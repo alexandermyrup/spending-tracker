@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spending Tracker - Test Suite</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #f5f5f5; padding: 20px; }
+.test-container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+.header { background: #2c3e50; color: #fff; padding: 20px; }
+.header h1 { margin: 0; font-size: 24px; }
+.header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 14px; }
+.test-suite { border-bottom: 1px solid #e0e0e0; }
+.test-suite-header { background: #34495e; color: #fff; padding: 12px 20px; font-weight: 600; font-size: 14px; text-transform: uppercase; cursor: pointer; user-select: none; }
+.test-suite-header:hover { background: #2c3e50; }
+.test-suite-header.collapsed::before { content: '▶ '; }
+.test-suite-header.expanded::before { content: '▼ '; }
+.test-list { padding: 10px 20px; background: #fafafa; display: none; }
+.test-list.visible { display: block; }
+.test-item { padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid #ddd; background: #fff; font-size: 13px; }
+.test-item.pass { background: #d4edda; border-left-color: #28a745; color: #155724; }
+.test-item.fail { background: #f8d7da; border-left-color: #dc3545; color: #721c24; }
+.test-item.pending { background: #fff3cd; border-left-color: #ffc107; color: #856404; }
+.test-code { font-family: 'Courier New', monospace; font-size: 12px; margin-top: 5px; background: #f0f0f0; padding: 8px; border-radius: 3px; overflow-x: auto; display: block; }
+.summary { padding: 20px; background: #fff; border-top: 2px solid #e0e0e0; }
+.summary-row { display: flex; gap: 30px; margin-bottom: 10px; font-size: 14px; }
+.summary-row span { font-weight: 600; }
+.pass-count { color: #28a745; }
+.fail-count { color: #dc3545; }
+.pending-count { color: #ffc107; }
+.progress-bar { height: 4px; background: #e0e0e0; border-radius: 2px; margin: 10px 0; overflow: hidden; }
+.progress-fill { height: 100%; background: #28a745; }
+.error-msg { font-size: 12px; margin-top: 5px; padding: 8px; background: #ffebee; border-left: 3px solid #dc3545; color: #c62828; }
+</style>
+</head>
+<body>
+
+<div class="test-container">
+  <div class="header">
+    <h1>Spending Tracker - Automated Test Suite</h1>
+    <p>Comprehensive tests for core JavaScript logic</p>
+  </div>
+
+  <div id="test-suites"></div>
+
+  <div class="summary">
+    <div class="summary-row">
+      <span>Total Tests: <span id="total-count">0</span></span>
+      <span class="pass-count">Passed: <span id="pass-count">0</span></span>
+      <span class="fail-count">Failed: <span id="fail-count">0</span></span>
+      <span class="pending-count">Pending: <span id="pending-count">0</span></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
+</div>
+
+<script>
+// ============ TEST FRAMEWORK ============
+class TestRunner {
+  constructor() {
+    this.suites = [];
+    this.results = { pass: 0, fail: 0, pending: 0, tests: [] };
+  }
+
+  suite(name, fn) {
+    const tests = [];
+    const suite = { name, tests };
+    this.suites.push(suite);
+
+    const test = (testName, testFn) => {
+      tests.push({ name: testName, fn: testFn });
+    };
+    test.skip = (testName, testFn) => {
+      tests.push({ name: testName, fn: testFn, skip: true });
+    };
+
+    fn(test);
+  }
+
+  async run() {
+    for (const suite of this.suites) {
+      for (const test of suite.tests) {
+        try {
+          if (test.skip) {
+            this.results.pending++;
+            this.results.tests.push({ suite: suite.name, name: test.name, status: 'pending' });
+          } else {
+            await test.fn();
+            this.results.pass++;
+            this.results.tests.push({ suite: suite.name, name: test.name, status: 'pass' });
+          }
+        } catch (e) {
+          this.results.fail++;
+          this.results.tests.push({ suite: suite.name, name: test.name, status: 'fail', error: e.message });
+        }
+      }
+    }
+    this.render();
+  }
+
+  render() {
+    const suitesContainer = document.getElementById('test-suites');
+    const suitesByName = {};
+
+    for (const test of this.results.tests) {
+      if (!suitesByName[test.suite]) {
+        suitesByName[test.suite] = [];
+      }
+      suitesByName[test.suite].push(test);
+    }
+
+    let html = '';
+    for (const [suiteName, tests] of Object.entries(suitesByName)) {
+      const suitePass = tests.filter(t => t.status === 'pass').length;
+      const suiteFail = tests.filter(t => t.status === 'fail').length;
+
+      html += `<div class="test-suite">
+        <div class="test-suite-header expanded" onclick="toggleSuite(this)">${suiteName} (${suitePass}/${tests.length})</div>
+        <div class="test-list visible">`;
+
+      for (const test of tests) {
+        const statusClass = test.status === 'pass' ? 'pass' : test.status === 'fail' ? 'fail' : 'pending';
+        const icon = test.status === 'pass' ? '✓' : test.status === 'fail' ? '✗' : '○';
+        html += `<div class="test-item ${statusClass}">
+          <span>${icon}</span> ${test.name}`;
+        if (test.error) {
+          html += `<code class="test-code">Error: ${escapeHtml(test.error)}</code>`;
+        }
+        html += `</div>`;
+      }
+
+      html += `</div></div>`;
+    }
+
+    suitesContainer.innerHTML = html;
+
+    // Update summary
+    document.getElementById('total-count').textContent = this.results.tests.length;
+    document.getElementById('pass-count').textContent = this.results.pass;
+    document.getElementById('fail-count').textContent = this.results.fail;
+    document.getElementById('pending-count').textContent = this.results.pending;
+
+    const total = this.results.tests.length || 1;
+    const pct = (this.results.pass / total * 100).toFixed(0);
+    document.getElementById('progress-fill').style.width = pct + '%';
+  }
+}
+
+function toggleSuite(el) {
+  const list = el.nextElementSibling;
+  list.classList.toggle('visible');
+  el.classList.toggle('expanded');
+  el.classList.toggle('collapsed');
+}
+
+function escapeHtml(text) {
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Simple assertion helpers
+function assert(condition, message) {
+  if (!condition) throw new Error(message || 'Assertion failed');
+}
+function assertEquals(actual, expected, message) {
+  if (actual !== expected) {
+    throw new Error(`${message || 'Assertion failed'}: expected ${expected}, got ${actual}`);
+  }
+}
+function assertDeepEqual(actual, expected, message) {
+  const actualStr = JSON.stringify(actual);
+  const expectedStr = JSON.stringify(expected);
+  if (actualStr !== expectedStr) {
+    throw new Error(`${message || 'Assertion failed'}: expected ${expectedStr}, got ${actualStr}`);
+  }
+}
+function assertArrayIncludes(arr, item, message) {
+  if (!arr.includes(item)) {
+    throw new Error(`${message || 'Assertion failed'}: ${JSON.stringify(arr)} does not include ${item}`);
+  }
+}
+
+// ============ SETUP & MOCKS ============
+let store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1 };
+let pendingImport = [];
+
+const STORAGE_KEY = 'spending-tracker-v2';
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+
+const DEFAULT_CATEGORIES = {
+  "Fixed costs": ["Rent + utilities","Transport","Mobile","Internet","Contacts","Macbook payment","Gym","KAB venteliste"],
+  "Subscriptions": ["OpenAI","iCloud","F1TV","EA Play Pro","M365","Google","WHOOP"],
+  "Insurance": ["Hövding forsikring","Accident insurance","Sygesikring Danmark"],
+  "Variable": ["Groceries","Eating out","Nightlife","Travel","Skincare","Vitamins","Pharmacy","Toiletries","Clothes","Laundry","Haircut","Tandlæge","Gift cost","Transfer out","Fun","Other"],
+  "Savings": ["Pension","Investments"],
+  "Income": ["SU","Part-time job","Feriepenge","Reimbursement","Interest","Other income"]
+};
+
+const SPENDING_GROUPS = ['Fixed costs','Subscriptions','Insurance','Variable'];
+const INCOME_GROUP = 'Income';
+const SAVINGS_GROUP = 'Savings';
+
+const MERCHANT_PATTERNS = [
+  { p: 'FOETEX', c: 'Groceries', t: 'spending' },
+  { p: 'DSB', c: 'Transport', t: 'spending' },
+  { p: 'FK-Feriepenge', c: 'Feriepenge', t: 'income' },
+  { p: 'SU', c: 'SU', t: 'income', x: true },
+  { p: 'Nordnet', c: 'Investments', t: 'saving' },
+];
+
+// Mock localStorage
+const mockStorage = {};
+const localStorage = {
+  getItem: (key) => mockStorage[key] || null,
+  setItem: (key, value) => { mockStorage[key] = value; },
+  clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); }
+};
+
+function resetStore() {
+  store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1 };
+  store.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+  store.budgets = { "2026": getDefaultYearBudget() };
+  pendingImport = [];
+  localStorage.clear();
+}
+
+// ============ CORE FUNCTIONS (from spending-tracker.html) ============
+
+function autoMatchMerchant(merchantName, amount) {
+  const upper = merchantName.toUpperCase();
+  if (store.merchantMap[upper]) {
+    const mapped = store.merchantMap[upper];
+    const isIncomeCategory = getIncomeCategories().has(mapped.category) || mapped.type === 'income';
+    const isPositive = amount && amount > 0;
+    if (isIncomeCategory && !isPositive) { /* skip */ }
+    else if (!isIncomeCategory && isPositive && mapped.type === 'spending') { /* skip */ }
+    else return mapped;
+  }
+  if (upper.includes('LØNOVERFØRSEL')) return { category: 'Part-time job', type: 'income' };
+  if (upper === 'SAVINGS ACCOUNT' || upper === 'FROM SAVINGS ACCOUNT' || upper.includes('SAVINGS SU LÅN')) return { category: '', type: 'ignore' };
+  if (upper.includes('IVAN BARBER')) return { category: 'Haircut', type: 'spending' };
+  const knownInstitutions = ['UDBETALING DANMARK', 'SYGESIKRING DANMARK', 'TOPDANMARK'];
+  const looksLikePerson = !knownInstitutions.some(inst => upper.includes(inst)) && (upper.includes('MOBILEPAY') || merchantName.match(/^[A-ZÆØÅ][a-zæøå]+ [A-ZÆØÅ]/));
+  if (looksLikePerson && amount) {
+    if (amount > 0) return { category: 'Reimbursement', type: 'income' };
+    if (amount < 0) return { category: 'Transfer out', type: 'spending' };
+  }
+  for (const rule of MERCHANT_PATTERNS) {
+    if (rule.x) {
+      if (upper === rule.p.toUpperCase()) return { category: rule.c, type: rule.t };
+    } else {
+      if (upper.includes(rule.p.toUpperCase())) return { category: rule.c, type: rule.t };
+    }
+  }
+  return null;
+}
+
+function getDefaultYearBudget() {
+  const b = {};
+  const defaults = {
+    "Rent + utilities": 4800, "Transport": 710, "Groceries": 3200, "Eating out": 300,
+    "Investments": 3000, "SU": 0, "Part-time job": 0, "Reimbursement": 0
+  };
+  const allCats = [];
+  Object.values(DEFAULT_CATEGORIES).forEach(cats => allCats.push(...cats));
+  allCats.forEach(cat => {
+    b[cat] = {};
+    MONTH_KEYS.forEach(m => {
+      b[cat][m] = defaults[cat] || 0;
+    });
+  });
+  return b;
+}
+
+function getIncomeCategories() {
+  return new Set([
+    ...(DEFAULT_CATEGORIES[INCOME_GROUP] || []),
+    ...((store.categories && store.categories[INCOME_GROUP]) || [])
+  ]);
+}
+
+function sanitizeTransactions() {
+  let fixed = 0;
+  const incomeCats = getIncomeCategories();
+  store.transactions.forEach(tx => {
+    if (!tx.category || tx.type === 'ignore' || tx.manualCategory) return;
+    const isPositive = tx.amount > 0;
+    const isIncomeCat = incomeCats.has(tx.category);
+    if (isPositive && !isIncomeCat) {
+      tx.category = ''; fixed++;
+    } else if (!isPositive && isIncomeCat) {
+      tx.category = ''; fixed++;
+    }
+  });
+  return fixed;
+}
+
+function parseNordeaCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(';');
+    if (cols.length < 6) continue;
+    const dateRaw = cols[0].trim();
+    const amount = parseFloat(cols[1].replace(/\./g, '').replace(',', '.'));
+    if (isNaN(amount)) continue;
+    const name = cols[4].trim();
+    const desc = cols[5].trim();
+    const saldo = cols[6] ? cols[6].trim() : '';
+    let date = dateRaw;
+    if (dateRaw === 'Reserveret') date = new Date().toISOString().slice(0, 10);
+    else date = dateRaw.replace(/\//g, '-');
+    const merchant = resolveMerchant(name, desc);
+    rows.push({ date, amount, merchant, description: desc, originalName: name, balance: saldo, pending: dateRaw === 'Reserveret' });
+  }
+  return rows;
+}
+
+function txFingerprint(tx) {
+  return `${tx.date}|${tx.amount}|${tx.merchant}|${tx.description}`;
+}
+
+function resolveMerchant(name, desc) {
+  const n = (name || '').trim();
+  const d = (desc || '').trim();
+  const upper = n.toUpperCase();
+  if (upper.includes('VIPPS') || upper.includes('MOBILEPAY')) {
+    return d.replace(/^MobilePay\s+/i, '').trim() || n || 'Unknown';
+  }
+  if (d.toUpperCase().includes('NORDEAPAY')) {
+    return n || d || 'Unknown';
+  }
+  return n || d || 'Unknown';
+}
+
+function selectCategory(txId, category) {
+  const tx = store.transactions.find(t => t.id === txId);
+  if (tx) {
+    tx.category = category;
+    tx.manualCategory = !!category;
+    if (category) {
+      store.merchantMap[tx.merchant.toUpperCase()] = { category, type: tx.type };
+    } else {
+      delete store.merchantMap[tx.merchant.toUpperCase()];
+      tx.manualCategory = false;
+    }
+  }
+}
+
+function setTxType(id, type) {
+  const tx = store.transactions.find(t => t.id === id);
+  if (tx) {
+    tx.type = type;
+    if (tx.category && store.merchantMap[tx.merchant.toUpperCase()]) {
+      store.merchantMap[tx.merchant.toUpperCase()].type = type;
+    }
+  }
+}
+
+function renameCat(oldName, newName) {
+  for (const [group, cats] of Object.entries(store.categories)) {
+    const idx = cats.indexOf(oldName);
+    if (idx >= 0) {
+      store.categories[group][idx] = newName;
+      break;
+    }
+  }
+  store.transactions.forEach(t => { if (t.category === oldName) t.category = newName; });
+  Object.keys(store.budgets).forEach(yr => {
+    if (store.budgets[yr][oldName]) {
+      store.budgets[yr][newName] = store.budgets[yr][oldName];
+      delete store.budgets[yr][oldName];
+    }
+  });
+  Object.keys(store.merchantMap).forEach(k => {
+    if (store.merchantMap[k].category === oldName) store.merchantMap[k].category = newName;
+  });
+  MERCHANT_PATTERNS.forEach(rule => { if (rule.c === oldName) rule.c = newName; });
+}
+
+function deleteCat(name) {
+  for (const [group, cats] of Object.entries(store.categories)) {
+    store.categories[group] = cats.filter(c => c !== name);
+  }
+  store.transactions.forEach(t => { if (t.category === name) { t.category = ''; t.manualCategory = false; } });
+  Object.keys(store.merchantMap).forEach(k => { if (store.merchantMap[k].category === name) delete store.merchantMap[k]; });
+  MERCHANT_PATTERNS.forEach(rule => { if (rule.c === name) rule.c = ''; });
+  Object.keys(store.budgets).forEach(yr => { delete store.budgets[yr][name]; });
+}
+
+function confirmSplit(txId, parts) {
+  const tx = store.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const childIds = [];
+  const sign = tx.amount > 0 ? 1 : -1;
+  parts.forEach(p => {
+    const cat = p.category || '';
+    const amt = (parseFloat(p.amount) || 0) * sign;
+    const type = p.type;
+    const childId = store.nextId++;
+    childIds.push(childId);
+    store.transactions.push({
+      id: childId, date: tx.date, amount: amt, merchant: tx.merchant,
+      description: tx.description, balance: tx.balance, pending: tx.pending,
+      category: cat, type: type, covered: tx.covered,
+      splitFrom: tx.id
+    });
+  });
+  tx.splitInto = childIds;
+  tx.type = 'ignore';
+  return childIds;
+}
+
+// ============ TESTS ============
+const runner = new TestRunner();
+
+runner.suite('Import & Dedup', (test) => {
+  test('Parse Nordea CSV with semicolon and comma decimals', () => {
+    resetStore();
+    const csv = `Dato;Beløb;Valuta;Type;Navn;Tekst;Saldo
+2026/02/15;-150,50;DKK;Køb;FOETEX;Groceries;25000.00`;
+    const rows = parseNordeaCSV(csv);
+    assertEquals(rows.length, 1, 'Should parse 1 row');
+    assertEquals(rows[0].amount, -150.50, 'Should parse amount with comma decimal');
+    assertEquals(rows[0].date, '2026-02-15', 'Should convert date from / to -');
+    assertEquals(rows[0].merchant, 'FOETEX', 'Should resolve merchant');
+  });
+
+  test('CSV import creates transactions without auto-assigned categories', () => {
+    resetStore();
+    const csv = `Dato;Beløb;Valuta;Type;Navn;Tekst;Saldo
+2026/02/15;-150,50;DKK;Køb;FOETEX;Groceries;25000.00
+2026/02/16;5000,00;DKK;Ind;Employer;Salary;30000.00`;
+    const rows = parseNordeaCSV(csv);
+    rows.forEach(row => {
+      store.transactions.push({
+        id: store.nextId++, date: row.date, amount: row.amount, merchant: row.merchant,
+        description: row.description, balance: row.balance, pending: row.pending,
+        category: '', type: row.amount > 0 ? 'income' : 'spending', covered: false
+      });
+    });
+    assertEquals(store.transactions[0].category, '', 'Negative transaction should have empty category');
+    assertEquals(store.transactions[1].category, '', 'Positive transaction should have empty category');
+  });
+
+  test('Infer type correctly: spending for negative, income for positive', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: '', type: 'spending', covered: false
+    });
+    store.transactions.push({
+      id: 2, date: '2026-02-16', amount: 5000, merchant: 'Employer', description: 'Salary',
+      category: '', type: 'income', covered: false
+    });
+    assertEquals(store.transactions[0].type, 'spending', 'Negative amount should be spending');
+    assertEquals(store.transactions[1].type, 'income', 'Positive amount should be income');
+  });
+
+  test('Type inference for savings account should be ignore', () => {
+    resetStore();
+    const autocat = autoMatchMerchant('SAVINGS ACCOUNT', -1000);
+    assertEquals(autocat.type, 'ignore', 'SAVINGS ACCOUNT should be ignore type');
+  });
+
+  test('Duplicate detection via txFingerprint', () => {
+    resetStore();
+    const tx1 = { date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries' };
+    const tx2 = { date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries' };
+    const tx3 = { date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Salad' };
+    assertEquals(txFingerprint(tx1), txFingerprint(tx2), 'Same transactions should have same fingerprint');
+    assert(txFingerprint(tx1) !== txFingerprint(tx3), 'Different descriptions should have different fingerprints');
+  });
+
+  test('Duplicate flagging detects repeated fingerprints', () => {
+    resetStore();
+    store.transactions.push({ id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false });
+    store.transactions.push({ id: 2, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false });
+    const fpCount = {};
+    store.transactions.forEach(tx => {
+      const fp = txFingerprint(tx);
+      fpCount[fp] = (fpCount[fp] || 0) + 1;
+    });
+    assertEquals(fpCount[txFingerprint(store.transactions[0])], 2, 'Should detect 2 duplicate transactions');
+  });
+});
+
+runner.suite('Categorization', (test) => {
+  test('selectCategory assigns category and updates merchantMap', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: '', type: 'spending', covered: false
+    });
+    selectCategory(1, 'Groceries');
+    assertEquals(store.transactions[0].category, 'Groceries', 'Category should be set');
+    assertEquals(store.merchantMap['FOETEX'].category, 'Groceries', 'merchantMap should be updated');
+  });
+
+  test('selectCategory sets manualCategory flag', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: '', type: 'spending', covered: false
+    });
+    selectCategory(1, 'Groceries');
+    assertEquals(store.transactions[0].manualCategory, true, 'manualCategory flag should be true');
+  });
+
+  test('Removing category clears merchantMap entry and manualCategory', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: 'Groceries', type: 'spending', covered: false, manualCategory: true
+    });
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    selectCategory(1, '');
+    assertEquals(store.transactions[0].category, '', 'Category should be empty');
+    assertEquals(store.transactions[0].manualCategory, false, 'manualCategory should be false');
+    assertEquals(store.merchantMap['FOETEX'], undefined, 'merchantMap entry should be deleted');
+  });
+
+  test('autoMatchMerchant uses merchantMap first', () => {
+    resetStore();
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    const match = autoMatchMerchant('FOETEX', -100);
+    assertEquals(match.category, 'Groceries', 'Should use merchantMap mapping');
+  });
+
+  test('autoMatchMerchant validates income category sign', () => {
+    resetStore();
+    store.merchantMap['EMPLOYER'] = { category: 'Part-time job', type: 'income' };
+    const negMatch = autoMatchMerchant('EMPLOYER', -100);
+    assert(!negMatch || negMatch.category !== 'Part-time job', 'Should skip income category for negative amount');
+  });
+
+  test('autoMatchMerchant validates spending category sign', () => {
+    resetStore();
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    const posMatch = autoMatchMerchant('FOETEX', 100);
+    assert(!posMatch || posMatch.category !== 'Groceries', 'Should skip spending category for positive amount');
+  });
+
+  test('autoMatchMerchant uses pattern matching', () => {
+    resetStore();
+    const match = autoMatchMerchant('FOETEX AMAGER', -100);
+    assertEquals(match.category, 'Groceries', 'Should match FOETEX pattern');
+  });
+
+  test('autoMatchMerchant detects person-name for MobilePay positive', () => {
+    resetStore();
+    const match = autoMatchMerchant('John Smith MOBILEPAY', 500);
+    assertEquals(match.category, 'Reimbursement', 'Should detect person reimbursement (positive)');
+  });
+
+  test('autoMatchMerchant detects person-name for MobilePay negative', () => {
+    resetStore();
+    const match = autoMatchMerchant('John Smith MOBILEPAY', -500);
+    assertEquals(match.category, 'Transfer out', 'Should detect transfer out (negative)');
+  });
+
+  test('getIncomeCategories returns both default and store categories', () => {
+    resetStore();
+    store.categories[INCOME_GROUP].push('Custom Income');
+    const incomeCats = getIncomeCategories();
+    assert(incomeCats.has('SU'), 'Should include default SU');
+    assert(incomeCats.has('Custom Income'), 'Should include custom income category');
+  });
+});
+
+runner.suite('Sanitizer', (test) => {
+  test('sanitizeTransactions clears positive with spending categories (non-manual)', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: 150.50, merchant: 'FOETEX', description: 'Refund',
+      category: 'Groceries', type: 'spending', covered: false, manualCategory: false
+    });
+    sanitizeTransactions();
+    assertEquals(store.transactions[0].category, '', 'Should clear positive spending category');
+  });
+
+  test('sanitizeTransactions clears negative with income categories (non-manual)', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -500, merchant: 'Employer', description: 'Correction',
+      category: 'Part-time job', type: 'income', covered: false, manualCategory: false
+    });
+    sanitizeTransactions();
+    assertEquals(store.transactions[0].category, '', 'Should clear negative income category');
+  });
+
+  test('sanitizeTransactions SKIPS transactions with manualCategory=true', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: 150.50, merchant: 'FOETEX', description: 'Refund',
+      category: 'Groceries', type: 'spending', covered: false, manualCategory: true
+    });
+    sanitizeTransactions();
+    assertEquals(store.transactions[0].category, 'Groceries', 'Should preserve manual category');
+  });
+
+  test('sanitizeTransactions SKIPS transactions with type=ignore', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: 150.50, merchant: 'SAVINGS ACCOUNT', description: 'Transfer',
+      category: 'Investments', type: 'ignore', covered: false, manualCategory: false
+    });
+    sanitizeTransactions();
+    assertEquals(store.transactions[0].category, 'Investments', 'Should preserve ignore type');
+  });
+});
+
+runner.suite('Category Management', (test) => {
+  test('renameCat updates store.categories', () => {
+    resetStore();
+    renameCat('Groceries', 'Food');
+    assert(store.categories['Variable'].includes('Food'), 'Should update category name');
+    assert(!store.categories['Variable'].includes('Groceries'), 'Should remove old name');
+  });
+
+  test('renameCat updates transactions', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: 'Groceries', type: 'spending', covered: false
+    });
+    renameCat('Groceries', 'Food');
+    assertEquals(store.transactions[0].category, 'Food', 'Should update transaction category');
+  });
+
+  test('renameCat updates merchantMap', () => {
+    resetStore();
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    renameCat('Groceries', 'Food');
+    assertEquals(store.merchantMap['FOETEX'].category, 'Food', 'Should update merchantMap category');
+  });
+
+  test('renameCat updates budgets', () => {
+    resetStore();
+    renameCat('Groceries', 'Food');
+    assert(store.budgets['2026']['Food'], 'Should create new budget entry');
+    assertEquals(store.budgets['2026']['Groceries'], undefined, 'Should remove old budget entry');
+  });
+
+  test('renameCat updates MERCHANT_PATTERNS', () => {
+    resetStore();
+    MERCHANT_PATTERNS.push({ p: 'TEST', c: 'Groceries', t: 'spending' });
+    renameCat('Groceries', 'Food');
+    const testPattern = MERCHANT_PATTERNS.find(r => r.p === 'TEST');
+    assertEquals(testPattern.c, 'Food', 'Should update pattern category');
+  });
+
+  test('deleteCat clears transactions', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150.50, merchant: 'FOETEX', description: 'Groceries',
+      category: 'Groceries', type: 'spending', covered: false
+    });
+    deleteCat('Groceries');
+    assertEquals(store.transactions[0].category, '', 'Should clear transaction category');
+  });
+
+  test('deleteCat clears merchantMap', () => {
+    resetStore();
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    deleteCat('Groceries');
+    assertEquals(store.merchantMap['FOETEX'], undefined, 'Should delete merchantMap entry');
+  });
+
+  test('deleteCat clears MERCHANT_PATTERNS', () => {
+    resetStore();
+    MERCHANT_PATTERNS.push({ p: 'TEST', c: 'Groceries', t: 'spending' });
+    deleteCat('Groceries');
+    const testPattern = MERCHANT_PATTERNS.find(r => r.p === 'TEST');
+    assertEquals(testPattern.c, '', 'Should clear pattern category');
+  });
+
+  test('deleteCat clears budgets', () => {
+    resetStore();
+    deleteCat('Groceries');
+    assertEquals(store.budgets['2026']['Groceries'], undefined, 'Should remove budget entry');
+  });
+});
+
+runner.suite('Split Transactions', (test) => {
+  test('confirmSplit creates child transactions with splitFrom', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries',
+      category: '', type: 'spending', covered: false
+    });
+    const parts = [
+      { category: 'Groceries', amount: 200, type: 'spending' },
+      { category: 'Eating out', amount: 100, type: 'spending' }
+    ];
+    confirmSplit(1, parts);
+    const children = store.transactions.filter(t => t.splitFrom === 1);
+    assertEquals(children.length, 2, 'Should create 2 children');
+    assertEquals(children[0].splitFrom, 1, 'Child should have splitFrom set');
+  });
+
+  test('confirmSplit sets parent type to ignore', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries',
+      category: '', type: 'spending', covered: false
+    });
+    const parts = [
+      { category: 'Groceries', amount: 200, type: 'spending' },
+      { category: 'Eating out', amount: 100, type: 'spending' }
+    ];
+    confirmSplit(1, parts);
+    const parent = store.transactions.find(t => t.id === 1);
+    assertEquals(parent.type, 'ignore', 'Parent should be ignore type');
+    assert(parent.splitInto, 'Parent should have splitInto array');
+  });
+
+  test('confirmSplit respects sign for amounts', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: 300, merchant: 'Employer', description: 'Bonus',
+      category: '', type: 'income', covered: false
+    });
+    const parts = [
+      { category: 'Part-time job', amount: 200, type: 'income' },
+      { category: 'Reimbursement', amount: 100, type: 'income' }
+    ];
+    confirmSplit(1, parts);
+    const children = store.transactions.filter(t => t.splitFrom === 1);
+    assertEquals(children[0].amount, 200, 'Positive child should be positive');
+    assertEquals(children[1].amount, 100, 'Positive child should be positive');
+  });
+});
+
+runner.suite('Dashboard Calculations', (test) => {
+  test('Monthly: income excludes loans', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: 5000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-02-15', amount: 3000, merchant: 'SU', description: 'Loan', category: '', type: 'loan', covered: false }
+    );
+    const txs = store.transactions.filter(t => t.date.startsWith('2026-02') && !t.splitInto);
+    const income = txs.filter(t => (t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan')));
+    const totalIncome = income.reduce((s, t) => s + t.amount, 0);
+    assertEquals(totalIncome, 5000, 'Income should exclude loan');
+  });
+
+  test('Monthly: spending is absolute value of negatives', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -50, merchant: 'Gym', description: 'Membership', category: 'Gym', type: 'spending', covered: false }
+    );
+    const txs = store.transactions.filter(t => t.date.startsWith('2026-02') && !t.splitInto);
+    const spending = txs.filter(t => t.type === 'spending' && t.amount < 0);
+    const totalSpend = Math.abs(spending.reduce((s, t) => s + t.amount, 0));
+    assertEquals(totalSpend, 200, 'Spending should be absolute value');
+  });
+
+  test('Monthly: remaining = income - spending - savings', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: 5000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -1000, merchant: 'Investments', description: 'ISK', category: 'Investments', type: 'saving', covered: false }
+    );
+    const txs = store.transactions.filter(t => t.date.startsWith('2026-02') && !t.splitInto);
+    const income = txs.filter(t => (t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan'))).reduce((s, t) => s + t.amount, 0);
+    const spending = Math.abs(txs.filter(t => t.type === 'spending' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const saving = Math.abs(txs.filter(t => t.type === 'saving' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const remaining = income - spending - saving;
+    assertEquals(remaining, 3800, 'Remaining should be 5000 - 200 - 1000');
+  });
+});
+
+runner.suite('Type Changes', (test) => {
+  test('setTxType updates transaction type', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries',
+      category: 'Groceries', type: 'spending', covered: false
+    });
+    setTxType(1, 'saving');
+    assertEquals(store.transactions[0].type, 'saving', 'Should update type');
+  });
+
+  test('setTxType updates merchantMap type', () => {
+    resetStore();
+    store.transactions.push({
+      id: 1, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries',
+      category: 'Groceries', type: 'spending', covered: false
+    });
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    setTxType(1, 'saving');
+    assertEquals(store.merchantMap['FOETEX'].type, 'saving', 'Should update merchantMap type');
+  });
+});
+
+runner.suite('Person-name Heuristic', (test) => {
+  test('Known institutions excluded from person-name regex', () => {
+    resetStore();
+    const match = autoMatchMerchant('UDBETALING DANMARK', -1000);
+    assert(!match || match.category !== 'Transfer out', 'Should not treat known institution as person');
+  });
+
+  test('Firstname Lastname pattern matches for MobilePay', () => {
+    resetStore();
+    const match = autoMatchMerchant('John Smith MOBILEPAY', -500);
+    assertEquals(match.category, 'Transfer out', 'Should match person pattern with MobilePay');
+  });
+
+  test('Positive person = Reimbursement', () => {
+    resetStore();
+    const match = autoMatchMerchant('John Smith MOBILEPAY', 500);
+    assertEquals(match.category, 'Reimbursement', 'Positive should be Reimbursement');
+  });
+
+  test('Negative person = Transfer out', () => {
+    resetStore();
+    const match = autoMatchMerchant('John Smith MOBILEPAY', -500);
+    assertEquals(match.category, 'Transfer out', 'Negative should be Transfer out');
+  });
+});
+
+runner.suite('Filters', (test) => {
+  test('Uncategorized-only mode sorts suggestions first', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-14', amount: -50, merchant: 'Unknown', description: 'Mystery', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-13', amount: -100, merchant: 'Gym', description: 'Membership', category: 'Gym', type: 'spending', covered: false }
+    );
+    const uncatTxs = store.transactions.filter(t => !t.category && t.type !== 'ignore');
+    const sorted = uncatTxs.sort((a, b) => {
+      const aSug = !!autoMatchMerchant(a.merchant, a.amount);
+      const bSug = !!autoMatchMerchant(b.merchant, b.amount);
+      if (aSug !== bSug) return aSug ? -1 : 1;
+      return 0;
+    });
+    assertEquals(sorted[0].merchant, 'FOETEX', 'Should sort FOETEX (has suggestion) first');
+  });
+});
+
+// Run all tests
+runner.run();
+</script>
+
+</body>
+</html>
