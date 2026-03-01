@@ -233,10 +233,15 @@ function resetStore() {
 
 // ============ CORE FUNCTIONS (from spending-tracker.html) ============
 
+function normalizeMerchantName(name) {
+  return name.replace(/[*\-_.,;:/\\|]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
 function autoMatchMerchant(merchantName, amount) {
   const upper = merchantName.toUpperCase();
-  if (store.merchantMap[upper]) {
-    const mapped = store.merchantMap[upper];
+  const normalizedKey = normalizeMerchantName(merchantName);
+  if (store.merchantMap[normalizedKey]) {
+    const mapped = store.merchantMap[normalizedKey];
     const isIncomeCategory = getIncomeCategories().has(mapped.category) || mapped.type === 'income';
     const isPositive = amount && amount > 0;
     if (isIncomeCategory && !isPositive) { /* skip */ }
@@ -336,13 +341,28 @@ function resolveMerchant(name, desc) {
   const n = (name || '').trim();
   const d = (desc || '').trim();
   const upper = n.toUpperCase();
-  if (upper.includes('VIPPS') || upper.includes('MOBILEPAY')) {
+  const dUpper = d.toUpperCase();
+  if (upper.includes('VIPPS') || upper.includes('MOBILEPAY') || dUpper.startsWith('MOBILEPAY ')) {
     return d.replace(/^MobilePay\s+/i, '').trim() || n || 'Unknown';
   }
-  if (d.toUpperCase().includes('NORDEAPAY')) {
-    return n || d || 'Unknown';
+  if (dUpper.includes('OVERFØRSEL MOBILEPAY ')) {
+    return d.replace(/^Overførsel MobilePay\s+/i, '').trim() || 'Unknown';
   }
-  return n || d || 'Unknown';
+  if (dUpper.includes('NORDEAPAY') || dUpper.startsWith('NORDEA PAY')) {
+    let merchant = d.replace(/^Nordea\s*pay\s*(køb)?\s*,?\s*\.?\s*/i, '').trim();
+    merchant = merchant.replace(/\s*Den \d{2}\.\d{2}$/, '').trim();
+    return merchant || n || d || 'Unknown';
+  }
+  if (dUpper.startsWith('PAY MODPOST')) {
+    let merchant = d.replace(/^Pay modpost\.\s*,?\s*\.?\s*/i, '').trim();
+    merchant = merchant.replace(/\s*Den \d{2}\.\d{2}$/, '').trim();
+    return merchant || 'Unknown';
+  }
+  let result = n || d || 'Unknown';
+  result = result.replace(/\s?Den \d{2}\.\d{2}$/, '').trim();
+  result = result.replace(/^[A-Z]{3} [\d.,]+\s{2,}/, '').trim();
+  result = result.replace(/^Bs betaling\s+/i, '').trim();
+  return result || 'Unknown';
 }
 
 function selectCategory(txId, category) {
@@ -351,9 +371,9 @@ function selectCategory(txId, category) {
     tx.category = category;
     tx.manualCategory = !!category;
     if (category) {
-      store.merchantMap[tx.merchant.toUpperCase()] = { category, type: tx.type };
+      store.merchantMap[normalizeMerchantName(tx.merchant)] = { category, type: tx.type };
     } else {
-      delete store.merchantMap[tx.merchant.toUpperCase()];
+      delete store.merchantMap[normalizeMerchantName(tx.merchant)];
       tx.manualCategory = false;
     }
   }
@@ -363,8 +383,8 @@ function setTxType(id, type) {
   const tx = store.transactions.find(t => t.id === id);
   if (tx) {
     tx.type = type;
-    if (tx.category && store.merchantMap[tx.merchant.toUpperCase()]) {
-      store.merchantMap[tx.merchant.toUpperCase()].type = type;
+    if (tx.category && store.merchantMap[normalizeMerchantName(tx.merchant)]) {
+      store.merchantMap[normalizeMerchantName(tx.merchant)].type = type;
     }
   }
 }
@@ -556,6 +576,117 @@ function getYearlyDashboardData(year, options) {
     annualLoanBudget,
     ytdLoanBudget: monthlyLoanBudget * ytdMonths.length
   };
+}
+
+// ============ SMART CATEGORIZATION SUITE (copied from spending-tracker.html) ============
+
+function computeMerchantStats(transactions) {
+  const stats = {};
+  transactions.forEach(tx => {
+    if (!tx.category || tx.type === 'ignore' || tx.splitInto) return;
+    const key = tx.merchant.toUpperCase();
+    if (!stats[key]) stats[key] = { count: 0, categories: {}, amounts: [], dates: [] };
+    const s = stats[key];
+    s.count++;
+    s.categories[tx.category] = (s.categories[tx.category] || 0) + 1;
+    s.amounts.push(tx.amount);
+    s.dates.push(tx.date);
+  });
+  Object.values(stats).forEach(s => {
+    const sum = s.amounts.reduce((a, b) => a + b, 0);
+    s.meanAmount = sum / s.amounts.length;
+    const variance = s.amounts.reduce((a, v) => a + (v - s.meanAmount) ** 2, 0) / s.amounts.length;
+    s.stddevAmount = Math.sqrt(variance);
+    let maxCount = 0;
+    s.primaryCategory = '';
+    s.primaryCategoryCount = 0;
+    Object.entries(s.categories).forEach(([cat, cnt]) => {
+      if (cnt > maxCount) { maxCount = cnt; s.primaryCategory = cat; s.primaryCategoryCount = cnt; }
+    });
+  });
+  return stats;
+}
+
+function detectRecurringMerchants(merchantStats) {
+  const recurring = {};
+  Object.entries(merchantStats).forEach(([merchant, stats]) => {
+    if (stats.count < 3) return;
+    const sortedDates = stats.dates.slice().sort();
+    const gaps = [];
+    for (let i = 1; i < sortedDates.length; i++) {
+      const d1 = new Date(sortedDates[i - 1]);
+      const d2 = new Date(sortedDates[i]);
+      gaps.push((d2 - d1) / (1000 * 60 * 60 * 24));
+    }
+    if (gaps.length === 0) return;
+    const sortedGaps = gaps.slice().sort((a, b) => a - b);
+    const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
+    if (medianGap < 25 || medianGap > 38) return;
+    const absAmounts = stats.amounts.map(Math.abs);
+    const mean = absAmounts.reduce((a, b) => a + b, 0) / absAmounts.length;
+    if (mean === 0) return;
+    const variance = absAmounts.reduce((a, v) => a + (v - mean) ** 2, 0) / absAmounts.length;
+    const cv = Math.sqrt(variance) / mean;
+    if (cv >= 0.15) return;
+    const firstDate = new Date(sortedDates[0]);
+    const lastDate = new Date(sortedDates[sortedDates.length - 1]);
+    const monthsCovered = Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24 * 30.44)) + 1;
+    recurring[merchant] = { cadenceDays: Math.round(medianGap), typicalAmount: mean, monthsCovered };
+  });
+  return recurring;
+}
+
+function computeCategoryCertainty(tx, suggestion, merchantStats, recurringMerchants) {
+  if (!suggestion || !suggestion.category) return 0;
+  const key = tx.merchant.toUpperCase();
+  const stats = merchantStats[key];
+  let historyScore = 0;
+  if (stats && stats.categories[suggestion.category]) {
+    const count = stats.categories[suggestion.category];
+    if (count >= 5) historyScore = 1.0;
+    else if (count >= 3) historyScore = 0.7;
+    else if (count >= 2) historyScore = 0.5;
+    else historyScore = 0.3;
+  }
+  let amountScore = 0.2;
+  if (stats && stats.stddevAmount !== undefined && stats.count >= 2) {
+    const deviation = Math.abs(tx.amount - stats.meanAmount);
+    if (stats.stddevAmount === 0) amountScore = deviation === 0 ? 1.0 : 0.2;
+    else if (deviation <= stats.stddevAmount) amountScore = 1.0;
+    else if (deviation <= 2 * stats.stddevAmount) amountScore = 0.5;
+    else amountScore = 0.2;
+  }
+  const merchantMapKey = normalizeMerchantName(tx.merchant);
+  const isFromMerchantMap = !!(store.merchantMap && store.merchantMap[merchantMapKey]);
+  const sourceScore = isFromMerchantMap ? 1.0 : 0.6;
+  const recurringScore = recurringMerchants[key] ? 1.0 : 0.0;
+  return historyScore * 0.35 + amountScore * 0.25 + sourceScore * 0.25 + recurringScore * 0.15;
+}
+
+function certaintyBand(score) {
+  if (score >= 0.8) return 'high';
+  if (score >= 0.4) return 'medium';
+  return 'low';
+}
+
+function detectConflicts(merchantStats) {
+  const groups = {};
+  Object.entries(merchantStats).forEach(([merchant, stats]) => {
+    const normalized = normalizeMerchantName(merchant);
+    if (!groups[normalized]) groups[normalized] = { merchants: [], categories: {} };
+    groups[normalized].merchants.push(merchant);
+    Object.entries(stats.categories).forEach(([cat, cnt]) => {
+      groups[normalized].categories[cat] = (groups[normalized].categories[cat] || 0) + cnt;
+    });
+  });
+  const conflicts = {};
+  Object.entries(groups).forEach(([normalized, group]) => {
+    const cats = Object.keys(group.categories);
+    if (cats.length >= 2) {
+      conflicts[normalized] = { merchants: group.merchants, categories: group.categories };
+    }
+  });
+  return conflicts;
 }
 
 // ============ TESTS ============
@@ -1368,6 +1499,510 @@ runner.suite('CHART_COLORS constant', (test) => {
 
   test('All entries are valid hex colour strings', () => {
     assert(CHART_COLORS.every(c => /^#[0-9a-fA-F]{6}$/.test(c)), 'All entries should be valid hex colour strings');
+  });
+});
+
+// ============ SMART CATEGORIZATION TESTS ============
+
+runner.suite('Merchant Stats (Phase 1)', (test) => {
+  test('Counts categorized occurrences per merchant', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -150, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 3, date: '2026-01-20', amount: -80, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['FOETEX'].count, 3, 'Should have 3 categorized occurrences');
+  });
+
+  test('Computes mean and stddev of amounts', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -200, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 3, date: '2026-01-20', amount: -300, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['FOETEX'].meanAmount, -200, 'Mean should be -200');
+    assert(Math.abs(stats['FOETEX'].stddevAmount - 81.65) < 1, 'Stddev should be ~81.65');
+  });
+
+  test('Identifies primary category', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'COOP', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -50, merchant: 'COOP', description: '', category: 'Eating out', type: 'spending', covered: false },
+      { id: 3, date: '2026-01-20', amount: -80, merchant: 'COOP', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['COOP'].primaryCategory, 'Groceries', 'Primary should be Groceries');
+    assertEquals(stats['COOP'].primaryCategoryCount, 2, 'Primary count should be 2');
+  });
+
+  test('Excludes splits and ignored transactions', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -50, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'ignore', covered: false },
+      { id: 3, date: '2026-01-20', amount: -200, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false, splitInto: [4, 5] }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['FOETEX'].count, 1, 'Should only count 1 (ignore and split parent excluded)');
+  });
+
+  test('Excludes uncategorized transactions', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -150, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['FOETEX'].count, 1, 'Should only count categorized');
+  });
+
+  test('Single transaction edge case', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'MATAS', description: '', category: 'Skincare', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    assertEquals(stats['MATAS'].count, 1, 'Count should be 1');
+    assertEquals(stats['MATAS'].meanAmount, -100, 'Mean should be -100');
+    assertEquals(stats['MATAS'].stddevAmount, 0, 'Stddev should be 0 for single tx');
+    assertEquals(stats['MATAS'].primaryCategory, 'Skincare', 'Primary should be Skincare');
+  });
+});
+
+runner.suite('Recurring Detection (Phase 2)', (test) => {
+  test('Detects monthly subscription with consistent amounts', () => {
+    resetStore();
+    const txs = [];
+    for (let i = 0; i < 6; i++) {
+      const month = String(i + 1).padStart(2, '0');
+      txs.push({ id: i + 1, date: `2026-${month}-15`, amount: -228, merchant: 'WHOOP', description: '', category: 'WHOOP', type: 'spending', covered: false });
+    }
+    store.transactions.push(...txs);
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(recurring['WHOOP'], 'WHOOP should be detected as recurring');
+    assert(recurring['WHOOP'].cadenceDays >= 28 && recurring['WHOOP'].cadenceDays <= 31, 'Cadence should be ~30 days');
+  });
+
+  test('Rejects merchant with too few transactions', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -228, merchant: 'WHOOP', description: '', category: 'WHOOP', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -228, merchant: 'WHOOP', description: '', category: 'WHOOP', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(!recurring['WHOOP'], 'Should not detect with only 2 transactions');
+  });
+
+  test('Rejects merchant with irregular cadence', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-01', amount: -100, merchant: 'RANDOM', description: '', category: 'Fun', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-15', amount: -100, merchant: 'RANDOM', description: '', category: 'Fun', type: 'spending', covered: false },
+      { id: 3, date: '2026-03-20', amount: -100, merchant: 'RANDOM', description: '', category: 'Fun', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(!recurring['RANDOM'], 'Should not detect with irregular cadence');
+  });
+
+  test('Rejects merchant with high amount variation', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -100, merchant: 'VARIABLE', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -500, merchant: 'VARIABLE', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 3, date: '2026-03-15', amount: -50, merchant: 'VARIABLE', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(!recurring['VARIABLE'], 'Should not detect with >15% coefficient of variation');
+  });
+
+  test('Handles year boundary correctly', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2025-10-15', amount: -89, merchant: 'ICLOUD', description: '', category: 'iCloud', type: 'spending', covered: false },
+      { id: 2, date: '2025-11-15', amount: -89, merchant: 'ICLOUD', description: '', category: 'iCloud', type: 'spending', covered: false },
+      { id: 3, date: '2025-12-15', amount: -89, merchant: 'ICLOUD', description: '', category: 'iCloud', type: 'spending', covered: false },
+      { id: 4, date: '2026-01-15', amount: -89, merchant: 'ICLOUD', description: '', category: 'iCloud', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(recurring['ICLOUD'], 'Should detect across year boundary');
+  });
+
+  test('Reports months covered', () => {
+    resetStore();
+    for (let i = 0; i < 5; i++) {
+      const month = String(i + 1).padStart(2, '0');
+      store.transactions.push({ id: i + 1, date: `2026-${month}-15`, amount: -173, merchant: 'OPENAI', description: '', category: 'OpenAI', type: 'spending', covered: false });
+    }
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(recurring['OPENAI'], 'Should detect OPENAI as recurring');
+    assert(recurring['OPENAI'].monthsCovered >= 4, 'Should cover at least 4 months');
+  });
+
+  test('Reports typical amount', () => {
+    resetStore();
+    for (let i = 0; i < 4; i++) {
+      const month = String(i + 1).padStart(2, '0');
+      store.transactions.push({ id: i + 1, date: `2026-${month}-01`, amount: -4800, merchant: 'RENT', description: '', category: 'Rent + utilities', type: 'spending', covered: false });
+    }
+    const stats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(stats);
+    assert(recurring['RENT'], 'Should detect RENT as recurring');
+    assertEquals(recurring['RENT'].typicalAmount, 4800, 'Typical amount should be 4800');
+  });
+});
+
+runner.suite('Certainty Levels (Phase 3)', (test) => {
+  test('Returns 0 for null or empty suggestion', () => {
+    resetStore();
+    const tx = { id: 1, date: '2026-01-05', amount: -100, merchant: 'UNKNOWN', description: '' };
+    assertEquals(computeCategoryCertainty(tx, null, {}, {}), 0, 'Null suggestion should return 0');
+    assertEquals(computeCategoryCertainty(tx, { category: '' }, {}, {}), 0, 'Empty category should return 0');
+  });
+
+  test('High certainty for well-known recurring merchant in merchantMap', () => {
+    resetStore();
+    // 5+ categorizations, in merchantMap, recurring, consistent amount
+    const stats = { 'WHOOP': { count: 6, categories: { 'WHOOP': 6 }, amounts: [-228, -228, -228, -228, -228, -228], meanAmount: -228, stddevAmount: 0, primaryCategory: 'WHOOP', primaryCategoryCount: 6, dates: [] } };
+    const recurring = { 'WHOOP': { cadenceDays: 30, typicalAmount: 228, monthsCovered: 6 } };
+    store.merchantMap['WHOOP'] = { category: 'WHOOP', type: 'spending' };
+    const tx = { id: 1, date: '2026-01-15', amount: -228, merchant: 'WHOOP', description: '' };
+    const score = computeCategoryCertainty(tx, { category: 'WHOOP' }, stats, recurring);
+    assertEquals(certaintyBand(score), 'high', 'Should be high certainty');
+    assert(score >= 0.8, `Score ${score} should be >= 0.8`);
+  });
+
+  test('Medium certainty for merchant with some history', () => {
+    resetStore();
+    // 2 categorizations, in merchantMap, not recurring, consistent amount
+    const stats = { 'COOP': { count: 2, categories: { 'Groceries': 2 }, amounts: [-100, -150], meanAmount: -125, stddevAmount: 25, primaryCategory: 'Groceries', primaryCategoryCount: 2, dates: [] } };
+    store.merchantMap['COOP'] = { category: 'Groceries', type: 'spending' };
+    const tx = { id: 1, date: '2026-01-20', amount: -120, merchant: 'COOP', description: '' };
+    const score = computeCategoryCertainty(tx, { category: 'Groceries' }, stats, {});
+    assertEquals(certaintyBand(score), 'medium', 'Should be medium certainty');
+  });
+
+  test('Low certainty for pattern-only match with no history', () => {
+    resetStore();
+    const tx = { id: 1, date: '2026-01-05', amount: -50, merchant: 'NEW PLACE', description: '' };
+    const score = computeCategoryCertainty(tx, { category: 'Eating out' }, {}, {});
+    assertEquals(certaintyBand(score), 'low', 'Should be low certainty');
+    assert(score < 0.4, `Score ${score} should be < 0.4`);
+  });
+
+  test('Amount deviation reduces certainty', () => {
+    resetStore();
+    const stats = { 'FOETEX': { count: 5, categories: { 'Groceries': 5 }, amounts: [-100, -100, -100, -100, -100], meanAmount: -100, stddevAmount: 0, primaryCategory: 'Groceries', primaryCategoryCount: 5, dates: [] } };
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    // Normal amount
+    const txNormal = { id: 1, amount: -100, merchant: 'FOETEX', description: '' };
+    const scoreNormal = computeCategoryCertainty(txNormal, { category: 'Groceries' }, stats, {});
+    // Deviant amount
+    const txDeviant = { id: 2, amount: -5000, merchant: 'FOETEX', description: '' };
+    const scoreDeviant = computeCategoryCertainty(txDeviant, { category: 'Groceries' }, stats, {});
+    assert(scoreNormal > scoreDeviant, `Normal score ${scoreNormal} should exceed deviant score ${scoreDeviant}`);
+  });
+
+  test('Boundary: score of exactly 0.8 is high', () => {
+    assertEquals(certaintyBand(0.8), 'high', '0.8 should be high');
+  });
+
+  test('Boundary: score of exactly 0.4 is medium', () => {
+    assertEquals(certaintyBand(0.4), 'medium', '0.4 should be medium');
+  });
+
+  test('Boundary: score of 0.39 is low', () => {
+    assertEquals(certaintyBand(0.39), 'low', '0.39 should be low');
+  });
+});
+
+runner.suite('Conflict Detection (Phase 4)', (test) => {
+  test('Normalizes merchant names correctly', () => {
+    assertEquals(normalizeMerchantName('APPLE.COM/BILL'), 'APPLECOM/BILL'.replace(/\//g, ''), 'Should strip dots');
+    assertEquals(normalizeMerchantName('EA *ELECTRONIC ARTS'), 'EA ELECTRONIC ARTS', 'Should strip asterisks');
+    assertEquals(normalizeMerchantName('foo - bar'), 'FOO  BAR'.replace(/\s+/g, ' '), 'Should strip dashes and normalize spaces');
+    assertEquals(normalizeMerchantName('  hello  world  '), 'HELLO WORLD', 'Should trim and collapse spaces');
+  });
+
+  test('Detects merchants with 2+ categories', () => {
+    resetStore();
+    const stats = {
+      'COOP': { count: 5, categories: { 'Groceries': 3, 'Eating out': 2 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'Groceries', primaryCategoryCount: 3, dates: [] }
+    };
+    const conflicts = detectConflicts(stats);
+    const normalized = normalizeMerchantName('COOP');
+    assert(conflicts[normalized], 'Should detect conflict for COOP');
+    assertEquals(Object.keys(conflicts[normalized].categories).length, 2, 'Should have 2 conflicting categories');
+  });
+
+  test('No conflicts when merchant has single category', () => {
+    resetStore();
+    const stats = {
+      'FOETEX': { count: 5, categories: { 'Groceries': 5 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'Groceries', primaryCategoryCount: 5, dates: [] }
+    };
+    const conflicts = detectConflicts(stats);
+    assertEquals(Object.keys(conflicts).length, 0, 'Should have no conflicts');
+  });
+
+  test('Groups merchants by normalized name', () => {
+    resetStore();
+    const stats = {
+      'APPLE.COM/BILL': { count: 3, categories: { 'iCloud': 3 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'iCloud', primaryCategoryCount: 3, dates: [] },
+      'APPLE*COM*BILL': { count: 2, categories: { 'M365': 2 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'M365', primaryCategoryCount: 2, dates: [] }
+    };
+    const conflicts = detectConflicts(stats);
+    // Both normalize to APPLECOMBILL
+    const keys = Object.keys(conflicts);
+    assert(keys.length === 1, 'Should group into 1 conflict');
+    assertEquals(Object.keys(conflicts[keys[0]].categories).length, 2, 'Should have 2 categories in conflict');
+  });
+
+  test('Ignores uncategorized transactions (they are excluded from stats)', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -50, merchant: 'FOETEX', description: '', category: '', type: 'spending', covered: false }
+    );
+    const stats = computeMerchantStats(store.transactions);
+    const conflicts = detectConflicts(stats);
+    assertEquals(Object.keys(conflicts).length, 0, 'Uncategorized should not cause conflicts');
+  });
+
+  test('Normalization strips all special characters', () => {
+    assertEquals(normalizeMerchantName('A*B-C_D.E,F;G:H/I\\J|K'), 'ABCDEFGHIJK', 'Should strip all special chars');
+  });
+
+  test('Multiple distinct conflicts reported separately', () => {
+    const stats = {
+      'MERCHANT_A': { count: 4, categories: { 'Cat1': 2, 'Cat2': 2 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'Cat1', primaryCategoryCount: 2, dates: [] },
+      'MERCHANT_B': { count: 3, categories: { 'Cat3': 1, 'Cat4': 2 }, amounts: [], meanAmount: 0, stddevAmount: 0, primaryCategory: 'Cat4', primaryCategoryCount: 2, dates: [] }
+    };
+    const conflicts = detectConflicts(stats);
+    assertEquals(Object.keys(conflicts).length, 2, 'Should have 2 separate conflicts');
+  });
+});
+
+runner.suite('Low-Certainty Review (Phase 5)', (test) => {
+  test('Filters to only categorized transactions with low certainty', () => {
+    resetStore();
+    // High certainty tx (5+ occurrences, in merchantMap, pattern match)
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    for (let i = 1; i <= 5; i++) {
+      store.transactions.push({ id: i, date: `2026-01-${String(i).padStart(2, '0')}`, amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false });
+    }
+    // Low certainty tx — DSB matches pattern but has no merchantMap entry or history
+    const lowTx = { id: 10, date: '2026-01-10', amount: -50, merchant: 'DSB', description: '', category: 'Transport', type: 'spending', covered: false };
+    store.transactions.push(lowTx);
+    const mStats = computeMerchantStats(store.transactions);
+
+    // Low-certainty filter logic (mirrors renderTransactions)
+    const filtered = store.transactions.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      const certainty = computeCategoryCertainty(tx, suggestion, mStats, {});
+      return certainty < 0.4;
+    });
+    // DSB has pattern match (source=0.6) but only 1 occurrence → low history score
+    assert(filtered.length >= 1, 'Should include at least the low-certainty tx');
+    assert(filtered.some(t => t.merchant === 'DSB'), 'Should include DSB');
+  });
+
+  test('Excludes ignored transactions', () => {
+    resetStore();
+    const tx = { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'ignore', covered: false };
+    store.transactions.push(tx);
+    const mStats = computeMerchantStats(store.transactions);
+    const filtered = store.transactions.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      return computeCategoryCertainty(tx, suggestion, mStats, {}) < 0.4;
+    });
+    assertEquals(filtered.length, 0, 'Ignored transactions should be excluded');
+  });
+
+  test('Excludes uncategorized transactions', () => {
+    resetStore();
+    const tx = { id: 1, date: '2026-01-05', amount: -100, merchant: 'FOETEX', description: '', category: '', type: 'spending', covered: false };
+    store.transactions.push(tx);
+    const mStats = computeMerchantStats(store.transactions);
+    const filtered = store.transactions.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      return computeCategoryCertainty(tx, suggestion, mStats, {}) < 0.4;
+    });
+    assertEquals(filtered.length, 0, 'Uncategorized transactions should be excluded');
+  });
+
+  test('Excludes high-certainty transactions', () => {
+    resetStore();
+    // Build enough history for high certainty
+    store.merchantMap['FOETEX'] = { category: 'Groceries', type: 'spending' };
+    for (let i = 0; i < 6; i++) {
+      store.transactions.push({ id: i + 1, date: `2026-01-${String(i + 1).padStart(2, '0')}`, amount: -100, merchant: 'FOETEX', description: '', category: 'Groceries', type: 'spending', covered: false });
+    }
+    const mStats = computeMerchantStats(store.transactions);
+    const recurring = detectRecurringMerchants(mStats);
+    const filtered = store.transactions.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      return computeCategoryCertainty(tx, suggestion, mStats, recurring) < 0.4;
+    });
+    assertEquals(filtered.length, 0, 'High-certainty transactions should be excluded');
+  });
+
+  test('Includes medium-certainty transactions only if below threshold', () => {
+    resetStore();
+    // 2 categorizations, in merchantMap, not recurring
+    store.merchantMap['COOP'] = { category: 'Groceries', type: 'spending' };
+    store.transactions.push(
+      { id: 1, date: '2026-01-05', amount: -100, merchant: 'COOP', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-12', amount: -150, merchant: 'COOP', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const mStats = computeMerchantStats(store.transactions);
+    // Check that medium certainty (0.4-0.79) is NOT included in low-certainty filter
+    const filtered = store.transactions.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      const certainty = computeCategoryCertainty(tx, suggestion, mStats, {});
+      return certainty < 0.4;
+    });
+    assertEquals(filtered.length, 0, 'Medium-certainty (0.4+) should NOT be in low-certainty filter');
+  });
+});
+
+// ============ Normalized MerchantMap Keys ============
+runner.suite('Normalized MerchantMap Keys', (test) => {
+
+  test('autoMatchMerchant matches despite extra spaces and punctuation', () => {
+    resetStore();
+    // Store under a clean name
+    store.merchantMap[normalizeMerchantName('FOETEX')] = { category: 'Groceries', type: 'spending' };
+    // Lookup with extra spaces and punctuation — should still match
+    const result = autoMatchMerchant('FOETEX  STORE', -100);
+    // Won't match because "FOETEX STORE" normalizes to "FOETEX STORE", not "FOETEX"
+    // But if stored as "FOETEX STORE" with extra space, it should match "FOETEX STORE"
+    resetStore();
+    store.merchantMap[normalizeMerchantName('FOETEX  STORE')] = { category: 'Groceries', type: 'spending' };
+    const result2 = autoMatchMerchant('FOETEX STORE', -100);
+    assertEquals(result2.category, 'Groceries', 'Double-space merchant should match single-space lookup');
+  });
+
+  test('autoMatchMerchant matches despite special characters', () => {
+    resetStore();
+    // COOP*365 normalizes to COOP365; lookup with same special char should match
+    store.merchantMap[normalizeMerchantName('COOP*365')] = { category: 'Groceries', type: 'spending' };
+    const result = autoMatchMerchant('COOP*365', -50);
+    assertEquals(result.category, 'Groceries', 'Same merchant with special chars should match via normalization');
+    // Also verify that "COOP.365" normalizes to the same key as "COOP*365"
+    const result2 = autoMatchMerchant('COOP.365', -50);
+    assertEquals(result2.category, 'Groceries', 'Different punctuation should normalize to same key');
+  });
+
+  test('selectCategory stores under normalized key', () => {
+    resetStore();
+    store.transactions.push({ id: 1, date: '2026-01-05', amount: -100, merchant: 'Føtex  Store', description: '', category: '', type: 'spending', covered: false });
+    selectCategory(1, 'Groceries');
+    const normalizedKey = normalizeMerchantName('Føtex  Store');
+    assert(!!store.merchantMap[normalizedKey], 'merchantMap should have normalized key');
+    assertEquals(store.merchantMap[normalizedKey].category, 'Groceries', 'Should store correct category');
+  });
+
+  test('setTxType updates using normalized key', () => {
+    resetStore();
+    store.transactions.push({ id: 1, date: '2026-01-05', amount: -100, merchant: 'COOP*365', description: '', category: 'Groceries', type: 'spending', covered: false });
+    const nk = normalizeMerchantName('COOP*365');
+    store.merchantMap[nk] = { category: 'Groceries', type: 'spending' };
+    setTxType(1, 'saving');
+    assertEquals(store.merchantMap[nk].type, 'saving', 'Type should be updated via normalized key');
+  });
+
+  test('Migration re-keys merchantMap entries', () => {
+    // Simulate pre-migration state: keys stored with toUpperCase() only
+    const oldMap = {
+      'FOETEX  STORE': { category: 'Groceries', type: 'spending' },
+      'COOP*365': { category: 'Groceries', type: 'spending' },
+      'NETTO': { category: 'Groceries', type: 'spending' }
+    };
+    const newMap = {};
+    Object.keys(oldMap).forEach(k => {
+      const nk = normalizeMerchantName(k);
+      newMap[nk] = oldMap[k];
+    });
+    // "FOETEX  STORE" should become "FOETEX STORE" (collapsed space)
+    assert(!!newMap['FOETEX STORE'], 'Double-space key should be collapsed');
+    assert(!newMap['FOETEX  STORE'], 'Old double-space key should not exist');
+    // "COOP*365" should become "COOP365" (stripped *)
+    assert(!!newMap['COOP365'], 'Key with * should have * stripped');
+    // "NETTO" stays "NETTO"
+    assert(!!newMap['NETTO'], 'Already-normalized key should survive');
+  });
+});
+
+// ============ Merchant Name Resolution (2025 format cleanup) ============
+runner.suite('resolveMerchant 2025 format cleanup', (test) => {
+
+  test('Strips "Den DD.MM" date suffix from card transactions', () => {
+    assertEquals(resolveMerchant('', 'SPAR NY ELLEBJERG STDen 14.04'), 'SPAR NY ELLEBJERG ST');
+    assertEquals(resolveMerchant('', 'FOETEX FOOD TORVEPORDen 11.04'), 'FOETEX FOOD TORVEPOR');
+    assertEquals(resolveMerchant('', 'CAFE DET ELEKTRISKE Den 13.04'), 'CAFE DET ELEKTRISKE');
+  });
+
+  test('Extracts merchant from "Nordea pay" descriptions', () => {
+    assertEquals(resolveMerchant('', 'Nordea pay køb, . HIVE CPH         Den 12.04'), 'HIVE CPH');
+    assertEquals(resolveMerchant('', 'Nordea pay, . NETTO NOERREVOLDG.   Den 12.04'), 'NETTO NOERREVOLDG.');
+    assertEquals(resolveMerchant('', 'Nordea pay køb, . Wolt'), 'Wolt');
+    assertEquals(resolveMerchant('', 'Nordea pay køb, . SAS'), 'SAS');
+  });
+
+  test('Extracts person name from MobilePay in desc (2025 format)', () => {
+    assertEquals(resolveMerchant('', 'MobilePay Ivan Jugov'), 'Ivan Jugov');
+    assertEquals(resolveMerchant('', 'MobilePay Jonas Fjor'), 'Jonas Fjor');
+  });
+
+  test('Extracts person name from "Overførsel MobilePay" transfers', () => {
+    assertEquals(resolveMerchant('', 'Overførsel MobilePay Oliver Ski'), 'Oliver Ski');
+    assertEquals(resolveMerchant('', 'Overførsel MobilePay Karl Victo'), 'Karl Victo');
+  });
+
+  test('Strips foreign currency prefix', () => {
+    assertEquals(resolveMerchant('', 'SEK 1240,00         TICKSTER.COM'), 'TICKSTER.COM');
+    assertEquals(resolveMerchant('', 'EUR 19,47           UKVI ETAMOB000002855'), 'UKVI ETAMOB000002855');
+    assertEquals(resolveMerchant('', 'USD 49,81           SP ODESZA'), 'SP ODESZA');
+  });
+
+  test('Strips "Bs betaling" prefix', () => {
+    assertEquals(resolveMerchant('', 'Bs betaling TOPDANMARK FORSIKRIN'), 'TOPDANMARK FORSIKRIN');
+    assertEquals(resolveMerchant('', 'Bs betaling FIBERBY'), 'FIBERBY');
+  });
+
+  test('Handles "Pay modpost." refund entries', () => {
+    assertEquals(resolveMerchant('', 'Pay modpost., . Microsoft*Store    Den 22.03'), 'Microsoft*Store');
+  });
+
+  test('Preserves clean 2026-format names unchanged', () => {
+    assertEquals(resolveMerchant('NETTO', ''), 'NETTO');
+    assertEquals(resolveMerchant('Føtex', ''), 'Føtex');
+  });
+
+  test('Preserves transfer descriptions', () => {
+    assertEquals(resolveMerchant('', 'From Savings Account'), 'From Savings Account');
+    assertEquals(resolveMerchant('', 'Lønoverførsel'), 'Lønoverførsel');
+    assertEquals(resolveMerchant('', 'Overførsel SU'), 'Overførsel SU');
   });
 });
 

@@ -179,6 +179,15 @@ tr:hover { background: #f9fafb; }
 .tx-actions { display: flex; gap: 4px; align-items: center; }
 .cat-suggest { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; cursor: pointer; background: #fff7ed; color: var(--orange); border: 1px dashed var(--orange); transition: all 0.15s; }
 .cat-suggest:hover { background: var(--green-light); color: var(--green); border-color: var(--green); }
+.cat-suggest-high { background: var(--green-light); color: var(--green); border: 1px solid var(--green); border-style: solid; }
+.cat-suggest-high:hover { background: #bbf7d0; }
+.cat-suggest-medium { background: #fff7ed; color: var(--orange); border: 1px solid var(--orange); border-style: solid; }
+.cat-suggest-medium:hover { background: var(--green-light); color: var(--green); border-color: var(--green); }
+.badge-recurring { display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px; font-size: 10px; color: var(--accent); background: #f0f4ff; margin-left: 4px; cursor: help; }
+.conflict-banner { background: #fef2f2; border: 1px solid var(--red); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+.conflict-banner summary { cursor: pointer; font-weight: 500; color: var(--red); }
+.conflict-banner .conflict-list { margin-top: 8px; }
+.conflict-banner .conflict-item { padding: 4px 0; border-bottom: 1px solid #fee2e2; font-size: 12px; }
 .cat-group-pick:hover { background: var(--accent-light); color: var(--accent); }
 
 .toast { position: fixed; bottom: 20px; right: 20px; background: var(--text); color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 200; transform: translateY(100px); opacity: 0; transition: all 0.3s; }
@@ -268,9 +277,11 @@ tr:hover { background: #f9fafb; }
         <option value="saving">Saving/Investing</option><option value="income">Income</option><option value="ignore">Ignored</option>
       </select>
       <label class="text-sm text-muted"><input type="checkbox" id="tx-uncategorized" onchange="renderTransactions()"> Uncategorized only</label>
+      <label class="text-sm text-muted"><input type="checkbox" id="tx-low-certainty" onchange="renderTransactions()"> Low-certainty review</label>
       <input type="text" id="tx-search" placeholder="Search merchant..." oninput="renderTransactions()" style="margin-left: auto;">
       <button class="btn btn-sm btn-danger" onclick="clearAllTransactions()">Clear All</button>
     </div>
+    <div id="conflict-banner"></div>
     <div id="tx-summary" class="text-sm text-muted mb-16"></div>
     <div class="card">
       <div class="table-wrap">
@@ -523,13 +534,18 @@ const MERCHANT_PATTERNS = [
   { p: 'SU', c: 'SU', t: 'income', x: true },
 ];
 
+function normalizeMerchantName(name) {
+  return name.replace(/[*\-_.,;:/\\|]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+}
+
 // Match merchant against pattern list. Returns { category, type } or null.
 // Optional amount param for amount-dependent rules.
 function autoMatchMerchant(merchantName, amount) {
   const upper = merchantName.toUpperCase();
+  const normalizedKey = normalizeMerchantName(merchantName);
   // First check user's learned merchantMap, but validate sign makes sense
-  if (store.merchantMap[upper]) {
-    const mapped = store.merchantMap[upper];
+  if (store.merchantMap[normalizedKey]) {
+    const mapped = store.merchantMap[normalizedKey];
     const isIncomeCategory = getIncomeCategories().has(mapped.category) || mapped.type === 'income';
     const isPositive = amount && amount > 0;
     // Don't suggest income categories for negative transactions or vice versa
@@ -564,6 +580,157 @@ function autoMatchMerchant(merchantName, amount) {
     }
   }
   return null;
+}
+
+// ========== SMART CATEGORIZATION SUITE ==========
+
+// Phase 1: Merchant Stats — per-merchant statistics from categorized transactions
+function computeMerchantStats(transactions) {
+  const stats = {};
+  transactions.forEach(tx => {
+    if (!tx.category || tx.type === 'ignore' || tx.splitInto) return;
+    const key = tx.merchant.toUpperCase();
+    if (!stats[key]) stats[key] = { count: 0, categories: {}, amounts: [], dates: [] };
+    const s = stats[key];
+    s.count++;
+    s.categories[tx.category] = (s.categories[tx.category] || 0) + 1;
+    s.amounts.push(tx.amount);
+    s.dates.push(tx.date);
+  });
+  // Compute derived fields
+  Object.values(stats).forEach(s => {
+    const sum = s.amounts.reduce((a, b) => a + b, 0);
+    s.meanAmount = sum / s.amounts.length;
+    const variance = s.amounts.reduce((a, v) => a + (v - s.meanAmount) ** 2, 0) / s.amounts.length;
+    s.stddevAmount = Math.sqrt(variance);
+    // Primary category = most frequent
+    let maxCount = 0;
+    s.primaryCategory = '';
+    s.primaryCategoryCount = 0;
+    Object.entries(s.categories).forEach(([cat, cnt]) => {
+      if (cnt > maxCount) { maxCount = cnt; s.primaryCategory = cat; s.primaryCategoryCount = cnt; }
+    });
+  });
+  return stats;
+}
+
+// Cache for merchant stats — invalidated on every renderTransactions call
+let _merchantStatsCache = null;
+let _merchantStatsVersion = -1;
+let _merchantStatsCacheVersion = 0;
+function getMerchantStats() {
+  if (_merchantStatsCache && _merchantStatsVersion === _merchantStatsCacheVersion) return _merchantStatsCache;
+  _merchantStatsCache = computeMerchantStats(store.transactions);
+  _merchantStatsVersion = _merchantStatsCacheVersion;
+  return _merchantStatsCache;
+}
+function invalidateMerchantCaches() { _merchantStatsCacheVersion++; }
+
+// Phase 2: Recurring Transaction Detection
+function detectRecurringMerchants(merchantStats) {
+  const recurring = {};
+  Object.entries(merchantStats).forEach(([merchant, stats]) => {
+    if (stats.count < 3) return;
+    // Sort dates and compute gaps
+    const sortedDates = stats.dates.slice().sort();
+    const gaps = [];
+    for (let i = 1; i < sortedDates.length; i++) {
+      const d1 = new Date(sortedDates[i - 1]);
+      const d2 = new Date(sortedDates[i]);
+      gaps.push((d2 - d1) / (1000 * 60 * 60 * 24));
+    }
+    if (gaps.length === 0) return;
+    // Median gap
+    const sortedGaps = gaps.slice().sort((a, b) => a - b);
+    const medianGap = sortedGaps[Math.floor(sortedGaps.length / 2)];
+    // Monthly cadence: 25–38 day median gap
+    if (medianGap < 25 || medianGap > 38) return;
+    // Amount consistency: coefficient of variation < 15%
+    const absAmounts = stats.amounts.map(Math.abs);
+    const mean = absAmounts.reduce((a, b) => a + b, 0) / absAmounts.length;
+    if (mean === 0) return;
+    const variance = absAmounts.reduce((a, v) => a + (v - mean) ** 2, 0) / absAmounts.length;
+    const cv = Math.sqrt(variance) / mean;
+    if (cv >= 0.15) return;
+    // Calculate months covered
+    const firstDate = new Date(sortedDates[0]);
+    const lastDate = new Date(sortedDates[sortedDates.length - 1]);
+    const monthsCovered = Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24 * 30.44)) + 1;
+    recurring[merchant] = { cadenceDays: Math.round(medianGap), typicalAmount: mean, monthsCovered };
+  });
+  return recurring;
+}
+
+// Cache for recurring merchants — shares invalidation with merchant stats
+let _recurringCache = null;
+let _recurringVersion = -1;
+function getRecurringMerchants() {
+  if (_recurringCache && _recurringVersion === _merchantStatsCacheVersion) return _recurringCache;
+  _recurringCache = detectRecurringMerchants(getMerchantStats());
+  _recurringVersion = _merchantStatsCacheVersion;
+  return _recurringCache;
+}
+
+// Phase 3: Categorization Certainty
+function computeCategoryCertainty(tx, suggestion, merchantStats, recurringMerchants) {
+  if (!suggestion || !suggestion.category) return 0;
+  const key = tx.merchant.toUpperCase();
+  const stats = merchantStats[key];
+  // Signal 1: Category history depth (weight 0.35)
+  let historyScore = 0;
+  if (stats && stats.categories[suggestion.category]) {
+    const count = stats.categories[suggestion.category];
+    if (count >= 5) historyScore = 1.0;
+    else if (count >= 3) historyScore = 0.7;
+    else if (count >= 2) historyScore = 0.5;
+    else historyScore = 0.3;
+  }
+  // Signal 2: Amount consistency (weight 0.25)
+  let amountScore = 0.2; // default for no history
+  if (stats && stats.stddevAmount !== undefined && stats.count >= 2) {
+    const deviation = Math.abs(tx.amount - stats.meanAmount);
+    if (stats.stddevAmount === 0) amountScore = deviation === 0 ? 1.0 : 0.2;
+    else if (deviation <= stats.stddevAmount) amountScore = 1.0;
+    else if (deviation <= 2 * stats.stddevAmount) amountScore = 0.5;
+    else amountScore = 0.2;
+  }
+  // Signal 3: Match source (weight 0.25)
+  const merchantMapKey = normalizeMerchantName(tx.merchant);
+  const isFromMerchantMap = !!(store.merchantMap && store.merchantMap[merchantMapKey]);
+  const sourceScore = isFromMerchantMap ? 1.0 : 0.6;
+  // Signal 4: Recurring merchant (weight 0.15)
+  const recurringScore = recurringMerchants[key] ? 1.0 : 0.0;
+
+  return historyScore * 0.35 + amountScore * 0.25 + sourceScore * 0.25 + recurringScore * 0.15;
+}
+
+function certaintyBand(score) {
+  if (score >= 0.8) return 'high';
+  if (score >= 0.4) return 'medium';
+  return 'low';
+}
+
+// Phase 4: Conflicting Categorization Detection
+function detectConflicts(merchantStats) {
+  // Group by normalized name
+  const groups = {};
+  Object.entries(merchantStats).forEach(([merchant, stats]) => {
+    const normalized = normalizeMerchantName(merchant);
+    if (!groups[normalized]) groups[normalized] = { merchants: [], categories: {} };
+    groups[normalized].merchants.push(merchant);
+    Object.entries(stats.categories).forEach(([cat, cnt]) => {
+      groups[normalized].categories[cat] = (groups[normalized].categories[cat] || 0) + cnt;
+    });
+  });
+  // Find groups with 2+ categories
+  const conflicts = {};
+  Object.entries(groups).forEach(([normalized, group]) => {
+    const cats = Object.keys(group.categories);
+    if (cats.length >= 2) {
+      conflicts[normalized] = { merchants: group.merchants, categories: group.categories };
+    }
+  });
+  return conflicts;
 }
 
 // budgets structure: { "2026": { "Rent + utilities": { "01": 4800, "02": 4800, ... }, ... } }
@@ -625,6 +792,14 @@ function loadStore() {
           }
         });
       });
+      // Migrate: re-key merchantMap using normalized keys
+      const oldMap = store.merchantMap;
+      const newMap = {};
+      Object.keys(oldMap).forEach(k => {
+        const nk = normalizeMerchantName(k);
+        newMap[nk] = oldMap[k]; // last-write-wins if two keys normalize to the same thing
+      });
+      store.merchantMap = newMap;
     } else {
       store.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
       store.budgets = { "2026": getDefaultYearBudget() };
@@ -711,17 +886,40 @@ function parseNordeaCSV(text) {
 function txFingerprint(tx) { return `${tx.date}|${tx.amount}|${tx.merchant}|${tx.description}`; }
 
 // Resolve merchant name: prefer description for payment platforms (MobilePay, NordeaPay)
+// Also cleans 2025-format metadata (date suffixes, currency prefixes, payment prefixes)
 function resolveMerchant(name, desc) {
   const n = (name || '').trim();
   const d = (desc || '').trim();
   const upper = n.toUpperCase();
-  if (upper.includes('VIPPS') || upper.includes('MOBILEPAY')) {
+  const dUpper = d.toUpperCase();
+  // MobilePay: check both name (2026 format) and desc (2025 format)
+  if (upper.includes('VIPPS') || upper.includes('MOBILEPAY') || dUpper.startsWith('MOBILEPAY ')) {
     return d.replace(/^MobilePay\s+/i, '').trim() || n || 'Unknown';
   }
-  if (d.toUpperCase().includes('NORDEAPAY')) {
-    return n || d || 'Unknown';
+  // "Overførsel MobilePay Person" (2025 incoming transfers)
+  if (dUpper.includes('OVERFØRSEL MOBILEPAY ')) {
+    return d.replace(/^Overførsel MobilePay\s+/i, '').trim() || 'Unknown';
   }
-  return n || d || 'Unknown';
+  // Nordea Pay: "NordeaPay" (2026) or "Nordea pay køb, ." (2025) — extract actual merchant
+  if (dUpper.includes('NORDEAPAY') || dUpper.startsWith('NORDEA PAY')) {
+    let merchant = d.replace(/^Nordea\s*pay\s*(køb)?\s*,?\s*\.?\s*/i, '').trim();
+    merchant = merchant.replace(/\s*Den \d{2}\.\d{2}$/, '').trim();
+    return merchant || n || d || 'Unknown';
+  }
+  // "Pay modpost." (Nordea refund/reversal)
+  if (dUpper.startsWith('PAY MODPOST')) {
+    let merchant = d.replace(/^Pay modpost\.\s*,?\s*\.?\s*/i, '').trim();
+    merchant = merchant.replace(/\s*Den \d{2}\.\d{2}$/, '').trim();
+    return merchant || 'Unknown';
+  }
+  let result = n || d || 'Unknown';
+  // Strip "Den DD.MM" date suffix (2025 card transactions)
+  result = result.replace(/\s?Den \d{2}\.\d{2}$/, '').trim();
+  // Strip foreign currency prefix: "SEK 1240,00  TICKSTER.COM" → "TICKSTER.COM"
+  result = result.replace(/^[A-Z]{3} [\d.,]+\s{2,}/, '').trim();
+  // Strip "Bs betaling " prefix (direct debit)
+  result = result.replace(/^Bs betaling\s+/i, '').trim();
+  return result || 'Unknown';
 }
 
 // Merchant map key: use resolved merchant for mapping
@@ -761,13 +959,25 @@ function renderImportPreview() {
 
 function confirmImport() {
   let count = 0;
+  let autoCount = 0;
+  const mStats = getMerchantStats();
+  const recurring = getRecurringMerchants();
   pendingImport.forEach(tx => {
-    // Only infer type (spending/income/ignore), never auto-assign category
     const autocat = autoMatchMerchant(tx.merchant, tx.amount);
+    // Auto-categorize recurring merchants with 3+ consistent categorizations
+    let assignedCategory = '';
+    if (autocat && autocat.category) {
+      const key = tx.merchant.toUpperCase();
+      const stats = mStats[key];
+      if (recurring[key] && stats && stats.primaryCategoryCount >= 3 && stats.primaryCategory === autocat.category) {
+        assignedCategory = autocat.category;
+        autoCount++;
+      }
+    }
     store.transactions.push({
       id: store.nextId++, date: tx.date, amount: tx.amount, merchant: tx.merchant,
       description: tx.description, balance: tx.balance, pending: tx.pending,
-      category: '',
+      category: assignedCategory,
       type: autocat ? autocat.type : (tx.amount > 0 ? 'income' : 'spending'),
       covered: false
     });
@@ -776,7 +986,9 @@ function confirmImport() {
   store.transactions.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   saveStore(); pendingImport = [];
   document.getElementById('import-preview').classList.add('hidden');
-  toast(`Imported ${count} transaction${count !== 1 ? 's' : ''}.`);
+  let msg = `Imported ${count} transaction${count !== 1 ? 's' : ''}.`;
+  if (autoCount > 0) msg += ` ${autoCount} auto-categorized.`;
+  toast(msg);
   renderAll();
 }
 
@@ -846,20 +1058,74 @@ function renderTransactions() {
     uncategorizedOnly: document.getElementById('tx-uncategorized').checked,
     search: document.getElementById('tx-search').value
   }, store.transactions);
-  document.getElementById('tx-summary').textContent = `${result.filtered.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}`;
+
+  // Smart categorization data
+  const mStats = getMerchantStats();
+  const recurring = getRecurringMerchants();
+  const conflicts = detectConflicts(mStats);
+  const lowCertaintyMode = document.getElementById('tx-low-certainty').checked;
+
+  // Conflict banner
+  const conflictBanner = document.getElementById('conflict-banner');
+  const conflictEntries = Object.entries(conflicts);
+  if (conflictEntries.length > 0) {
+    conflictBanner.innerHTML = `<details class="conflict-banner"><summary>${conflictEntries.length} merchant${conflictEntries.length !== 1 ? 's' : ''} with conflicting categories</summary><div class="conflict-list">${conflictEntries.map(([name, c]) =>
+      `<div class="conflict-item"><strong>${esc(name)}</strong>: ${Object.entries(c.categories).map(([cat, cnt]) => `${esc(cat)} (${cnt})`).join(', ')}</div>`
+    ).join('')}</div></details>`;
+  } else {
+    conflictBanner.innerHTML = '';
+  }
+
+  // Low-certainty post-filter
+  let displayTxs = result.filtered;
+  if (lowCertaintyMode) {
+    displayTxs = displayTxs.filter(tx => {
+      if (tx.type === 'ignore' || !tx.category) return false;
+      const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
+      if (!suggestion || !suggestion.category) return false;
+      const certainty = computeCategoryCertainty(tx, suggestion, mStats, recurring);
+      return certainty < 0.4;
+    });
+  }
+
+  // In uncategorized mode, sort by certainty (highest first) so easy accepts are at top
+  const uncatMode = document.getElementById('tx-uncategorized').checked;
+  if (uncatMode) {
+    displayTxs = displayTxs.slice().sort((a, b) => {
+      const aHasCat = !!a.category, bHasCat = !!b.category;
+      if (aHasCat !== bHasCat) return aHasCat ? 1 : -1;
+      if (!aHasCat && !bHasCat) {
+        const aSug = autoMatchMerchant(a.merchant, a.amount);
+        const bSug = autoMatchMerchant(b.merchant, b.amount);
+        const aCert = aSug && aSug.category ? computeCategoryCertainty(a, aSug, mStats, recurring) : -1;
+        const bCert = bSug && bSug.category ? computeCategoryCertainty(b, bSug, mStats, recurring) : -1;
+        if (aCert !== bCert) return bCert - aCert; // highest certainty first
+      }
+      return b.date.localeCompare(a.date) || b.id - a.id;
+    });
+  }
+
+  document.getElementById('tx-summary').textContent = `${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}`;
   const tbody = document.getElementById('tx-body');
-  tbody.innerHTML = result.filtered.map(tx => {
+  tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
     const isDupe = !isSplitChild && result.duplicateFingerprints[txFingerprint(tx)] > 1;
+    const isRecurring = !!recurring[tx.merchant.toUpperCase()];
     return `<tr${isSplitChild ? ' style="background:#f8f9ff"' : (isDupe ? ' style="background:#fef2f2"' : '')}>
     <td class="mono">${tx.pending ? '<em>Pending</em>' : tx.date}${isSplitChild ? '<span class="badge-split">split</span>' : ''}${isDupe ? '<span class="badge-duplicate" title="Possible duplicate: same date, amount, merchant and description">dup?</span>' : ''}</td>
-    <td class="fw-500">${esc(tx.merchant)}</td>
+    <td class="fw-500">${esc(tx.merchant)}${isRecurring ? '<span class="badge-recurring" title="Recurring subscription (monthly)">&#8635;</span>' : ''}</td>
     <td class="text-muted text-sm">${esc(tx.description)}</td>
     <td class="amount ${tx.amount < 0 ? (tx.type === 'saving' ? 'saving' : 'expense') : 'income'} mono">${fmt(tx.amount)}</td>
     <td><div class="cat-select-wrap">${(() => {
       if (tx.category) return `<span class="cat-select-trigger" onclick="openCatDropdown(event, ${tx.id})">${esc(tx.category)}</span>`;
       const suggestion = autoMatchMerchant(tx.merchant, tx.amount);
-      if (suggestion && suggestion.category) return `<span class="cat-suggest" data-txid="${tx.id}" data-cat="${esc(suggestion.category)}" onclick="acceptSuggestion(this)" title="Click to accept">${esc(suggestion.category)} &#x2713;</span><span class="cat-select-trigger badge-uncategorized" onclick="openCatDropdown(event, ${tx.id})" title="Pick different" style="padding:2px 6px;margin-left:2px">&#x25BE;</span>`;
+      if (suggestion && suggestion.category) {
+        const certainty = computeCategoryCertainty(tx, suggestion, mStats, recurring);
+        const band = certaintyBand(certainty);
+        const bandClass = band === 'high' ? ' cat-suggest-high' : band === 'medium' ? ' cat-suggest-medium' : '';
+        const pct = Math.round(certainty * 100);
+        return `<span class="cat-suggest${bandClass}" data-txid="${tx.id}" data-cat="${esc(suggestion.category)}" onclick="acceptSuggestion(this)" title="${pct}% certainty — click to accept">${esc(suggestion.category)} &#x2713;</span><span class="cat-select-trigger badge-uncategorized" onclick="openCatDropdown(event, ${tx.id})" title="Pick different" style="padding:2px 6px;margin-left:2px">&#x25BE;</span>`;
+      }
       return `<span class="cat-select-trigger badge-uncategorized" onclick="openCatDropdown(event, ${tx.id})">+ Category</span>`;
     })()}</div></td>
     <td><select class="type-select" onchange="setTxType(${tx.id}, this.value)">
@@ -886,8 +1152,8 @@ function setTxType(id, type) {
   if (tx) {
     tx.type = type;
     // Also update merchantMap if this tx has a category, so future imports learn the type too
-    if (tx.category && store.merchantMap[tx.merchant.toUpperCase()]) {
-      store.merchantMap[tx.merchant.toUpperCase()].type = type;
+    if (tx.category && store.merchantMap[normalizeMerchantName(tx.merchant)]) {
+      store.merchantMap[normalizeMerchantName(tx.merchant)].type = type;
     }
     saveStore();
   }
@@ -1042,11 +1308,12 @@ function selectCategory(txId, category) {
     tx.category = category;
     tx.manualCategory = !!category; // Flag so sanitizer respects manual choices
     if (category) {
-      store.merchantMap[tx.merchant.toUpperCase()] = { category, type: tx.type };
+      store.merchantMap[normalizeMerchantName(tx.merchant)] = { category, type: tx.type };
     } else {
-      delete store.merchantMap[tx.merchant.toUpperCase()];
+      delete store.merchantMap[normalizeMerchantName(tx.merchant)];
       tx.manualCategory = false;
     }
+    invalidateMerchantCaches();
     saveStore();
   }
   closeCatDropdowns(); renderTransactions();

@@ -21,10 +21,13 @@
 - Known institution exclusion from person-name heuristic
 - Refactoring: extract `getFilteredTransactions()` and `getYearlyDashboardData()` pure functions, extract `CHART_COLORS` constant, fix forecastLoan NaN bug
 - Test suite expanded to 61 tests (19 new tests covering extracted functions)
+- Normalize merchantMap keys: use `normalizeMerchantName()` for all merchantMap storage/lookup so formatting differences (spaces, punctuation) don't break matching
+- Clean 2025 CSV merchant names in `resolveMerchant()`: strip `Den DD.MM` date suffixes, foreign currency prefixes, `Nordea pay`/`Bs betaling`/`Pay modpost.` prefixes, handle MobilePay-in-desc format. Test suite at 119 tests.
 
 ## Backlog
 
 ### P1: High impact, do next
+- **Debug SU loan feature**: Investigate and fix issues with the SU loan tracking/split functionality. Needs scoping — reproduce the bug, identify root cause, then fix. Scope: ~1 session.
 - **Categorization certainty levels**: Confidence scoring for auto-categorization suggestions. Signals: (1) number of past categorizations for this merchant, (2) amount deviation from historical mean/range, (3) exact vs fuzzy match. High certainty (e.g., Louis Nielsen ~360 DKK = Contacts) shown as solid green badge. Low certainty (e.g., Louis Nielsen 200 DKK) shown as dashed orange badge. No auto-accept on import (all transactions require manual review). Scope: ~2 sessions. Depends on: enough transaction history to be useful.
 - **Low-certainty review mode**: Filtered view in transactions tab showing only categorized transactions where certainty is below a threshold. Lets you periodically audit auto-learned mappings and catch miscategorizations early. Could surface: amount outliers for a given merchant, categories that were only used once, merchants where the user has categorized differently over time. Scope: ~1 session. Depends on: certainty levels being implemented first.
 - **Conflicting categorization detection**: Flag transactions where near-identical payments (similar merchant name, similar amount, same description pattern) have been categorized differently. E.g., "MICROSOFT*MICROSOFT 365 P" categorized as M365 but "MICROSOFT*MICROSOFT 365 PE" uncategorized or under a different name. Could use fuzzy string matching (Levenshtein distance or token overlap) to group likely-same merchants and surface inconsistencies. Scope: ~1 session. Synergy with certainty levels and low-certainty review.
