@@ -1666,7 +1666,8 @@ function getEffectiveMonth(t, shiftDay) {
   const raw = t.date.slice(0, 7);
   if (!shiftDay) return raw;
   const isIncome = t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan');
-  if (!isIncome) return raw;
+  const shouldShift = isIncome || t.type === 'saving';
+  if (!shouldShift) return raw;
   const day = parseInt(t.date.slice(8, 10), 10);
   if (day <= shiftDay) return raw;
   const year = parseInt(t.date.slice(0, 4), 10);

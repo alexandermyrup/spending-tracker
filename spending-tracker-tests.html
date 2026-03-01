@@ -463,7 +463,8 @@ function getEffectiveMonth(t, shiftDay) {
   const raw = t.date.slice(0, 7);
   if (!shiftDay) return raw;
   const isIncome = t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan');
-  if (!isIncome) return raw;
+  const shouldShift = isIncome || t.type === 'saving';
+  if (!shouldShift) return raw;
   const day = parseInt(t.date.slice(8, 10), 10);
   if (day <= shiftDay) return raw;
   const year = parseInt(t.date.slice(0, 4), 10);
@@ -1312,6 +1313,11 @@ runner.suite('Salary month-shift rule', (test) => {
   test('Loan on Jan 28 with shift=25 → Jan (not income)', () => {
     const t = { date: '2026-01-28', amount: 50000, type: 'loan' };
     assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Loan should not shift');
+  });
+
+  test('Saving on Jan 28 with shift=25 → Feb (shifts like income)', () => {
+    const t = { date: '2026-01-28', amount: -3000, type: 'saving' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-02', 'Saving should shift to Feb');
   });
 
   test('Ignore-type positive amount with shift=25 → raw month', () => {
