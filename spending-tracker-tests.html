@@ -218,12 +218,17 @@ const localStorage = {
   clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); }
 };
 
+const ORIGINAL_PATTERNS = JSON.parse(JSON.stringify(MERCHANT_PATTERNS));
+
 function resetStore() {
   store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1 };
   store.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
   store.budgets = { "2026": getDefaultYearBudget() };
   pendingImport = [];
   localStorage.clear();
+  // Restore MERCHANT_PATTERNS to original state (tests may mutate it)
+  MERCHANT_PATTERNS.length = 0;
+  ORIGINAL_PATTERNS.forEach(p => MERCHANT_PATTERNS.push(JSON.parse(JSON.stringify(p))));
 }
 
 // ============ CORE FUNCTIONS (from spending-tracker.html) ============
@@ -248,10 +253,13 @@ function autoMatchMerchant(merchantName, amount) {
     if (amount < 0) return { category: 'Transfer out', type: 'spending' };
   }
   for (const rule of MERCHANT_PATTERNS) {
-    if (rule.x) {
-      if (upper === rule.p.toUpperCase()) return { category: rule.c, type: rule.t };
-    } else {
-      if (upper.includes(rule.p.toUpperCase())) return { category: rule.c, type: rule.t };
+    const matched = rule.x ? upper === rule.p.toUpperCase() : upper.includes(rule.p.toUpperCase());
+    if (matched) {
+      if (amount) {
+        if (rule.t === 'income' && amount < 0) continue;
+        if (rule.t === 'spending' && amount > 0) continue;
+      }
+      return { category: rule.c, type: rule.t };
     }
   }
   return null;
@@ -451,6 +459,19 @@ function getFilteredTransactions(filters, transactions) {
   return { filtered, totalSpending, totalIncome, duplicateFingerprints };
 }
 
+function getEffectiveMonth(t, shiftDay) {
+  const raw = t.date.slice(0, 7);
+  if (!shiftDay) return raw;
+  const isIncome = t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan');
+  if (!isIncome) return raw;
+  const day = parseInt(t.date.slice(8, 10), 10);
+  if (day <= shiftDay) return raw;
+  const year = parseInt(t.date.slice(0, 4), 10);
+  const month = parseInt(t.date.slice(5, 7), 10);
+  if (month === 12) return `${year + 1}-01`;
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
 function getYearlyDashboardData(year, options) {
   const excludeCovered = options.excludeCovered;
   const transactions = options.transactions;
@@ -458,6 +479,7 @@ function getYearlyDashboardData(year, options) {
   const categories = options.categories;
   const loanBudgetMap = options.loanBudget;
   const currentDate = options.currentDate || new Date();
+  const shiftDay = options.salaryShiftDay || 0;
 
   const yb = (budgets && budgets[year]) || {};
   const annualLoanBudget = (loanBudgetMap && loanBudgetMap[year]) || 0;
@@ -468,7 +490,7 @@ function getYearlyDashboardData(year, options) {
   const catTotals = {};
   const monthData = MONTH_KEYS.map((mk, i) => {
     const ym = `${year}-${mk}`;
-    let txs = transactions.filter(t => t.date.startsWith(ym) && !t.splitInto);
+    let txs = transactions.filter(t => !t.splitInto && getEffectiveMonth(t, shiftDay) === ym);
     if (excludeCovered) txs = txs.filter(t => !t.covered);
     const spend = Math.abs(txs.filter(t => t.type === 'spending' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const save = Math.abs(txs.filter(t => t.type === 'saving' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
@@ -1139,7 +1161,7 @@ runner.suite('getFilteredTransactions', (test) => {
     resetStore();
     store.transactions.push(
       { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
-      { id: 2, date: '2026-02-15', amount: -50, merchant: 'Unknown Shop', description: 'Mystery', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -50, merchant: 'XYZSHOP', description: 'Mystery', category: '', type: 'spending', covered: false },
       { id: 3, date: '2026-02-15', amount: -75, merchant: 'DSB', description: 'Train', category: '', type: 'spending', covered: false }
     );
     const result = getFilteredTransactions(
@@ -1150,7 +1172,7 @@ runner.suite('getFilteredTransactions', (test) => {
     assert(result.filtered.length === 3, 'Should return 3 uncategorized');
     assert(result.filtered[0].merchant === 'FOETEX' || result.filtered[0].merchant === 'DSB', 'First should be a suggestion match');
     assert(result.filtered[1].merchant === 'FOETEX' || result.filtered[1].merchant === 'DSB', 'Second should be a suggestion match');
-    assertEquals(result.filtered[2].merchant, 'Unknown Shop', 'Unknown Shop should be last (no suggestion)');
+    assertEquals(result.filtered[2].merchant, 'XYZSHOP', 'XYZSHOP should be last (no suggestion)');
   });
 });
 
@@ -1253,6 +1275,83 @@ runner.suite('getYearlyDashboardData', (test) => {
     assertEquals(result.monthData[0].hasActuals, true, 'Jan should have actuals');
     assertEquals(result.monthData[11].mk, '12', 'Last month key should be 12');
     assertEquals(result.monthData[11].hasActuals, false, 'Dec should have no actuals');
+  });
+});
+
+runner.suite('Salary month-shift rule', (test) => {
+  test('Income on Jan 28 with shift=25 → Feb', () => {
+    const t = { date: '2026-01-28', amount: 15000, type: 'income' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-02', 'Should shift to Feb');
+  });
+
+  test('Income on Jan 15 with shift=25 → Jan (before cutoff)', () => {
+    const t = { date: '2026-01-15', amount: 15000, type: 'income' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Should stay in Jan');
+  });
+
+  test('Income on Jan 25 with shift=25 → Jan (day <= shiftDay)', () => {
+    const t = { date: '2026-01-25', amount: 15000, type: 'income' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Should stay in Jan');
+  });
+
+  test('Income on Dec 28 with shift=25 → Jan next year', () => {
+    const t = { date: '2026-12-28', amount: 15000, type: 'income' };
+    assertEquals(getEffectiveMonth(t, 25), '2027-01', 'Should roll over to Jan next year');
+  });
+
+  test('Any income with shift=0 → raw month', () => {
+    const t = { date: '2026-01-28', amount: 15000, type: 'income' };
+    assertEquals(getEffectiveMonth(t, 0), '2026-01', 'Shift off returns raw month');
+  });
+
+  test('Spending on Jan 28 with shift=25 → Jan (not income)', () => {
+    const t = { date: '2026-01-28', amount: -3000, type: 'spending' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Spending should not shift');
+  });
+
+  test('Loan on Jan 28 with shift=25 → Jan (not income)', () => {
+    const t = { date: '2026-01-28', amount: 50000, type: 'loan' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Loan should not shift');
+  });
+
+  test('Ignore-type positive amount with shift=25 → raw month', () => {
+    const t = { date: '2026-01-28', amount: 500, type: 'ignore' };
+    assertEquals(getEffectiveMonth(t, 25), '2026-01', 'Ignore type should not shift');
+  });
+
+  test('Yearly dashboard with shifted income shows in correct month', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-28', amount: 15000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-01-15', amount: -3000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false }
+    );
+    store.nextId = 3;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-03-01"),
+      salaryShiftDay: 25
+    });
+    assertEquals(result.monthData[0].inc, 0, 'Jan income should be 0 (shifted to Feb)');
+    assertEquals(result.monthData[1].inc, 15000, 'Feb income should be 15000');
+    assertEquals(result.monthData[0].spend, 3000, 'Jan spending should stay in Jan');
+  });
+
+  test('Monthly dashboard filter respects shifted income', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-28', amount: 15000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-01-10', amount: 5000, merchant: 'SU', description: 'SU', category: 'SU', type: 'income', covered: false }
+    );
+    store.nextId = 3;
+    // With shift=25, Jan 28 income should move to Feb, but Jan 10 stays in Jan
+    const shiftDay = 25;
+    const janTxs = store.transactions.filter(t => !t.splitInto && getEffectiveMonth(t, shiftDay) === '2026-01');
+    const febTxs = store.transactions.filter(t => !t.splitInto && getEffectiveMonth(t, shiftDay) === '2026-02');
+    assertEquals(janTxs.length, 1, 'Jan should have 1 transaction');
+    assertEquals(janTxs[0].amount, 5000, 'Jan transaction should be the SU payment');
+    assertEquals(febTxs.length, 1, 'Feb should have 1 transaction');
+    assertEquals(febTxs[0].amount, 15000, 'Feb transaction should be the salary');
   });
 });
 

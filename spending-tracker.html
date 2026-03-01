@@ -215,6 +215,21 @@ tr:hover { background: #f9fafb; }
       <label class="text-sm text-muted" style="margin-left: 8px;">
         <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard()"> Exclude covered
       </label>
+      <label class="text-sm text-muted" style="margin-left: 8px;">Salary shift:
+        <select id="dash-salary-shift" onchange="saveSalaryShiftDay(this.value)" style="font-size:13px;padding:2px 4px">
+          <option value="0">Off</option>
+          <option value="20">20th</option>
+          <option value="21">21st</option>
+          <option value="22">22nd</option>
+          <option value="23">23rd</option>
+          <option value="24">24th</option>
+          <option value="25">25th</option>
+          <option value="26">26th</option>
+          <option value="27">27th</option>
+          <option value="28">28th</option>
+          <option value="29">29th</option>
+        </select>
+      </label>
     </div>
     <!-- Monthly view -->
     <div id="dash-monthly-view">
@@ -360,7 +375,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
 const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
 
-let store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1 };
+let store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1, salaryShiftDay: 0 };
 
 const DEFAULT_CATEGORIES = {
   "Fixed costs": ["Rent + utilities","Transport","Mobile","Internet","Contacts","Macbook payment","Gym","KAB venteliste"],
@@ -537,12 +552,15 @@ function autoMatchMerchant(merchantName, amount) {
     if (amount > 0) return { category: 'Reimbursement', type: 'income' };
     if (amount < 0) return { category: 'Transfer out', type: 'spending' };
   }
-  // Then check pattern list
+  // Then check pattern list (with sign validation)
   for (const rule of MERCHANT_PATTERNS) {
-    if (rule.x) { // exact match
-      if (upper === rule.p.toUpperCase()) return { category: rule.c, type: rule.t };
-    } else {
-      if (upper.includes(rule.p.toUpperCase())) return { category: rule.c, type: rule.t };
+    const matched = rule.x ? upper === rule.p.toUpperCase() : upper.includes(rule.p.toUpperCase());
+    if (matched) {
+      if (amount) {
+        if (rule.t === 'income' && amount < 0) continue;
+        if (rule.t === 'spending' && amount > 0) continue;
+      }
+      return { category: rule.c, type: rule.t };
     }
   }
   return null;
@@ -589,6 +607,7 @@ function loadStore() {
       store = JSON.parse(raw);
       if (!store.merchantMap) store.merchantMap = {};
       if (!store.loanBudget) store.loanBudget = {};
+      if (store.salaryShiftDay === undefined) store.salaryShiftDay = 0;
       if (!store.nextId) store.nextId = store.transactions.length + 1;
       // Migrate: ensure all default categories exist in existing stores
       Object.entries(DEFAULT_CATEGORIES).forEach(([group, cats]) => {
@@ -1161,7 +1180,8 @@ function renderDashboard() {
   const month = document.getElementById('dash-month').value;
   if (!month) return;
   const exclCovered = document.getElementById('dash-exclude-covered').checked;
-  let txs = store.transactions.filter(t => t.date.startsWith(month) && !t.splitInto);
+  const shiftDay = store.salaryShiftDay || 0;
+  let txs = store.transactions.filter(t => !t.splitInto && getEffectiveMonth(t, shiftDay) === month);
   if (exclCovered) txs = txs.filter(t => !t.covered);
 
   const spending = txs.filter(t => t.type === 'spending' && t.amount < 0);
@@ -1282,6 +1302,7 @@ function getYearlyDashboardData(year, options) {
   const categories = options.categories;
   const loanBudgetMap = options.loanBudget;
   const currentDate = options.currentDate || new Date();
+  const shiftDay = options.salaryShiftDay || 0;
 
   const yb = (budgets && budgets[year]) || {};
   const annualLoanBudget = (loanBudgetMap && loanBudgetMap[year]) || 0;
@@ -1293,7 +1314,7 @@ function getYearlyDashboardData(year, options) {
   const catTotals = {};
   const monthData = MONTH_KEYS.map((mk, i) => {
     const ym = `${year}-${mk}`;
-    let txs = transactions.filter(t => t.date.startsWith(ym) && !t.splitInto);
+    let txs = transactions.filter(t => !t.splitInto && getEffectiveMonth(t, shiftDay) === ym);
     if (excludeCovered) txs = txs.filter(t => !t.covered);
     const spend = Math.abs(txs.filter(t => t.type === 'spending' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const save = Math.abs(txs.filter(t => t.type === 'saving' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
@@ -1374,7 +1395,8 @@ function renderYearlyDashboard() {
     transactions: store.transactions,
     budgets: store.budgets,
     categories: store.categories,
-    loanBudget: store.loanBudget
+    loanBudget: store.loanBudget,
+    salaryShiftDay: store.salaryShiftDay
   });
 
   // Year summary card
@@ -1475,6 +1497,13 @@ function saveLoanBudget(year, val) {
   if (!store.loanBudget) store.loanBudget = {};
   store.loanBudget[year] = parseFloat(val) || 0;
   saveStore();
+  renderYearlyDashboard();
+}
+
+function saveSalaryShiftDay(val) {
+  store.salaryShiftDay = parseInt(val, 10) || 0;
+  saveStore();
+  renderDashboard();
   renderYearlyDashboard();
 }
 
@@ -1633,9 +1662,28 @@ function getGroupForCategory(cat) {
   for (const [group, cats] of Object.entries(store.categories)) { if (cats.includes(cat)) return group; }
   return 'Variable';
 }
+function getEffectiveMonth(t, shiftDay) {
+  const raw = t.date.slice(0, 7);
+  if (!shiftDay) return raw;
+  const isIncome = t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan');
+  if (!isIncome) return raw;
+  const day = parseInt(t.date.slice(8, 10), 10);
+  if (day <= shiftDay) return raw;
+  const year = parseInt(t.date.slice(0, 4), 10);
+  const month = parseInt(t.date.slice(5, 7), 10);
+  if (month === 12) return `${year + 1}-01`;
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
 function getUniqueMonths() {
   const months = new Set();
-  store.transactions.forEach(t => { if (t.date && t.date.length >= 7) months.add(t.date.slice(0, 7)); });
+  const shiftDay = store.salaryShiftDay || 0;
+  store.transactions.forEach(t => {
+    if (t.date && t.date.length >= 7) {
+      months.add(t.date.slice(0, 7));
+      if (shiftDay) months.add(getEffectiveMonth(t, shiftDay));
+    }
+  });
   return [...months].sort();
 }
 function getAllCategories() { const all = []; Object.values(store.categories).forEach(cats => all.push(...cats)); return all; }
@@ -1689,6 +1737,7 @@ function populateFilters() {
   const dashMonth = document.getElementById('dash-month');
   dashMonth.innerHTML = months.map(m => `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>${m}</option>`).join('');
   if (months.length > 0 && !months.includes(currentMonth)) dashMonth.value = months[months.length - 1];
+  document.getElementById('dash-salary-shift').value = store.salaryShiftDay || 0;
   const txMonth = document.getElementById('tx-month-filter');
   const txmv = txMonth.value;
   txMonth.innerHTML = `<option value="all">All months</option>` + months.map(m => `<option value="${m}">${m}</option>`).join('');
