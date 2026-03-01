@@ -19,6 +19,8 @@
 - Loan inflow type (excluded from true income in dashboard)
 - Delete transactions: single delete + clear all
 - Known institution exclusion from person-name heuristic
+- Refactoring: extract `getFilteredTransactions()` and `getYearlyDashboardData()` pure functions, extract `CHART_COLORS` constant, fix forecastLoan NaN bug
+- Test suite expanded to 61 tests (19 new tests covering extracted functions)
 
 ## Backlog
 
