@@ -187,6 +187,7 @@ let pendingImport = [];
 const STORAGE_KEY = 'spending-tracker-v2';
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
 
 const DEFAULT_CATEGORIES = {
   "Fixed costs": ["Rent + utilities","Transport","Mobile","Internet","Contacts","Macbook payment","Gym","KAB venteliste"],
@@ -412,6 +413,126 @@ function confirmSplit(txId, parts) {
   tx.splitInto = childIds;
   tx.type = 'ignore';
   return childIds;
+}
+
+// ============ EXTRACTED PURE FUNCTIONS ============
+
+function getFilteredTransactions(filters, transactions) {
+  const search = (filters.search || '').toLowerCase();
+  const txs = transactions.filter(tx => {
+    if (filters.month !== 'all' && !tx.date.startsWith(filters.month)) return false;
+    if (filters.category !== 'all' && tx.category !== filters.category) return false;
+    if (filters.type !== 'all' && tx.type !== filters.type) return false;
+    if (filters.uncategorizedOnly && (tx.category || tx.type === 'ignore')) return false;
+    if (search && !tx.merchant.toLowerCase().includes(search) && !tx.description.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const totalSpending = Math.abs(txs.filter(t => t.amount < 0 && t.type === 'spending').reduce((s, t) => s + t.amount, 0));
+  const totalIncome = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const duplicateFingerprints = {};
+  transactions.forEach(tx => {
+    if (tx.splitInto || tx.splitFrom) return;
+    const fp = txFingerprint(tx);
+    duplicateFingerprints[fp] = (duplicateFingerprints[fp] || 0) + 1;
+  });
+  const filtered = txs.filter(tx => !tx.splitInto).sort((a, b) => {
+    if (filters.uncategorizedOnly) {
+      const aHasCat = !!a.category;
+      const bHasCat = !!b.category;
+      if (aHasCat !== bHasCat) return aHasCat ? 1 : -1;
+      if (!aHasCat && !bHasCat) {
+        const aSug = !!autoMatchMerchant(a.merchant, a.amount);
+        const bSug = !!autoMatchMerchant(b.merchant, b.amount);
+        if (aSug !== bSug) return aSug ? -1 : 1;
+      }
+    }
+    return b.date.localeCompare(a.date) || b.id - a.id;
+  });
+  return { filtered, totalSpending, totalIncome, duplicateFingerprints };
+}
+
+function getYearlyDashboardData(year, options) {
+  const excludeCovered = options.excludeCovered;
+  const transactions = options.transactions;
+  const budgets = options.budgets;
+  const categories = options.categories;
+  const loanBudgetMap = options.loanBudget;
+  const currentDate = options.currentDate || new Date();
+
+  const yb = (budgets && budgets[year]) || {};
+  const annualLoanBudget = (loanBudgetMap && loanBudgetMap[year]) || 0;
+
+  const currentYear = currentDate.getFullYear();
+  const currentMonthIdx = (parseInt(year) === currentYear) ? currentDate.getMonth() : 11;
+
+  const catTotals = {};
+  const monthData = MONTH_KEYS.map((mk, i) => {
+    const ym = `${year}-${mk}`;
+    let txs = transactions.filter(t => t.date.startsWith(ym) && !t.splitInto);
+    if (excludeCovered) txs = txs.filter(t => !t.covered);
+    const spend = Math.abs(txs.filter(t => t.type === 'spending' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const save = Math.abs(txs.filter(t => t.type === 'saving' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
+    const inc = txs.filter(t => t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan')).reduce((s, t) => s + t.amount, 0);
+    const loan = txs.filter(t => t.type === 'loan').reduce((s, t) => s + t.amount, 0);
+
+    const hasActuals = txs.length > 0;
+    if (hasActuals) {
+      txs.filter(t => t.type === 'spending' && t.amount < 0).forEach(t => {
+        const cat = t.category || 'Uncategorized';
+        catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount);
+      });
+    }
+
+    let budget = 0;
+    Object.entries(categories).forEach(([group, cats]) => {
+      if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
+      cats.forEach(cat => { budget += (yb[cat] && yb[cat][mk]) || 0; });
+    });
+
+    const isPast = i <= currentMonthIdx || parseInt(year) < currentYear;
+    return { mk, ym, month: MONTHS[i], spend, save, inc, loan, budget, hasActuals, isPast };
+  });
+
+  const ytdMonths = monthData.filter(m => m.hasActuals);
+  const ytdSpend = ytdMonths.reduce((s, m) => s + m.spend, 0);
+  const ytdSave = ytdMonths.reduce((s, m) => s + m.save, 0);
+  const ytdIncome = ytdMonths.reduce((s, m) => s + m.inc, 0);
+  const ytdLoan = ytdMonths.reduce((s, m) => s + m.loan, 0);
+  const ytdRemaining = ytdIncome - ytdSpend - ytdSave;
+
+  const annualBudget = monthData.reduce((s, m) => s + m.budget, 0);
+  const ytdBudget = ytdMonths.reduce((s, m) => s + m.budget, 0);
+
+  const futureMonths = monthData.filter(m => !m.hasActuals && m.isPast === false);
+  const forecastSpend = ytdSpend + futureMonths.reduce((s, m) => s + m.budget, 0);
+  const avgMonthlyIncome = ytdMonths.length > 0 ? ytdIncome / ytdMonths.length : 0;
+  const forecastIncome = ytdIncome + (futureMonths.length * avgMonthlyIncome);
+  const avgMonthlySave = ytdMonths.length > 0 ? ytdSave / ytdMonths.length : 0;
+  const forecastSave = ytdSave + (futureMonths.length * avgMonthlySave);
+  const monthlyLoanBudget = annualLoanBudget / 12;
+  const forecastLoan = ytdLoan + (futureMonths.length * monthlyLoanBudget);
+  const forecastRemaining = forecastIncome - forecastSpend - forecastSave;
+
+  const catBudgets = {};
+  Object.entries(categories).forEach(([group, cats]) => {
+    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
+    cats.forEach(cat => {
+      let total = 0;
+      MONTH_KEYS.forEach(mk => { total += (yb[cat] && yb[cat][mk]) || 0; });
+      if (total > 0) catBudgets[cat] = total;
+    });
+  });
+
+  return {
+    monthData,
+    ytd: { spend: ytdSpend, save: ytdSave, income: ytdIncome, loan: ytdLoan, remaining: ytdRemaining, budget: ytdBudget, monthCount: ytdMonths.length },
+    annual: { budget: annualBudget, avgSpend: ytdMonths.length > 0 ? ytdSpend / ytdMonths.length : 0, avgIncome: avgMonthlyIncome },
+    forecast: { spend: forecastSpend, income: forecastIncome, save: forecastSave, loan: forecastLoan, remaining: forecastRemaining, futureMonthCount: futureMonths.length },
+    catTotals,
+    catBudgets,
+    annualLoanBudget,
+    ytdLoanBudget: monthlyLoanBudget * ytdMonths.length
+  };
 }
 
 // ============ TESTS ============
@@ -841,6 +962,307 @@ runner.suite('Filters', (test) => {
       return 0;
     });
     assertEquals(sorted[0].merchant, 'FOETEX', 'Should sort FOETEX (has suggestion) first');
+  });
+});
+
+runner.suite('forecastLoan Bug Fix', (test) => {
+  test('forecastLoan is numeric when loan budget is set', () => {
+    resetStore();
+    store.loanBudget = { "2026": 24000 };
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: 5000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-01-15', amount: 2000, merchant: 'SU Loan', description: 'Loan', category: '', type: 'loan', covered: false },
+      { id: 3, date: '2026-01-15', amount: -3000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 4, date: '2026-02-15', amount: 5000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 5, date: '2026-02-15', amount: 2000, merchant: 'SU Loan', description: 'Loan', category: '', type: 'loan', covered: false },
+      { id: 6, date: '2026-02-15', amount: -3500, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false }
+    );
+    store.nextId = 7;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false,
+      transactions: store.transactions,
+      budgets: store.budgets,
+      categories: store.categories,
+      loanBudget: store.loanBudget,
+      currentDate: new Date("2026-02-15")
+    });
+    assert(Number.isFinite(result.forecast.loan), 'forecast.loan should be a finite number, got: ' + result.forecast.loan);
+    assertEquals(result.forecast.loan, 24000, 'forecast.loan should be 4000 + (10 * 2000)');
+    assert(Number.isFinite(result.forecast.remaining), 'forecast.remaining should be a finite number');
+  });
+
+  test('forecastLoan is 0 when no loan budget is set', () => {
+    resetStore();
+    store.loanBudget = {};
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: 5000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-01-15', amount: -3000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false }
+    );
+    store.nextId = 3;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false,
+      transactions: store.transactions,
+      budgets: store.budgets,
+      categories: store.categories,
+      loanBudget: store.loanBudget,
+      currentDate: new Date("2026-02-15")
+    });
+    assertEquals(result.forecast.loan, 0, 'forecast.loan should be 0 with no loan budget');
+  });
+});
+
+runner.suite('getFilteredTransactions', (test) => {
+  test('Filters by month', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -100, merchant: 'A', description: '', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'B', description: '', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-20', amount: -300, merchant: 'C', description: '', category: '', type: 'spending', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: '2026-02', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    assertEquals(result.filtered.length, 2, 'Should return 2 Feb transactions');
+    assert(result.filtered.every(tx => tx.date.startsWith('2026-02')), 'All should be Feb');
+  });
+
+  test('Filters by category', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'B', description: '', category: 'Eating out', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -300, merchant: 'C', description: '', category: 'Groceries', type: 'spending', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'Groceries', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    assertEquals(result.filtered.length, 2, 'Should return 2 Groceries transactions');
+    assert(result.filtered.every(tx => tx.category === 'Groceries'), 'All should be Groceries');
+  });
+
+  test('Filters by type', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'B', description: '', category: '', type: 'saving', covered: false },
+      { id: 3, date: '2026-02-15', amount: 5000, merchant: 'C', description: '', category: '', type: 'income', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'saving', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    assert(result.filtered.length >= 1, 'Should return at least 1 saving');
+    assert(result.filtered.every(tx => tx.type === 'saving'), 'All should be saving type');
+  });
+
+  test('Uncategorized-only filter excludes categorized and ignored', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'B', description: '', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -300, merchant: 'C', description: '', category: '', type: 'ignore', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: true, search: '' },
+      store.transactions
+    );
+    assertEquals(result.filtered.length, 1, 'Should return only 1 uncategorized non-ignored');
+    assertEquals(result.filtered[0].id, 2, 'Should be id:2');
+  });
+
+  test('Search filters by merchant and description', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'DSB', description: 'Train ticket', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -300, merchant: 'REMA1000', description: 'Weekly groceries', category: '', type: 'spending', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: false, search: 'grocer' },
+      store.transactions
+    );
+    assertEquals(result.filtered.length, 2, 'Should match 2 transactions with "grocer"');
+  });
+
+  test('Excludes split parent transactions', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Mixed', category: '', type: 'ignore', covered: false, splitInto: [2, 3] },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'FOETEX', description: 'Mixed', category: 'Groceries', type: 'spending', covered: false, splitFrom: 1 },
+      { id: 3, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Mixed', category: 'Eating out', type: 'spending', covered: false, splitFrom: 1 }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    assert(!result.filtered.find(tx => tx.id === 1), 'Should not contain split parent');
+    assert(result.filtered.find(tx => tx.id === 2), 'Should contain child id:2');
+    assert(result.filtered.find(tx => tx.id === 3), 'Should contain child id:3');
+  });
+
+  test('Duplicate fingerprint detection', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -150, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-16', amount: -200, merchant: 'DSB', description: 'Train', category: '', type: 'spending', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    const dupFp = txFingerprint(store.transactions[0]);
+    assert(result.duplicateFingerprints[dupFp] === 2, 'Duplicate fingerprint should have count 2');
+    const uniqueFp = txFingerprint(store.transactions[2]);
+    assert(!result.duplicateFingerprints[uniqueFp] || result.duplicateFingerprints[uniqueFp] === 1, 'Unique fingerprint should not be flagged as duplicate');
+  });
+
+  test('Summary totals are correct', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -150, merchant: 'A', description: '', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -50, merchant: 'B', description: '', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: 5000, merchant: 'C', description: '', category: '', type: 'income', covered: false },
+      { id: 4, date: '2026-02-15', amount: -1000, merchant: 'D', description: '', category: '', type: 'saving', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions
+    );
+    assertEquals(result.totalSpending, 200, 'totalSpending should be 200 (absolute value)');
+    assertEquals(result.totalIncome, 5000, 'totalIncome should be 5000');
+  });
+
+  test('Uncategorized mode sorts suggestions first', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', category: '', type: 'spending', covered: false },
+      { id: 2, date: '2026-02-15', amount: -50, merchant: 'Unknown Shop', description: 'Mystery', category: '', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -75, merchant: 'DSB', description: 'Train', category: '', type: 'spending', covered: false }
+    );
+    const result = getFilteredTransactions(
+      { month: 'all', category: 'all', type: 'all', uncategorizedOnly: true, search: '' },
+      store.transactions
+    );
+    // FOETEX and DSB have pattern matches, Unknown Shop does not
+    assert(result.filtered.length === 3, 'Should return 3 uncategorized');
+    assert(result.filtered[0].merchant === 'FOETEX' || result.filtered[0].merchant === 'DSB', 'First should be a suggestion match');
+    assert(result.filtered[1].merchant === 'FOETEX' || result.filtered[1].merchant === 'DSB', 'Second should be a suggestion match');
+    assertEquals(result.filtered[2].merchant, 'Unknown Shop', 'Unknown Shop should be last (no suggestion)');
+  });
+});
+
+runner.suite('getYearlyDashboardData', (test) => {
+  test('Correct YTD aggregation', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: 10000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 2, date: '2026-01-15', amount: -4000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 3, date: '2026-01-15', amount: -2000, merchant: 'Nordnet', description: 'Invest', category: 'Investments', type: 'saving', covered: false },
+      { id: 4, date: '2026-02-15', amount: 10000, merchant: 'Employer', description: 'Salary', category: 'Part-time job', type: 'income', covered: false },
+      { id: 5, date: '2026-02-15', amount: -5000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 6, date: '2026-02-15', amount: -2000, merchant: 'Nordnet', description: 'Invest', category: 'Investments', type: 'saving', covered: false }
+    );
+    store.nextId = 7;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15")
+    });
+    assertEquals(result.ytd.income, 20000, 'YTD income should be 20000');
+    assertEquals(result.ytd.spend, 9000, 'YTD spend should be 9000');
+    assertEquals(result.ytd.save, 4000, 'YTD save should be 4000');
+    assertEquals(result.ytd.remaining, 7000, 'YTD remaining should be 7000');
+    assertEquals(result.ytd.monthCount, 2, 'Should have 2 months of data');
+  });
+
+  test('Exclude covered transactions', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -1000, merchant: 'A', description: '', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-15', amount: -500, merchant: 'B', description: '', category: 'Eating out', type: 'spending', covered: true }
+    );
+    store.nextId = 3;
+    const opts = { transactions: store.transactions, budgets: store.budgets, categories: store.categories, loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15") };
+    const exclResult = getYearlyDashboardData("2026", { ...opts, excludeCovered: true });
+    assertEquals(exclResult.ytd.spend, 1000, 'With excludeCovered, spend should be 1000');
+    const inclResult = getYearlyDashboardData("2026", { ...opts, excludeCovered: false });
+    assertEquals(inclResult.ytd.spend, 1500, 'Without excludeCovered, spend should be 1500');
+  });
+
+  test('Forecast uses budget for future spending', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -3000, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false }
+    );
+    store.nextId = 2;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15")
+    });
+    assert(result.forecast.futureMonthCount >= 10, 'Should have at least 10 future months');
+    assert(result.forecast.spend > result.ytd.spend, 'Forecast spend should exceed YTD spend');
+  });
+
+  test('Category totals aggregate correctly across months', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -150, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 2, date: '2026-01-15', amount: -75, merchant: 'DSB', description: 'Train', category: 'Transport', type: 'spending', covered: false },
+      { id: 3, date: '2026-02-15', amount: -200, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false },
+      { id: 4, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', category: 'Groceries', type: 'spending', covered: false }
+    );
+    store.nextId = 5;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15")
+    });
+    assertEquals(result.catTotals['Groceries'], 450, 'Groceries total should be 450');
+    assertEquals(result.catTotals['Transport'], 75, 'Transport total should be 75');
+  });
+
+  test('Annual budget totals sum across months', () => {
+    resetStore();
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15")
+    });
+    assertEquals(result.catBudgets['Groceries'], 38400, 'Groceries annual budget should be 3200 * 12 = 38400');
+    assertEquals(result.catBudgets['Transport'], 8520, 'Transport annual budget should be 710 * 12 = 8520');
+  });
+
+  test('Month data array has 12 entries with correct structure', () => {
+    resetStore();
+    store.transactions.push(
+      { id: 1, date: '2026-01-15', amount: -100, merchant: 'A', description: '', category: '', type: 'spending', covered: false }
+    );
+    store.nextId = 2;
+    const result = getYearlyDashboardData("2026", {
+      excludeCovered: false, transactions: store.transactions,
+      budgets: store.budgets, categories: store.categories,
+      loanBudget: store.loanBudget || {}, currentDate: new Date("2026-02-15")
+    });
+    assertEquals(result.monthData.length, 12, 'Should have 12 months');
+    assertEquals(result.monthData[0].mk, '01', 'First month key should be 01');
+    assertEquals(result.monthData[0].month, 'Jan', 'First month name should be Jan');
+    assertEquals(result.monthData[0].hasActuals, true, 'Jan should have actuals');
+    assertEquals(result.monthData[11].mk, '12', 'Last month key should be 12');
+    assertEquals(result.monthData[11].hasActuals, false, 'Dec should have no actuals');
+  });
+});
+
+runner.suite('CHART_COLORS constant', (test) => {
+  test('CHART_COLORS has 12 entries', () => {
+    assertEquals(CHART_COLORS.length, 12, 'Should have 12 colors');
+  });
+
+  test('All entries are valid hex colour strings', () => {
+    assert(CHART_COLORS.every(c => /^#[0-9a-fA-F]{6}$/.test(c)), 'All entries should be valid hex colour strings');
   });
 });
 

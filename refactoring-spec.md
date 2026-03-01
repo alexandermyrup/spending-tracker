@@ -2,7 +2,7 @@
 
 ## Context
 
-Single-file HTML app (~1,700 lines). No build step, no module system. All code lives in `spending-tracker.html`. Tests live in `spending-tracker-tests.html` (42 existing tests, copy-paste pattern for functions under test). This spec covers one bug fix and four structural refactors that prepare the codebase for P1 roadmap features (certainty levels, low-certainty review mode, conflicting categorization detection).
+Single-file HTML app (~1,700 lines). No build step, no module system. All code lives in `spending-tracker.html`. Tests live in `spending-tracker-tests.html` (42 existing tests, copy-paste pattern for functions under test). This spec covers one bug fix and three structural refactors that prepare the codebase for P1 roadmap features (certainty levels, low-certainty review mode, conflicting categorization detection).
 
 ## Constraints
 
@@ -36,7 +36,21 @@ const forecastLoan = ytdLoan + (futureMonths.length * monthlyLoanBudget);
 
 ---
 
-## 2. Extract `getFilteredTransactions(filters)` from `renderTransactions()`
+## 2. Extract `CHART_COLORS` constant
+
+**Purpose:** Remove duplication and prepare for the P3 colour scheme overhaul.
+
+The 12-colour array `['#2563eb','#7c3aed','#db2777',...]` is duplicated on lines 1207 and 1401. Extract to a single `const` near the top of the `<script>` block, after `MONTH_KEYS`.
+
+```javascript
+const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
+```
+
+Replace both inline arrays with `CHART_COLORS`.
+
+---
+
+## 3. Extract `getFilteredTransactions(filters)` from `renderTransactions()`
 
 **Purpose:** Separate the filtering/sorting logic from DOM rendering. This pure function will be reusable by the future low-certainty review mode and conflicting categorization detection features.
 
@@ -75,30 +89,6 @@ function getFilteredTransactions(filters, transactions) { ... }
 1. Read filter values from DOM elements (as today).
 2. Call `getFilteredTransactions(filters, store.transactions)`.
 3. Use the returned data to build HTML.
-
----
-
-## 3. Extract `buildTransactionRowHTML(tx, options)` from `renderTransactions()`
-
-**Purpose:** Isolate the per-row HTML generation. Today this is a ~25-line inline `.map()` callback (lines 825-855). Extracting it makes the rendering testable and prepares for adding certainty badges.
-
-**Target signature:**
-
-```javascript
-/**
- * Generates HTML string for a single transaction row.
- *
- * @param {Object} tx - transaction object
- * @param {Object} options
- * @param {boolean} options.isDuplicate - whether this tx has duplicate fingerprint
- * @param {boolean} options.isSplitChild - whether tx.splitFrom is truthy
- * @param {Object|null} options.suggestion - result of autoMatchMerchant, or null
- * @returns {string} HTML string for <tr>
- */
-function buildTransactionRowHTML(tx, options) { ... }
-```
-
-**Note:** This function will still produce HTML strings (not DOM nodes). It uses `esc()` and `fmt()` internally. Testing it in the test file is optional (HTML string comparison is brittle); the main value is readability and future extensibility.
 
 ---
 
@@ -147,35 +137,18 @@ function getYearlyDashboardData(year, options) { ... }
 
 ---
 
-## 5. Extract shared constants
-
-**Purpose:** Remove duplication and prepare for the P3 colour scheme overhaul.
-
-### 5a. `CHART_COLORS` constant
-
-The 12-colour array `['#2563eb','#7c3aed','#db2777',...]` is duplicated on lines 1207 and 1401. Extract to a single `const` near the top of the `<script>` block, after `MONTH_KEYS`.
-
-```javascript
-const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
-```
-
-Replace both inline arrays with `CHART_COLORS`.
-
-### 5b. `getMonthlyDashboardData(month, options)` (optional, lower priority)
-
-Same pattern as yearly: extract the data aggregation from `renderDashboard()` into a pure function. This is lower priority because `renderDashboard()` is shorter (~110 lines) and less tangled. Include if time allows, skip if not.
-
----
-
 ## Implementation order
 
-1. **Bug fix** (section 1) - 5 minutes, no risk.
-2. **Extract `CHART_COLORS`** (section 5a) - 2 minutes, trivial.
-3. **Extract `getYearlyDashboardData()`** (section 4) - the largest change. Do this before `getFilteredTransactions()` because it's self-contained and the bug fix verification depends on it.
-4. **Extract `getFilteredTransactions()`** (section 2).
-5. **Extract `buildTransactionRowHTML()`** (section 3) - optional, lowest priority.
+1. **Bug fix** (section 1) — no risk.
+2. **Extract `CHART_COLORS`** (section 2) — trivial.
+3. **Extract `getFilteredTransactions()`** (section 3).
+4. **Extract `getYearlyDashboardData()`** (section 4) — largest change.
 
-After each extraction, verify that the app still works by opening `spending-tracker.html` in a browser and clicking through each tab (Dashboard monthly, Dashboard yearly, Transactions, Budgets, Categories).
+**After each step:**
+
+- Commit with a descriptive message (e.g. `fix: compute monthlyLoanBudget before forecastLoan`, `refactor: extract CHART_COLORS constant`, etc.).
+- Run all 42 existing tests + manual browser check (open `spending-tracker.html`, click through each tab: Dashboard monthly, Dashboard yearly, Transactions, Budgets, Categories).
+- If anything breaks, revert to the last commit and investigate.
 
 ---
 
@@ -184,4 +157,4 @@ After each extraction, verify that the app still works by opening `spending-trac
 New tests should be added to `spending-tracker-tests.html` following the existing pattern:
 - Copy the extracted pure functions into the test file's `<script>` block.
 - Add new test suites for each extracted function.
-- See `refactoring-tests-spec.md` for the exact test cases.
+- See `refactoring-tests-spec.md` for the exact test cases (19 new tests across 4 suites: forecastLoan bug fix, CHART_COLORS, getFilteredTransactions, getYearlyDashboardData).

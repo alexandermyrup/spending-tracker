@@ -358,6 +358,7 @@ tr:hover { background: #f9fafb; }
 const STORAGE_KEY = 'spending-tracker-v2';
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
 
 let store = { transactions: [], categories: {}, budgets: {}, merchantMap: {}, nextId: 1 };
 
@@ -782,35 +783,28 @@ importArea.addEventListener('drop', e => {
 });
 
 // ========== TRANSACTIONS VIEW ==========
-function renderTransactions() {
-  const mf = document.getElementById('tx-month-filter').value;
-  const cf = document.getElementById('tx-cat-filter').value;
-  const tf = document.getElementById('tx-type-filter').value;
-  const uc = document.getElementById('tx-uncategorized').checked;
-  const search = document.getElementById('tx-search').value.toLowerCase();
-  let txs = store.transactions.filter(tx => {
-    if (mf !== 'all' && !tx.date.startsWith(mf)) return false;
-    if (cf !== 'all' && tx.category !== cf) return false;
-    if (tf !== 'all' && tx.type !== tf) return false;
-    if (uc && (tx.category || tx.type === 'ignore')) return false;
+function getFilteredTransactions(filters, transactions) {
+  const search = (filters.search || '').toLowerCase();
+  const txs = transactions.filter(tx => {
+    if (filters.month !== 'all' && !tx.date.startsWith(filters.month)) return false;
+    if (filters.category !== 'all' && tx.category !== filters.category) return false;
+    if (filters.type !== 'all' && tx.type !== filters.type) return false;
+    if (filters.uncategorizedOnly && (tx.category || tx.type === 'ignore')) return false;
     if (search && !tx.merchant.toLowerCase().includes(search) && !tx.description.toLowerCase().includes(search)) return false;
     return true;
   });
-  const totalExp = txs.filter(t => t.amount < 0 && t.type === 'spending').reduce((s, t) => s + t.amount, 0);
-  const totalInc = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  document.getElementById('tx-summary').textContent = `${txs.length} transactions | Spending: ${fmt(totalExp)} | Income: ${fmt(totalInc)}`;
-  const tbody = document.getElementById('tx-body');
+  const totalSpending = Math.abs(txs.filter(t => t.amount < 0 && t.type === 'spending').reduce((s, t) => s + t.amount, 0));
+  const totalIncome = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   // Build duplicate detection map across ALL transactions (not just filtered)
-  const fpCount = {};
-  store.transactions.forEach(tx => {
-    if (tx.splitInto || tx.splitFrom) return; // skip split parents/children
+  const duplicateFingerprints = {};
+  transactions.forEach(tx => {
+    if (tx.splitInto || tx.splitFrom) return;
     const fp = txFingerprint(tx);
-    fpCount[fp] = (fpCount[fp] || 0) + 1;
+    duplicateFingerprints[fp] = (duplicateFingerprints[fp] || 0) + 1;
   });
   // Filter out parent transactions that have been split (show children instead)
-  const visibleTxs = txs.filter(tx => !tx.splitInto).sort((a, b) => {
-    if (uc) {
-      // Uncategorized mode: suggestions first, then uncategorized without, then categorized
+  const filtered = txs.filter(tx => !tx.splitInto).sort((a, b) => {
+    if (filters.uncategorizedOnly) {
       const aHasCat = !!a.category;
       const bHasCat = !!b.category;
       if (aHasCat !== bHasCat) return aHasCat ? 1 : -1;
@@ -822,9 +816,22 @@ function renderTransactions() {
     }
     return b.date.localeCompare(a.date) || b.id - a.id;
   });
-  tbody.innerHTML = visibleTxs.map(tx => {
+  return { filtered, totalSpending, totalIncome, duplicateFingerprints };
+}
+
+function renderTransactions() {
+  const result = getFilteredTransactions({
+    month: document.getElementById('tx-month-filter').value,
+    category: document.getElementById('tx-cat-filter').value,
+    type: document.getElementById('tx-type-filter').value,
+    uncategorizedOnly: document.getElementById('tx-uncategorized').checked,
+    search: document.getElementById('tx-search').value
+  }, store.transactions);
+  document.getElementById('tx-summary').textContent = `${result.filtered.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}`;
+  const tbody = document.getElementById('tx-body');
+  tbody.innerHTML = result.filtered.map(tx => {
     const isSplitChild = !!tx.splitFrom;
-    const isDupe = !isSplitChild && fpCount[txFingerprint(tx)] > 1;
+    const isDupe = !isSplitChild && result.duplicateFingerprints[txFingerprint(tx)] > 1;
     return `<tr${isSplitChild ? ' style="background:#f8f9ff"' : (isDupe ? ' style="background:#fef2f2"' : '')}>
     <td class="mono">${tx.pending ? '<em>Pending</em>' : tx.date}${isSplitChild ? '<span class="badge-split">split</span>' : ''}${isDupe ? '<span class="badge-duplicate" title="Possible duplicate: same date, amount, merchant and description">dup?</span>' : ''}</td>
     <td class="fw-500">${esc(tx.merchant)}</td>
@@ -1204,13 +1211,12 @@ function renderDashboard() {
   spending.forEach(t => { const cat = t.category || 'Uncategorized'; catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount); });
   const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  const colors = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
   document.getElementById('dash-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 12).map(([cat, val], i) => {
     const budgetAmt = getBudgetForMonth(cat, month);
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
     return `<div class="bar-row"><div class="bar-label" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${colors[i%colors.length]}"><span>${fmt(-val)}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${CHART_COLORS[i%CHART_COLORS.length]}"><span>${fmt(-val)}</span></div>
       ${budgetAmt > 0 ? `<div class="bar-budget-line" style="left:${Math.min(budgetPct,100)}%" title="Budget: ${fmt(-budgetAmt)}"></div>` : ''}</div>
       <div class="bar-value">${fmt(-val)}</div></div>`;
   }).join('')}</div>`;
@@ -1269,36 +1275,46 @@ function switchDashView(view) {
   if (view === 'yearly') renderYearlyDashboard();
 }
 
-function renderYearlyDashboard() {
-  const year = document.getElementById('dash-year').value || String(new Date().getFullYear());
-  const exclCovered = document.getElementById('dash-exclude-covered').checked;
-  ensureYearBudget(year);
-  const yb = store.budgets[year] || {};
-  const annualLoanBudget = (store.loanBudget && store.loanBudget[year]) || 0;
+function getYearlyDashboardData(year, options) {
+  const excludeCovered = options.excludeCovered;
+  const transactions = options.transactions;
+  const budgets = options.budgets;
+  const categories = options.categories;
+  const loanBudgetMap = options.loanBudget;
+  const currentDate = options.currentDate || new Date();
 
-  // Current month index (0-based) for forecast cutoff
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonthIdx = (parseInt(year) === currentYear) ? now.getMonth() : 11; // 0=Jan
+  const yb = (budgets && budgets[year]) || {};
+  const annualLoanBudget = (loanBudgetMap && loanBudgetMap[year]) || 0;
 
-  // Gather actuals per month
+  const currentYear = currentDate.getFullYear();
+  const currentMonthIdx = (parseInt(year) === currentYear) ? currentDate.getMonth() : 11;
+
+  // Gather actuals per month + accumulate category totals in one pass
+  const catTotals = {};
   const monthData = MONTH_KEYS.map((mk, i) => {
     const ym = `${year}-${mk}`;
-    let txs = store.transactions.filter(t => t.date.startsWith(ym) && !t.splitInto);
-    if (exclCovered) txs = txs.filter(t => !t.covered);
+    let txs = transactions.filter(t => t.date.startsWith(ym) && !t.splitInto);
+    if (excludeCovered) txs = txs.filter(t => !t.covered);
     const spend = Math.abs(txs.filter(t => t.type === 'spending' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const save = Math.abs(txs.filter(t => t.type === 'saving' && t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const inc = txs.filter(t => t.type === 'income' || (t.amount > 0 && t.type !== 'ignore' && t.type !== 'loan')).reduce((s, t) => s + t.amount, 0);
     const loan = txs.filter(t => t.type === 'loan').reduce((s, t) => s + t.amount, 0);
 
-    // Budget for this month (spending categories only)
+    // Accumulate category spending totals (only for months with actuals)
+    const hasActuals = txs.length > 0;
+    if (hasActuals) {
+      txs.filter(t => t.type === 'spending' && t.amount < 0).forEach(t => {
+        const cat = t.category || 'Uncategorized';
+        catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount);
+      });
+    }
+
     let budget = 0;
-    Object.entries(store.categories).forEach(([group, cats]) => {
+    Object.entries(categories).forEach(([group, cats]) => {
       if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
       cats.forEach(cat => { budget += (yb[cat] && yb[cat][mk]) || 0; });
     });
 
-    const hasActuals = txs.length > 0;
     const isPast = i <= currentMonthIdx || parseInt(year) < currentYear;
     return { mk, ym, month: MONTHS[i], spend, save, inc, loan, budget, hasActuals, isPast };
   });
@@ -1311,58 +1327,89 @@ function renderYearlyDashboard() {
   const ytdLoan = ytdMonths.reduce((s, m) => s + m.loan, 0);
   const ytdRemaining = ytdIncome - ytdSpend - ytdSave;
 
-  // Annual budget total
   const annualBudget = monthData.reduce((s, m) => s + m.budget, 0);
   const ytdBudget = ytdMonths.reduce((s, m) => s + m.budget, 0);
 
-  // Forecast: actuals for past months, budget for future months
+  // Forecast
   const futureMonths = monthData.filter(m => !m.hasActuals && m.isPast === false);
   const forecastSpend = ytdSpend + futureMonths.reduce((s, m) => s + m.budget, 0);
   const avgMonthlyIncome = ytdMonths.length > 0 ? ytdIncome / ytdMonths.length : 0;
   const forecastIncome = ytdIncome + (futureMonths.length * avgMonthlyIncome);
   const avgMonthlySave = ytdMonths.length > 0 ? ytdSave / ytdMonths.length : 0;
   const forecastSave = ytdSave + (futureMonths.length * avgMonthlySave);
+  const monthlyLoanBudget = annualLoanBudget / 12;
   const forecastLoan = ytdLoan + (futureMonths.length * monthlyLoanBudget);
   const forecastRemaining = forecastIncome - forecastSpend - forecastSave;
 
-  // Loan budget tracking
-  const monthlyLoanBudget = annualLoanBudget / 12;
-  const ytdLoanBudget = monthlyLoanBudget * ytdMonths.length;
+  // Category budgets
+  const catBudgets = {};
+  Object.entries(categories).forEach(([group, cats]) => {
+    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
+    cats.forEach(cat => {
+      let total = 0;
+      MONTH_KEYS.forEach(mk => { total += (yb[cat] && yb[cat][mk]) || 0; });
+      if (total > 0) catBudgets[cat] = total;
+    });
+  });
+
+  return {
+    monthData,
+    ytd: { spend: ytdSpend, save: ytdSave, income: ytdIncome, loan: ytdLoan, remaining: ytdRemaining, budget: ytdBudget, monthCount: ytdMonths.length },
+    annual: { budget: annualBudget, avgSpend: ytdMonths.length > 0 ? ytdSpend / ytdMonths.length : 0, avgIncome: avgMonthlyIncome },
+    forecast: { spend: forecastSpend, income: forecastIncome, save: forecastSave, loan: forecastLoan, remaining: forecastRemaining, futureMonthCount: futureMonths.length },
+    catTotals,
+    catBudgets,
+    annualLoanBudget,
+    ytdLoanBudget: monthlyLoanBudget * ytdMonths.length
+  };
+}
+
+function renderYearlyDashboard() {
+  const year = document.getElementById('dash-year').value || String(new Date().getFullYear());
+  const exclCovered = document.getElementById('dash-exclude-covered').checked;
+  ensureYearBudget(year);
+
+  const d = getYearlyDashboardData(year, {
+    excludeCovered: exclCovered,
+    transactions: store.transactions,
+    budgets: store.budgets,
+    categories: store.categories,
+    loanBudget: store.loanBudget
+  });
 
   // Year summary card
   document.getElementById('year-summary').innerHTML = `<div class="surplus-card">
-    <h2>${year} Overview${ytdMonths.length < 12 ? ` (${ytdMonths.length} months of data)` : ''}</h2>
+    <h2>${year} Overview${d.ytd.monthCount < 12 ? ` (${d.ytd.monthCount} months of data)` : ''}</h2>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,0.06)">
       <span class="text-sm text-muted">Expected annual loan (SU-lan):</span>
-      <input type="number" id="loan-budget-input" value="${annualLoanBudget}" min="0" step="100"
+      <input type="number" id="loan-budget-input" value="${d.annualLoanBudget}" min="0" step="100"
         style="width:120px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px"
         onchange="saveLoanBudget('${year}', this.value)">
       <span class="text-sm text-muted">kr/year</span>
     </div>
-    <div class="surplus-row"><span class="surplus-label">YTD Income</span><span class="surplus-val" style="color:var(--green)">${fmt(ytdIncome)}</span></div>
-    ${ytdLoan > 0 || annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">YTD Loan inflow (SU-lan)</span><span class="surplus-val" style="color:var(--text2)">${fmt(ytdLoan)}${ytdLoanBudget > 0 ? ` / ${fmt(ytdLoanBudget)} expected` : ''}</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">YTD Spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-ytdSpend)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">YTD Saved / invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(-ytdSave)}</span></div>
-    <div class="surplus-row" style="border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;margin-top:4px"><span class="surplus-label">YTD Budget (spending)</span><span class="surplus-val" style="color:var(--text2)">${fmt(-ytdBudget)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">${ytdBudget - ytdSpend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="surplus-val" style="color:${ytdBudget - ytdSpend >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(ytdBudget - ytdSpend)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${ytdRemaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="surplus-val" style="color:${ytdRemaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(ytdRemaining)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">YTD Income</span><span class="surplus-val" style="color:var(--green)">${fmt(d.ytd.income)}</span></div>
+    ${d.ytd.loan > 0 || d.annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">YTD Loan inflow (SU-lan)</span><span class="surplus-val" style="color:var(--text2)">${fmt(d.ytd.loan)}${d.ytdLoanBudget > 0 ? ` / ${fmt(d.ytdLoanBudget)} expected` : ''}</span></div>` : ''}
+    <div class="surplus-row"><span class="surplus-label">YTD Spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-d.ytd.spend)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">YTD Saved / invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(-d.ytd.save)}</span></div>
+    <div class="surplus-row" style="border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;margin-top:4px"><span class="surplus-label">YTD Budget (spending)</span><span class="surplus-val" style="color:var(--text2)">${fmt(-d.ytd.budget)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">${d.ytd.budget - d.ytd.spend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="surplus-val" style="color:${d.ytd.budget - d.ytd.spend >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(d.ytd.budget - d.ytd.spend)}</span></div>
+    <div class="surplus-row total"><span class="surplus-label">${d.ytd.remaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="surplus-val" style="color:${d.ytd.remaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(d.ytd.remaining)}</span></div>
   </div>`;
 
   // Stats cards
-  const avgSpend = ytdMonths.length > 0 ? ytdSpend / ytdMonths.length : 0;
   document.getElementById('year-stats').innerHTML = `
-    <div class="stat-card"><div class="label">Annual Budget</div><div class="value">${fmt(-annualBudget)}</div><div class="sub">spending categories</div></div>
-    <div class="stat-card"><div class="label">Avg Monthly Spend</div><div class="value negative">${fmt(-avgSpend)}</div><div class="sub">over ${ytdMonths.length} month${ytdMonths.length !== 1 ? 's' : ''}</div></div>
-    <div class="stat-card"><div class="label">Avg Monthly Income</div><div class="value positive">${fmt(avgMonthlyIncome)}</div></div>
-    <div class="stat-card"><div class="label">Budget Used</div><div class="value ${ytdSpend <= ytdBudget ? 'positive' : 'negative'}">${annualBudget > 0 ? Math.round(ytdSpend / annualBudget * 100) + '%' : '0%'}</div><div class="sub">of annual budget</div></div>
+    <div class="stat-card"><div class="label">Annual Budget</div><div class="value">${fmt(-d.annual.budget)}</div><div class="sub">spending categories</div></div>
+    <div class="stat-card"><div class="label">Avg Monthly Spend</div><div class="value negative">${fmt(-d.annual.avgSpend)}</div><div class="sub">over ${d.ytd.monthCount} month${d.ytd.monthCount !== 1 ? 's' : ''}</div></div>
+    <div class="stat-card"><div class="label">Avg Monthly Income</div><div class="value positive">${fmt(d.annual.avgIncome)}</div></div>
+    <div class="stat-card"><div class="label">Budget Used</div><div class="value ${d.ytd.spend <= d.ytd.budget ? 'positive' : 'negative'}">${d.annual.budget > 0 ? Math.round(d.ytd.spend / d.annual.budget * 100) + '%' : '0%'}</div><div class="sub">of annual budget</div></div>
   `;
 
   // Monthly bars (actual vs budget, greyed out for forecast months)
-  const maxBar = Math.max(...monthData.map(m => Math.max(m.spend, m.budget)), 1);
-  document.getElementById('year-monthly-bars').innerHTML = `<div style="display:flex;align-items:flex-end;gap:4px;height:180px;padding-top:10px">${monthData.map((m, i) => {
+  const maxBar = Math.max(...d.monthData.map(m => Math.max(m.spend, m.budget)), 1);
+  document.getElementById('year-monthly-bars').innerHTML = `<div style="display:flex;align-items:flex-end;gap:4px;height:180px;padding-top:10px">${d.monthData.map((m, i) => {
     const hSpend = m.spend / maxBar * 140;
     const hBudget = m.budget / maxBar * 140;
-    const isFuture = !m.hasActuals && i > currentMonthIdx;
+    const isFuture = !m.hasActuals && !m.isPast;
     const barColor = isFuture ? '#e2e8f0' : (m.spend > m.budget && m.budget > 0 ? 'var(--red)' : 'var(--accent)');
     const displayAmt = isFuture ? m.budget : m.spend;
     const hDisplay = isFuture ? hBudget : hSpend;
@@ -1381,30 +1428,14 @@ function renderYearlyDashboard() {
   </div>`;
 
   // Category breakdown for the year
-  const catTotals = {};
-  const catBudgets = {};
-  ytdMonths.forEach(m => {
-    let txs = store.transactions.filter(t => t.date.startsWith(m.ym) && !t.splitInto && t.type === 'spending' && t.amount < 0);
-    if (exclCovered) txs = txs.filter(t => !t.covered);
-    txs.forEach(t => { const cat = t.category || 'Uncategorized'; catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount); });
-  });
-  Object.entries(store.categories).forEach(([group, cats]) => {
-    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
-    cats.forEach(cat => {
-      let total = 0;
-      MONTH_KEYS.forEach(mk => { total += (yb[cat] && yb[cat][mk]) || 0; });
-      if (total > 0) catBudgets[cat] = total;
-    });
-  });
-  const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+  const sortedCats = Object.entries(d.catTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  const colors = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
   document.getElementById('year-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 15).map(([cat, val], i) => {
-    const budgetAmt = catBudgets[cat] || 0;
+    const budgetAmt = d.catBudgets[cat] || 0;
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
     return `<div class="bar-row"><div class="bar-label" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${colors[i%colors.length]}"><span>${fmt(-val)}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${CHART_COLORS[i%CHART_COLORS.length]}"><span>${fmt(-val)}</span></div>
       ${budgetAmt > 0 ? `<div class="bar-budget-line" style="left:${Math.min(budgetPct,100)}%" title="Annual budget: ${fmt(-budgetAmt)}"></div>` : ''}</div>
       <div class="bar-value">${fmt(-val)}</div></div>`;
   }).join('')}</div>`;
@@ -1414,9 +1445,9 @@ function renderYearlyDashboard() {
   Object.entries(store.categories).forEach(([group, cats]) => {
     if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
     cats.forEach(cat => {
-      const budget = catBudgets[cat] || 0;
-      if (budget <= 0 && !(catTotals[cat] > 0)) return;
-      const actual = catTotals[cat] || 0;
+      const budget = d.catBudgets[cat] || 0;
+      if (budget <= 0 && !(d.catTotals[cat] > 0)) return;
+      const actual = d.catTotals[cat] || 0;
       const pct = budget > 0 ? Math.round(actual / budget * 100) : (actual > 0 ? 999 : 0);
       const cls = pct > 100 ? 'over' : pct > 80 ? 'warn' : 'ok';
       bvaHTML.push(`<div class="budget-item">
@@ -1429,14 +1460,14 @@ function renderYearlyDashboard() {
   document.getElementById('year-budget-vs-actual').innerHTML = `<div class="budget-grid">${bvaHTML.join('') || '<p class="text-muted">No budgets set.</p>'}</div>`;
 
   // Forecast card
-  document.getElementById('year-forecast').innerHTML = futureMonths.length > 0 ? `<div class="surplus-card" style="background:linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);border-color:#fbbf24">
-    <h2>Year-End Forecast (${futureMonths.length} months projected)</h2>
-    <p class="text-sm text-muted" style="margin-bottom:12px">Future spending uses budget. Future income and savings use your average so far.${annualLoanBudget > 0 ? ' Loan uses expected annual amount.' : ''}</p>
-    <div class="surplus-row"><span class="surplus-label">Projected income</span><span class="surplus-val" style="color:var(--green)">${fmt(forecastIncome)}</span></div>
-    ${annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">Projected loan inflow</span><span class="surplus-val" style="color:var(--text2)">${fmt(forecastLoan)} / ${fmt(annualLoanBudget)} budgeted</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">Projected spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-forecastSpend)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">Projected savings</span><span class="surplus-val" style="color:var(--purple)">${fmt(-forecastSave)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${forecastRemaining >= 0 ? 'Projected remaining' : 'Projected shortfall'}</span><span class="surplus-val" style="color:${forecastRemaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(forecastRemaining)}</span></div>
+  document.getElementById('year-forecast').innerHTML = d.forecast.futureMonthCount > 0 ? `<div class="surplus-card" style="background:linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);border-color:#fbbf24">
+    <h2>Year-End Forecast (${d.forecast.futureMonthCount} months projected)</h2>
+    <p class="text-sm text-muted" style="margin-bottom:12px">Future spending uses budget. Future income and savings use your average so far.${d.annualLoanBudget > 0 ? ' Loan uses expected annual amount.' : ''}</p>
+    <div class="surplus-row"><span class="surplus-label">Projected income</span><span class="surplus-val" style="color:var(--green)">${fmt(d.forecast.income)}</span></div>
+    ${d.annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">Projected loan inflow</span><span class="surplus-val" style="color:var(--text2)">${fmt(d.forecast.loan)} / ${fmt(d.annualLoanBudget)} budgeted</span></div>` : ''}
+    <div class="surplus-row"><span class="surplus-label">Projected spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-d.forecast.spend)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">Projected savings</span><span class="surplus-val" style="color:var(--purple)">${fmt(-d.forecast.save)}</span></div>
+    <div class="surplus-row total"><span class="surplus-label">${d.forecast.remaining >= 0 ? 'Projected remaining' : 'Projected shortfall'}</span><span class="surplus-val" style="color:${d.forecast.remaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(d.forecast.remaining)}</span></div>
   </div>` : `<p class="text-muted">Full year of data available, no forecast needed.</p>`;
 }
 
