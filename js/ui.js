@@ -1164,9 +1164,9 @@ function populateFilters() {
   const dashMonthValue = dashMonth.value;
   const lastCompletedMonth = getLastCompletedMonth(new Date());
   const firstMonth = getEarliestMonthForDashboard(store.transactions, store.budgets, store.salaryShiftDay || 0);
-  const finalMonth = allMonths.includes(lastCompletedMonth) || allMonths.length === 0
-    ? lastCompletedMonth
-    : allMonths[allMonths.length - 1];
+  const finalMonth = allMonths.length > 0
+    ? allMonths[allMonths.length - 1]
+    : lastCompletedMonth;
   const dashboardMonths = firstMonth ? getMonthRange(firstMonth, finalMonth) : [lastCompletedMonth];
   const defaultDashMonth = dashboardMonths.includes(lastCompletedMonth) ? lastCompletedMonth : dashboardMonths[dashboardMonths.length - 1];
   dashMonth.innerHTML = dashboardMonths.map(m => `<option value="${m}">${m}</option>`).join('');

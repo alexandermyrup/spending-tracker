@@ -260,6 +260,13 @@ runner.suite('Salary shift consistency', test => {
     );
   });
 
+  test('getMonthRange can include an in-progress current month while defaulting elsewhere', () => {
+    assertDeepEqual(
+      getMonthRange('2025-01', '2026-03').slice(-3),
+      ['2026-01', '2026-02', '2026-03']
+    );
+  });
+
   test('getEffectiveMonth shifts qualifying income after cutoff', () => {
     const tx = { date: '2026-01-28', amount: 5000, type: 'income' };
     assertEquals(getEffectiveMonth(tx, 25), '2026-02');
