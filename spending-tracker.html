@@ -112,32 +112,27 @@ tr:hover { background: #f9fafb; }
 .muted-card { background: var(--card); }
 .section-heading-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .section-heading-row h2 { margin-bottom: 0; }
-.overview-hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: 16px; }
+.overview-hero { display: grid; gap: 16px; }
 .scorecard-card { background: linear-gradient(135deg, #f8fbff 0%, #f7faf8 100%); border: 1px solid #dbe5f0; border-radius: 24px; padding: 24px; box-shadow: var(--shadow); }
 .scorecard-topline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
 .scorecard-month { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text2); }
 .scorecard-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
 .scorecard-badge.good { background: var(--green-light); color: var(--green); }
 .scorecard-badge.bad { background: var(--red-light); color: var(--red); }
-.scorecard-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.scorecard-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: 20px; align-items: start; }
 .scorecard-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
-.scorecard-verdict { font-size: clamp(34px, 5vw, 58px); line-height: 0.98; letter-spacing: -0.04em; margin-bottom: 10px; max-width: 10ch; font-weight: 700; }
-.scorecard-copy { font-size: 15px; line-height: 1.55; color: var(--text2); max-width: 50ch; }
-.scorecard-flow { display: grid; gap: 10px; margin-top: 18px; }
-.scorecard-flow-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 13px; }
-.scorecard-flow-label { font-weight: 700; color: var(--text2); }
-.scorecard-flow-track { position: relative; height: 12px; border-radius: 999px; background: rgba(16,38,61,0.08); overflow: hidden; }
-.scorecard-flow-fill { height: 100%; border-radius: 999px; }
-.scorecard-flow-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); }
-.scorecard-sidecard { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 24px; padding: 24px; box-shadow: var(--shadow); }
-.scorecard-sidecard h3 { color: var(--text2); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 16px; }
-.scorecard-ledger { display: grid; gap: 14px; }
-.scorecard-ledger-row { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-.scorecard-ledger-row:last-child { padding-bottom: 0; border-bottom: 0; }
-.scorecard-ledger-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
-.scorecard-ledger-value { font-size: 30px; line-height: 1; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
-.scorecard-ledger-copy { margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--text2); }
-.scorecard-callout { margin-top: 18px; padding: 14px 16px; border-radius: 16px; background: #f8fafc; font-size: 13px; line-height: 1.55; color: var(--text2); }
+.scorecard-verdict { font-size: clamp(34px, 4.6vw, 54px); line-height: 1; letter-spacing: -0.04em; margin-bottom: 10px; max-width: 11ch; font-weight: 700; }
+.scorecard-copy { font-size: 15px; line-height: 1.55; color: var(--text2); max-width: 52ch; }
+.scorecard-facts { display: grid; gap: 10px; }
+.scorecard-fact { padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: #fbfcfe; }
+.scorecard-fact-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
+.scorecard-fact-value { font-size: 24px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.scorecard-fact-meta { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text2); }
+.scorecard-breakdown { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.scorecard-breakdown-item { padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--border); }
+.scorecard-breakdown-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
+.scorecard-breakdown-value { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.scorecard-breakdown-meta { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text2); }
 .diagnosis-list, .summary-list { display: grid; gap: 0; }
 .diagnosis-card { background: var(--card); }
 .diagnosis-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); }
@@ -150,18 +145,15 @@ tr:hover { background: #f9fafb; }
 .diagnosis-type.one-off { background: #fff7ed; color: var(--orange); }
 .diagnosis-type.recurring-habit { background: #fef2f2; color: var(--red); }
 .diagnosis-type.no-history { background: #f3f4f6; color: var(--text2); }
-.diagnosis-meter { position: relative; height: 10px; margin-top: 12px; border-radius: 999px; background: rgba(16,38,61,0.08); overflow: hidden; }
-.diagnosis-meter-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #d47b6f, #c53f2f); }
-.diagnosis-meter-budget { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(16,38,61,0.45); border-radius: 999px; }
 .summary-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); font-size: 14px; }
 .summary-row:first-child { border-top: 0; padding-top: 0; }
 .summary-row strong { font-variant-numeric: tabular-nums; }
 .summary-row .meta { font-size: 12px; color: var(--text2); margin-top: 3px; }
 .empty-card-state { color: var(--text2); font-size: 14px; line-height: 1.5; padding: 8px 0; }
 .detail-stage { display: grid; gap: 18px; }
-.detail-stage-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; padding: 0 2px; }
-.detail-stage-head h2 { font-size: 20px; letter-spacing: -0.02em; }
-.detail-stage-head p { max-width: 56ch; color: var(--text2); font-size: 14px; }
+.detail-stage-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 0 2px; }
+.detail-stage-head h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.detail-stage-head p { max-width: 56ch; color: var(--text2); font-size: 13px; }
 
 .bar-chart { display: flex; flex-direction: column; gap: 6px; }
 .bar-row { display: flex; align-items: center; gap: 8px; }
@@ -193,8 +185,7 @@ tr:hover { background: #f9fafb; }
 .grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
 @media (max-width: 960px) {
   .grid-2, .grid-3, .overview-hero, .overview-support-grid, .overview-detail-grid, .scorecard-main { grid-template-columns: 1fr; }
-  .scorecard-metrics { grid-template-columns: 1fr; }
-  .scorecard-flow-row { grid-template-columns: 1fr; }
+  .scorecard-breakdown { grid-template-columns: 1fr; }
   .bar-label { width: 88px; }
 }
 
@@ -320,7 +311,6 @@ tr:hover { background: #f9fafb; }
       <div id="dash-monthly-view" class="overview-shell">
       <div class="overview-hero">
         <div id="dash-surplus"></div>
-        <div id="dash-hero-side"></div>
       </div>
       <div class="card diagnosis-card">
         <div class="section-heading-row">
@@ -348,7 +338,7 @@ tr:hover { background: #f9fafb; }
       <div class="detail-stage">
         <div class="detail-stage-head">
           <h2>Drill Down</h2>
-          <p>Keep the overview simple. Use the lower section only when you want category, merchant, and trend detail behind the monthly verdict.</p>
+          <p>Only look below if you want the category, merchant, and trend detail behind the month.</p>
         </div>
         <div class="overview-detail-grid">
           <div class="overview-detail-stack">

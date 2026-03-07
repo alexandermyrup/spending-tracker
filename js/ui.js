@@ -78,11 +78,6 @@ function fmtShort(n) {
   return new Intl.NumberFormat('da-DK').format(n);
 }
 
-function pct(value, max) {
-  if (max <= 0) return 0;
-  return Math.max(0, Math.min((value / max) * 100, 100));
-}
-
 function getNextMonthDateString(yearMonth) {
   const [year, month] = yearMonth.split('-').map(value => Number.parseInt(value, 10));
   const date = new Date(Date.UTC(year, month, 1));
@@ -714,15 +709,7 @@ function renderDashboard() {
     ...dashboardOptions
   });
   const verdictAmount = data.budget.success ? fmt(data.budget.variance) : fmt(-data.budget.variance);
-  const flowEntries = [
-    { label: 'Income', value: data.totals.income, color: 'linear-gradient(90deg, #1f7a57, #16a34a)' },
-    { label: 'Spent', value: data.budget.spent, color: 'linear-gradient(90deg, #d47b6f, #c53f2f)' },
-    { label: 'Invested', value: data.totals.invested, color: 'linear-gradient(90deg, #8b5cf6, #6a45b8)' },
-    { label: data.totals.remainingCash >= 0 ? 'Left over' : 'Shortfall', value: Math.abs(data.totals.remainingCash), color: data.totals.remainingCash >= 0 ? 'linear-gradient(90deg, #2b5f9e, #1f5fbf)' : 'linear-gradient(90deg, #d47b6f, #c53f2f)' }
-  ];
-  const flowMax = Math.max(...flowEntries.map(entry => entry.value), 1);
   const biggestMiss = data.budget.overBudgetCategories[0] || null;
-  const fixedShareMax = Math.max(data.spendingBreakdown.fixed.actual, data.spendingBreakdown.discretionary.actual, 1);
   document.getElementById('dash-surplus').innerHTML = `<div class="scorecard-card">
     <div class="scorecard-topline">
       <span class="scorecard-month">${data.monthLabel}</span>
@@ -734,51 +721,46 @@ function renderDashboard() {
         <div class="scorecard-eyebrow">How the month went</div>
         <div class="scorecard-verdict">${data.budget.success ? `Under budget by ${verdictAmount}.` : `Over budget by ${verdictAmount}.`}</div>
         <div class="scorecard-copy">${data.budget.overBudgetCategories.length > 0
-          ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview stays narrow on purpose: verdict first, top reasons second, details below only when you want the drill-down.`
+          ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview answers the month first, then gives you the top reasons before the lower drill-down cards.`
           : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</div>
-        <div class="scorecard-flow">${flowEntries.map(entry => `
-          <div class="scorecard-flow-row">
-            <div class="scorecard-flow-label">${entry.label}</div>
-            <div class="scorecard-flow-track"><div class="scorecard-flow-fill" style="width:${pct(entry.value, flowMax)}%;background:${entry.color}"></div></div>
-            <div class="scorecard-flow-value">${fmt(entry.value)}</div>
+        <div class="scorecard-breakdown">
+          <div class="scorecard-breakdown-item">
+            <div class="scorecard-breakdown-label">Fixed spending</div>
+            <div class="scorecard-breakdown-value">${fmt(data.spendingBreakdown.fixed.actual)}</div>
+            <div class="scorecard-breakdown-meta">Core monthly obligations</div>
           </div>
-        `).join('')}</div>
-      </div>
-    </div>
-  </div>`;
-  document.getElementById('dash-hero-side').innerHTML = `<div class="scorecard-sidecard">
-    <h3>Scorecard notes</h3>
-    <div class="scorecard-ledger">
-      <div class="scorecard-ledger-row">
-        <div class="scorecard-ledger-label">True income</div>
-        <div class="scorecard-ledger-value" style="color:var(--green)">${fmt(data.totals.income)}</div>
-        <div class="scorecard-ledger-copy">${data.totals.loanInflow > 0 ? `Loan inflow kept separate at ${fmt(data.totals.loanInflow)}.` : 'No loan inflow counted as income.'}</div>
-      </div>
-      <div class="scorecard-ledger-row">
-        <div class="scorecard-ledger-label">Spent vs budget</div>
-        <div class="scorecard-ledger-value" style="color:var(--red)">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
-        <div class="scorecard-ledger-copy">${data.budget.overBudgetCategories.length} category${data.budget.overBudgetCategories.length === 1 ? '' : 'ies'} over budget in ${data.monthShortLabel}.</div>
-      </div>
-      <div class="scorecard-ledger-row">
-        <div class="scorecard-ledger-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
-        <div class="scorecard-ledger-value" style="color:${data.totals.remainingCash >= 0 ? 'var(--accent)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</div>
-        <div class="scorecard-ledger-copy">Fixed ${fmt(data.spendingBreakdown.fixed.actual)} • Discretionary ${fmt(data.spendingBreakdown.discretionary.actual)}</div>
-      </div>
-    </div>
-    <div class="scorecard-callout">
-      ${biggestMiss
-        ? `<strong>${esc(biggestMiss.category)}</strong> was the main miss at ${fmt(biggestMiss.variance)} over budget.`
-        : 'No category overspent this month.'}
-      <div style="margin-top:10px">
-        <div class="scorecard-flow-row">
-          <div class="scorecard-flow-label">Fixed</div>
-          <div class="scorecard-flow-track"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.fixed.actual, fixedShareMax)}%;background:linear-gradient(90deg,#94a3b8,#cbd5e1)"></div></div>
-          <div class="scorecard-flow-value">${fmt(data.spendingBreakdown.fixed.actual)}</div>
+          <div class="scorecard-breakdown-item">
+            <div class="scorecard-breakdown-label">Flexible spending</div>
+            <div class="scorecard-breakdown-value">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
+            <div class="scorecard-breakdown-meta">Everything outside fixed costs</div>
+          </div>
+          <div class="scorecard-breakdown-item">
+            <div class="scorecard-breakdown-label">Biggest miss</div>
+            <div class="scorecard-breakdown-value">${biggestMiss ? esc(biggestMiss.category) : 'None'}</div>
+            <div class="scorecard-breakdown-meta">${biggestMiss ? `${fmt(biggestMiss.variance)} over budget` : 'No overspent categories'}</div>
+          </div>
         </div>
-        <div class="scorecard-flow-row" style="margin-top:8px">
-          <div class="scorecard-flow-label">Flexible</div>
-          <div class="scorecard-flow-track"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.discretionary.actual, fixedShareMax)}%;background:linear-gradient(90deg,#fdba74,#fb923c)"></div></div>
-          <div class="scorecard-flow-value">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
+      </div>
+      <div class="scorecard-facts">
+        <div class="scorecard-fact">
+          <div class="scorecard-fact-label">True income</div>
+          <div class="scorecard-fact-value" style="color:var(--green)">${fmt(data.totals.income)}</div>
+          <div class="scorecard-fact-meta">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow does not count as income.'}</div>
+        </div>
+        <div class="scorecard-fact">
+          <div class="scorecard-fact-label">Spent vs budget</div>
+          <div class="scorecard-fact-value" style="color:var(--red)">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
+          <div class="scorecard-fact-meta">${data.budget.overBudgetCategories.length} category${data.budget.overBudgetCategories.length === 1 ? '' : 'ies'} over budget.</div>
+        </div>
+        <div class="scorecard-fact">
+          <div class="scorecard-fact-label">Invested</div>
+          <div class="scorecard-fact-value" style="color:var(--purple)">${fmt(data.totals.invested)}</div>
+          <div class="scorecard-fact-meta">Shown separately from budget success.</div>
+        </div>
+        <div class="scorecard-fact">
+          <div class="scorecard-fact-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
+          <div class="scorecard-fact-value" style="color:${data.totals.remainingCash >= 0 ? 'var(--accent)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</div>
+          <div class="scorecard-fact-meta">${data.totals.remainingCash >= 0 ? 'Cash left after spending and investing.' : 'Spending and investing exceeded true income.'}</div>
         </div>
       </div>
     </div>
@@ -813,16 +795,11 @@ function renderDashboard() {
     : `<div class="diagnosis-list">${overspent.slice(0, 3).map(status => {
       const comparisons = getCategoryComparisons(status.category, month, dashboardOptions);
       const pattern = classifyOverspendPattern(status.category, month, dashboardOptions);
-      const meterMax = Math.max(status.actual, status.budget, comparisons.threeMonthAverage.actual, comparisons.twelveMonthAverage.actual, 1);
       return `<div class="diagnosis-item">
         <div>
           <span class="diagnosis-type ${pattern.code}">${esc(pattern.label)}</span>
           <div class="diagnosis-name">${esc(status.category)}</div>
           <div class="diagnosis-copy">Budget ${fmt(-status.budget)} • Last month ${fmt(-comparisons.previousMonth.actual)} • 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} • 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
-          <div class="diagnosis-meter">
-            <div class="diagnosis-meter-fill" style="width:${pct(status.actual, meterMax)}%"></div>
-            <div class="diagnosis-meter-budget" style="left:${pct(status.budget, meterMax)}%"></div>
-          </div>
         </div>
         <div class="diagnosis-over">${fmt(-status.variance)} over</div>
       </div>`;
