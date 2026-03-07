@@ -708,62 +708,81 @@ function renderDashboard() {
   const data = getMonthlyScorecardData(month, {
     ...dashboardOptions
   });
-  document.getElementById('dash-surplus').innerHTML = `<div class="surplus-card">
-    <h2>Monthly Scorecard <span class="text-xs text-muted">(${data.monthShortLabel})</span>${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
-    <div class="text-sm" style="margin-bottom:12px;color:${data.verdict.status === 'positive' ? 'var(--green)' : 'var(--red)'};font-weight:600">
-      ${data.budget.success ? `Under budget by ${fmt(data.budget.variance)}` : `Over budget by ${fmt(-data.budget.variance)}`}
+  const verdictAmount = data.budget.success ? fmt(data.budget.variance) : fmt(-data.budget.variance);
+  document.getElementById('dash-surplus').innerHTML = `<div class="scorecard-card">
+    <div class="scorecard-topline">
+      <span class="scorecard-month">${data.monthLabel}</span>
+      <span class="scorecard-badge ${data.verdict.status === 'positive' ? 'good' : 'bad'}">${data.budget.success ? 'Under budget' : 'Over budget'}</span>
+      ${store.salaryShiftDay ? `<span class="text-sm text-muted">Salary shifted by day ${store.salaryShiftDay}</span>` : ''}
     </div>
-    <div class="surplus-row"><span class="surplus-label">True income received</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totals.income)}</span></div>
-    ${data.totals.loanInflow > 0 ? `<div class="surplus-row"><span class="surplus-label">Loan inflow (SU-lån)</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.totals.loanInflow)}</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">Spent vs budget</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.budget.spent)} / ${fmt(-data.budget.total)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">Invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(data.totals.invested)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</span><span class="surplus-val" style="color:${data.totals.remainingCash >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</span></div>
+    <div class="scorecard-main">
+      <div>
+        <div class="scorecard-verdict">${data.budget.success ? `Under budget by ${verdictAmount}.` : `Over budget by ${verdictAmount}.`}</div>
+        <div class="scorecard-copy">${data.budget.overBudgetCategories.length > 0
+          ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. Use the diagnosis preview below for the main reasons, not the full category universe.`
+          : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</div>
+      </div>
+      <div class="scorecard-metrics">
+        <div class="scorecard-metric">
+          <div class="scorecard-metric-label">True income</div>
+          <div class="scorecard-metric-value" style="color:var(--green)">${fmt(data.totals.income)}</div>
+          <div class="scorecard-metric-sub">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow excluded from income.'}</div>
+        </div>
+        <div class="scorecard-metric">
+          <div class="scorecard-metric-label">Spent vs budget</div>
+          <div class="scorecard-metric-value" style="color:var(--red)">${fmt(-data.budget.spent)} / ${fmt(-data.budget.total)}</div>
+          <div class="scorecard-metric-sub">${data.budget.overBudgetCategories.length} category${data.budget.overBudgetCategories.length === 1 ? '' : 'ies'} over budget.</div>
+        </div>
+        <div class="scorecard-metric">
+          <div class="scorecard-metric-label">Invested</div>
+          <div class="scorecard-metric-value" style="color:var(--purple)">${fmt(data.totals.invested)}</div>
+          <div class="scorecard-metric-sub">Shown separately from budget success.</div>
+        </div>
+        <div class="scorecard-metric">
+          <div class="scorecard-metric-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
+          <div class="scorecard-metric-value" style="color:${data.totals.remainingCash >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</div>
+          <div class="scorecard-metric-sub">${fmt(-data.spendingBreakdown.fixed.actual)} fixed • ${fmt(-data.spendingBreakdown.discretionary.actual)} discretionary</div>
+        </div>
+      </div>
+    </div>
   </div>`;
-  document.getElementById('dash-stats').innerHTML = `
-    <div class="stat-card"><div class="label">Fixed costs</div><div class="value negative">${fmt(-data.spendingBreakdown.fixed.actual)}</div><div class="sub">${data.spendingBreakdown.fixed.budget > 0 ? `${Math.round(data.spendingBreakdown.fixed.actual / data.spendingBreakdown.fixed.budget * 100)}% of fixed budget` : 'No fixed budget set'}</div></div>
-    <div class="stat-card"><div class="label">Discretionary</div><div class="value negative">${fmt(-data.spendingBreakdown.discretionary.actual)}</div><div class="sub">${data.spendingBreakdown.discretionary.budget > 0 ? `${Math.round(data.spendingBreakdown.discretionary.actual / data.spendingBreakdown.discretionary.budget * 100)}% of discretionary budget` : 'No discretionary budget set'}</div></div>
-    <div class="stat-card"><div class="label">Cash saved</div><div class="value positive">${fmt(data.totals.cashSaved)}</div></div>
-    <div class="stat-card"><div class="label">Invested</div><div class="value" style="color:var(--purple)">${fmt(data.totals.invested)}</div></div>
-    <div class="stat-card"><div class="label">Over-budget categories</div><div class="value ${data.budget.overBudgetCategories.length === 0 ? 'positive' : 'negative'}">${data.budget.overBudgetCategories.length}</div><div class="sub">${data.budget.overBudgetCategories.length === 0 ? 'clean month' : 'needs diagnosis'}</div></div>
-    <div class="stat-card"><div class="label">Remaining cash</div><div class="value ${data.totals.remainingCash >= 0 ? 'positive' : 'negative'}">${fmt(data.totals.remainingCash)}</div><div class="sub">after spending, savings, investing</div></div>
-    ${data.totals.uncategorizedCount > 0 ? `<div class="stat-card" style="border-color:var(--orange)"><div class="label">Uncategorized</div><div class="value" style="color:var(--orange)">${data.totals.uncategorizedCount}</div><div class="sub">need tagging</div></div>` : ''}
-  `;
   const savings = getSavingsProgressData(month, dashboardOptions);
   const savingsYtd = getYtdSavingsProgress(month, dashboardOptions);
-  document.getElementById('dash-savings-progress').innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div class="surplus-row"><span class="surplus-label">Cash saved (${data.monthShortLabel})</span><span class="surplus-val" style="color:var(--green)">${fmt(savings.monthly.cashSaved)}</span></div>
-      <div class="surplus-row"><span class="surplus-label">Invested (${data.monthShortLabel})</span><span class="surplus-val" style="color:var(--purple)">${fmt(savings.monthly.invested)}</span></div>
-      <div class="surplus-row"><span class="surplus-label">YTD cash saved</span><span class="surplus-val" style="color:var(--green)">${fmt(savingsYtd.ytd.cashSaved)}</span></div>
-      <div class="surplus-row"><span class="surplus-label">YTD invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(savingsYtd.ytd.invested)}</span></div>
-      <div class="surplus-row total"><span class="surplus-label">YTD total progress</span><span class="surplus-val">${fmt(savingsYtd.ytd.total)}</span></div>
-    </div>`;
+  document.getElementById('dash-savings-progress').innerHTML = `<div class="summary-list">
+    <div class="summary-row"><div><div>Invested (${data.monthShortLabel})</div><div class="meta">Monthly committed capital</div></div><strong style="color:var(--purple)">${fmt(savings.monthly.invested)}</strong></div>
+    <div class="summary-row"><div><div>Cash saved (YTD)</div><div class="meta">Non-investment savings transfers</div></div><strong style="color:var(--green)">${fmt(savingsYtd.ytd.cashSaved)}</strong></div>
+    <div class="summary-row"><div><div>Invested (YTD)</div><div class="meta">Keeps savings visible without counting against budget</div></div><strong style="color:var(--purple)">${fmt(savingsYtd.ytd.invested)}</strong></div>
+    <div class="summary-row"><div><div>Total progress (YTD)</div><div class="meta">${savingsYtd.ytd.monthCount} month${savingsYtd.ytd.monthCount === 1 ? '' : 's'} tracked</div></div><strong>${fmt(savingsYtd.ytd.total)}</strong></div>
+  </div>`;
   const obligations = detectRecurringObligations({
     store,
     asOfDate: getNextMonthDateString(month),
     excludeCovered
   });
   document.getElementById('dash-obligations').innerHTML = obligations.length === 0
-    ? '<p class="text-muted">No recurring obligations detected yet.</p>'
-    : `<div style="display:flex;flex-direction:column;gap:10px">${obligations.slice(0, 4).map(item => `
-      <div style="border-bottom:1px solid var(--border);padding-bottom:8px">
-        <div class="flex-between"><strong>${esc(item.category)}</strong><span class="mono">${fmt(-item.typicalAmount)}</span></div>
-        <div class="text-sm text-muted">${item.fixed ? 'Fixed' : 'Recurring'} • ${item.cadence} • next ${item.nextExpectedDate}</div>
+    ? '<div class="empty-card-state">No active recurring obligations were detected for the last full month.</div>'
+    : `<div class="summary-list">${obligations.slice(0, 3).map(item => `
+      <div class="summary-row">
+        <div>
+          <div>${esc(item.category)}</div>
+          <div class="meta">${item.fixed ? 'Fixed' : 'Recurring'} • ${item.cadence} • next ${item.nextExpectedDate}</div>
+        </div>
+        <strong>${fmt(-item.typicalAmount)}</strong>
       </div>
     `).join('')}</div>`;
   const overspent = getOverspentCategories(month, dashboardOptions);
   document.getElementById('dash-diagnosis').innerHTML = overspent.length === 0
-    ? '<p class="text-muted">No overspent categories this month.</p>'
-    : `<div style="display:flex;flex-direction:column;gap:12px">${overspent.slice(0, 4).map(status => {
+    ? '<div class="empty-card-state">No overspent categories this month.</div>'
+    : `<div class="diagnosis-list">${overspent.slice(0, 3).map(status => {
       const comparisons = getCategoryComparisons(status.category, month, dashboardOptions);
       const pattern = classifyOverspendPattern(status.category, month, dashboardOptions);
-      return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">
-        <div class="flex-between" style="margin-bottom:6px">
-          <strong>${esc(status.category)}</strong>
-          <span class="mono" style="color:var(--red)">${fmt(-status.variance)} over</span>
+      return `<div class="diagnosis-item">
+        <div>
+          <span class="diagnosis-type ${pattern.code}">${esc(pattern.label)}</span>
+          <div class="diagnosis-name">${esc(status.category)}</div>
+          <div class="diagnosis-copy">Budget ${fmt(-status.budget)} • Last month ${fmt(-comparisons.previousMonth.actual)} • 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} • 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
         </div>
-        <div class="text-sm text-muted" style="margin-bottom:6px">${pattern.label}</div>
-        <div class="text-sm text-muted">Budget ${fmt(-status.budget)} | Last month ${fmt(-comparisons.previousMonth.actual)} | 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} | 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
+        <div class="diagnosis-over">${fmt(-status.variance)} over</div>
       </div>`;
     }).join('')}</div>`;
   const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);
