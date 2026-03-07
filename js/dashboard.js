@@ -466,6 +466,12 @@ function getNextExpectedDate(lastDate, cadence) {
   return formatIsoDate(next);
 }
 
+function isStillActiveRecurring(lastDate, asOf, cadence) {
+  const gapMonths = monthDiff(lastDate, asOf);
+  if (cadence === 'annual') return gapMonths <= 13;
+  return gapMonths <= 2;
+}
+
 export function detectRecurringObligations(options) {
   const { store, asOfDate, excludeCovered } = options;
   const shiftDay = store.salaryShiftDay || 0;
@@ -492,8 +498,9 @@ export function detectRecurringObligations(options) {
     if (!cadence) return;
     if (!hasStableAmounts(sorted, cadence === 'annual' ? 0.1 : 0.25)) return;
     if (cadence === 'monthly' && sorted.length < 3) return;
-    const typicalAmount = averageAmount(sorted);
     const lastDate = dates[dates.length - 1];
+    if (!isStillActiveRecurring(lastDate, asOf, cadence)) return;
+    const typicalAmount = averageAmount(sorted);
     obligations.push({
       category,
       merchant,

@@ -653,6 +653,23 @@ runner.suite('Savings and obligations', test => {
 
     assertEquals(result.some(item => item.category === 'Other'), false);
   });
+
+  test('does not show stale recurring payments that have stopped', () => {
+    const store = createRecurringStore();
+    store.transactions.push(
+      { id: 13, date: '2025-10-07', amount: -173, merchant: 'OpenAI', description: '', type: 'spending', category: 'OpenAI', covered: false },
+      { id: 14, date: '2025-11-07', amount: -173, merchant: 'OpenAI', description: '', type: 'spending', category: 'OpenAI', covered: false },
+      { id: 15, date: '2025-12-07', amount: -173, merchant: 'OpenAI', description: '', type: 'spending', category: 'OpenAI', covered: false }
+    );
+
+    const result = detectRecurringObligations({
+      store,
+      asOfDate: '2026-04-20',
+      excludeCovered: true
+    });
+
+    assertEquals(result.some(item => item.category === 'OpenAI'), false);
+  });
 });
 
 runner.suite('Yearly dashboard', test => {
