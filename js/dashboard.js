@@ -61,6 +61,16 @@ export function getMonthRange(startMonth, endMonth) {
   return months;
 }
 
+export function getEarliestMonthForDashboard(transactions, budgets, shiftDay) {
+  const transactionMonths = getUniqueMonths(transactions, shiftDay);
+  const transactionStart = transactionMonths[0] || null;
+  const budgetYears = Object.keys(budgets || {}).sort();
+  const budgetStart = budgetYears.length > 0 ? `${budgetYears[0]}-01` : null;
+  if (!transactionStart) return budgetStart;
+  if (!budgetStart) return transactionStart;
+  return transactionStart < budgetStart ? transactionStart : budgetStart;
+}
+
 export function getBudgetForMonth(store, cat, yearMonth, ensureYearBudget) {
   const [year, month] = yearMonth.split('-');
   ensureYearBudget(year);

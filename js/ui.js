@@ -29,6 +29,7 @@ import {
 import {
   classifyOverspendPattern,
   detectRecurringObligations,
+  getEarliestMonthForDashboard,
   getCategoryComparisons,
   getBudgetForMonth,
   getEffectiveMonth,
@@ -1162,7 +1163,7 @@ function populateFilters() {
   const dashMonth = document.getElementById('dash-month');
   const dashMonthValue = dashMonth.value;
   const lastCompletedMonth = getLastCompletedMonth(new Date());
-  const firstMonth = allMonths[0];
+  const firstMonth = getEarliestMonthForDashboard(store.transactions, store.budgets, store.salaryShiftDay || 0);
   const finalMonth = allMonths.includes(lastCompletedMonth) || allMonths.length === 0
     ? lastCompletedMonth
     : allMonths[allMonths.length - 1];

@@ -17,6 +17,7 @@ import {
 import {
   classifyOverspendPattern,
   detectRecurringObligations,
+  getEarliestMonthForDashboard,
   getCategoryComparisons,
   getCategoryBudgetStatus,
   getLastCompletedMonth,
@@ -245,6 +246,17 @@ runner.suite('Salary shift consistency', test => {
     assertDeepEqual(
       getMonthRange('2025-11', '2026-03'),
       ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03']
+    );
+  });
+
+  test('getEarliestMonthForDashboard starts from the earliest budget year when it is older than transactions', () => {
+    assertEquals(
+      getEarliestMonthForDashboard(
+        [{ date: '2025-04-15', amount: -100, type: 'spending' }],
+        { '2025': {}, '2026': {} },
+        0
+      ),
+      '2025-01'
     );
   });
 
