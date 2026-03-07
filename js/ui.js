@@ -39,7 +39,7 @@ import {
   getYearlyDashboardData
 } from './dashboard.js';
 
-const APP_VERSION = 'v0.1';
+const APP_VERSION = 'v0.2';
 
 let store = loadStore();
 let pendingImport = [];
