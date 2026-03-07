@@ -762,7 +762,7 @@ function renderDashboard() {
           <span class="mono" style="color:var(--red)">${fmt(-status.variance)} over</span>
         </div>
         <div class="text-sm text-muted" style="margin-bottom:6px">${pattern.label}</div>
-        <div class="text-sm text-muted">Budget ${fmt(-status.budget)} | Last month ${fmt(-comparisons.previousMonth.actual)} | 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)}</div>
+        <div class="text-sm text-muted">Budget ${fmt(-status.budget)} | Last month ${fmt(-comparisons.previousMonth.actual)} | 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} | 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
       </div>`;
     }).join('')}</div>`;
   const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);

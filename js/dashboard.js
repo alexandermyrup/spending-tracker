@@ -320,6 +320,9 @@ export function getCategoryComparisons(category, month, options) {
   const trailingMonths = [1, 2, 3].map(offset => getPreviousMonth(month, offset));
   const trailingStatuses = trailingMonths.map(previousMonthKey => getCategoryBudgetStatus(category, previousMonthKey, options));
   const averageActual = trailingStatuses.reduce((sum, status) => sum + status.actual, 0) / trailingStatuses.length;
+  const trailingTwelveMonths = Array.from({ length: 12 }, (_, index) => getPreviousMonth(month, index + 1));
+  const trailingTwelveStatuses = trailingTwelveMonths.map(previousMonthKey => getCategoryBudgetStatus(category, previousMonthKey, options));
+  const twelveMonthAverage = trailingTwelveStatuses.reduce((sum, status) => sum + status.actual, 0) / trailingTwelveStatuses.length;
 
   return {
     category,
@@ -338,6 +341,11 @@ export function getCategoryComparisons(category, month, options) {
       months: trailingMonths,
       actual: roundCurrency(averageActual),
       varianceFromCurrent: roundCurrency(current.actual - averageActual)
+    },
+    twelveMonthAverage: {
+      months: trailingTwelveMonths,
+      actual: roundCurrency(twelveMonthAverage),
+      varianceFromCurrent: roundCurrency(current.actual - twelveMonthAverage)
     }
   };
 }

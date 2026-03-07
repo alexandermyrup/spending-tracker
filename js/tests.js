@@ -390,6 +390,15 @@ runner.suite('Budget diagnosis', test => {
   function createDiagnosisStore() {
     const store = createStore({
       transactions: [
+        { id: 101, date: '2025-04-05', amount: -2100, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 102, date: '2025-05-05', amount: -2200, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 103, date: '2025-06-05', amount: -2300, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 104, date: '2025-07-05', amount: -2400, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 105, date: '2025-08-05', amount: -2500, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 106, date: '2025-09-05', amount: -2600, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 107, date: '2025-10-05', amount: -2700, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 108, date: '2025-11-05', amount: -2800, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 109, date: '2025-12-05', amount: -2900, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
         { id: 1, date: '2026-01-05', amount: -3000, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
         { id: 2, date: '2026-01-10', amount: -0, merchant: 'Cafe', description: '', type: 'spending', category: 'Eating out', covered: false },
         { id: 3, date: '2026-01-18', amount: -300, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
@@ -459,6 +468,18 @@ runner.suite('Budget diagnosis', test => {
     assertEquals(result.budget.amount, 600);
     assertEquals(result.previousMonth.actual, 720);
     assertEquals(result.threeMonthAverage.actual, 653.33);
+  });
+
+  test('returns a trailing 12-month average comparison when enough history exists', () => {
+    const store = createDiagnosisStore();
+    const result = getCategoryComparisons('Groceries', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.twelveMonthAverage.actual, 2650);
+    assertEquals(result.twelveMonthAverage.varianceFromCurrent, 250);
   });
 
   test('classifies category over budget but below trailing average as budget issue', () => {
