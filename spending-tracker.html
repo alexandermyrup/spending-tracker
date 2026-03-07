@@ -19,7 +19,9 @@ input, select, textarea { font-family: inherit; }
 
 .app { max-width: 1280px; margin: 0 auto; padding: 16px; }
 .header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.header-title { display: flex; align-items: center; gap: 10px; }
 .header h1 { font-size: 20px; font-weight: 600; }
+.version-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--text2); background: #f3f4f6; border: 1px solid var(--border); }
 .header-actions { display: flex; gap: 8px; }
 
 .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
@@ -197,7 +199,10 @@ tr:hover { background: #f9fafb; }
 <body>
 <div class="app">
   <div class="header">
-    <h1>Spending Tracker</h1>
+    <div class="header-title">
+      <h1>Spending Tracker</h1>
+      <span class="version-badge">v0.1</span>
+    </div>
     <div class="header-actions">
       <button class="btn" onclick="exportData()">Export JSON</button>
       <label class="btn"><input type="file" accept=".json" style="display:none" onchange="importJSON(event)">Import JSON</label>
