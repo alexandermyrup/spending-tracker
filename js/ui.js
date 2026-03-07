@@ -714,7 +714,6 @@ function renderDashboard() {
     <div class="surplus-row"><span class="surplus-label">True income received</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totals.income)}</span></div>
     ${data.totals.loanInflow > 0 ? `<div class="surplus-row"><span class="surplus-label">Loan inflow (SU-lån)</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.totals.loanInflow)}</span></div>` : ''}
     <div class="surplus-row"><span class="surplus-label">Spent vs budget</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.budget.spent)} / ${fmt(-data.budget.total)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">Cash saved</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totals.cashSaved)}</span></div>
     <div class="surplus-row"><span class="surplus-label">Invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(data.totals.invested)}</span></div>
     <div class="surplus-row total"><span class="surplus-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</span><span class="surplus-val" style="color:${data.totals.remainingCash >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</span></div>
   </div>`;
@@ -1162,9 +1161,9 @@ function populateFilters() {
   const dashMonth = document.getElementById('dash-month');
   const dashMonthValue = dashMonth.value;
   const lastCompletedMonth = getLastCompletedMonth(new Date());
-  const defaultDashMonth = months.includes(lastCompletedMonth) ? lastCompletedMonth : months[months.length - 1];
-  dashMonth.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
-  dashMonth.value = months.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
+  const defaultDashMonth = allMonths.includes(lastCompletedMonth) ? lastCompletedMonth : allMonths[allMonths.length - 1];
+  dashMonth.innerHTML = allMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+  dashMonth.value = allMonths.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
   document.getElementById('dash-salary-shift').value = store.salaryShiftDay || 0;
   const txMonth = document.getElementById('tx-month-filter');
   const txMonthValue = txMonth.value;
