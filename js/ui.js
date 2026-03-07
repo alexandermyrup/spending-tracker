@@ -36,6 +36,8 @@ import {
   getYearlyDashboardData
 } from './dashboard.js';
 
+const APP_VERSION = 'v0.1';
+
 let store = loadStore();
 let pendingImport = [];
 let lastImportedIds = [];
@@ -82,6 +84,11 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   window.setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function renderAppVersion() {
+  const badge = document.getElementById('app-version-badge');
+  if (badge) badge.textContent = APP_VERSION;
 }
 
 function rerenderAll() {
@@ -1209,6 +1216,7 @@ function bindGlobalActions() {
 export function initApp() {
   const sanitized = sanitizeTransactions(store);
   if (sanitized > 0) persistStore();
+  renderAppVersion();
   bindGlobalActions();
   bindTabEvents();
   bindImportEvents();
