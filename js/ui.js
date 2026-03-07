@@ -43,7 +43,7 @@ import {
 } from './dashboard.js';
 
 const APP_VERSION = 'v0.2';
-const APP_VERSION_COMMIT_URL = 'https://api.github.com/repos/alexandermyrup/spending-tracker/commits/main';
+const APP_VERSION_METADATA_URL = './version.json';
 
 let store = loadStore();
 let pendingImport = [];
@@ -98,13 +98,12 @@ async function renderAppVersion() {
   if (!badge) return;
   badge.textContent = APP_VERSION;
   try {
-    const response = await fetch(APP_VERSION_COMMIT_URL, {
-      headers: { Accept: 'application/vnd.github+json' }
-    });
+    const response = await fetch(APP_VERSION_METADATA_URL, { cache: 'no-store' });
     if (!response.ok) return;
-    const commit = await response.json();
-    const shortSha = String(commit?.sha || '').slice(0, 7);
-    if (shortSha) badge.textContent = `${APP_VERSION}.${shortSha}`;
+    const metadata = await response.json();
+    const version = metadata?.version || APP_VERSION;
+    const build = String(metadata?.build || '').slice(0, 7);
+    badge.textContent = build ? `${version}.${build}` : version;
   } catch {
     // Keep the base version if the network request fails.
   }
