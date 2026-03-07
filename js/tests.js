@@ -20,6 +20,7 @@ import {
   getCategoryComparisons,
   getCategoryBudgetStatus,
   getLastCompletedMonth,
+  getMonthRange,
   getEffectiveMonth,
   getMonthlyScorecardData,
   getSavingsProgressData,
@@ -238,6 +239,13 @@ runner.suite('Salary shift consistency', test => {
   test('getLastCompletedMonth returns the previous calendar month', () => {
     assertEquals(getLastCompletedMonth(new Date('2026-03-07T12:00:00Z')), '2026-02');
     assertEquals(getLastCompletedMonth(new Date('2026-01-03T12:00:00Z')), '2025-12');
+  });
+
+  test('getMonthRange returns contiguous months between endpoints', () => {
+    assertDeepEqual(
+      getMonthRange('2025-11', '2026-03'),
+      ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03']
+    );
   });
 
   test('getEffectiveMonth shifts qualifying income after cutoff', () => {

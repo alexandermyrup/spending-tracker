@@ -45,6 +45,22 @@ export function getRecentMonths(transactions, shiftDay, limit = MAX_VISIBLE_MONT
   return months.slice(-limit);
 }
 
+export function getMonthRange(startMonth, endMonth) {
+  if (!startMonth || !endMonth) return [];
+  const [startYear, startMonthIndex] = startMonth.split('-').map(value => Number.parseInt(value, 10));
+  const [endYear, endMonthIndex] = endMonth.split('-').map(value => Number.parseInt(value, 10));
+  const cursor = new Date(Date.UTC(startYear, startMonthIndex - 1, 1));
+  const end = new Date(Date.UTC(endYear, endMonthIndex - 1, 1));
+  const months = [];
+
+  while (cursor.getTime() <= end.getTime()) {
+    months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`);
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  return months;
+}
+
 export function getBudgetForMonth(store, cat, yearMonth, ensureYearBudget) {
   const [year, month] = yearMonth.split('-');
   ensureYearBudget(year);

@@ -33,6 +33,7 @@ import {
   getBudgetForMonth,
   getEffectiveMonth,
   getLastCompletedMonth,
+  getMonthRange,
   getMonthlyScorecardData,
   getSavingsProgressData,
   getOverspentCategories,
@@ -1161,9 +1162,14 @@ function populateFilters() {
   const dashMonth = document.getElementById('dash-month');
   const dashMonthValue = dashMonth.value;
   const lastCompletedMonth = getLastCompletedMonth(new Date());
-  const defaultDashMonth = allMonths.includes(lastCompletedMonth) ? lastCompletedMonth : allMonths[allMonths.length - 1];
-  dashMonth.innerHTML = allMonths.map(m => `<option value="${m}">${m}</option>`).join('');
-  dashMonth.value = allMonths.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
+  const firstMonth = allMonths[0];
+  const finalMonth = allMonths.includes(lastCompletedMonth) || allMonths.length === 0
+    ? lastCompletedMonth
+    : allMonths[allMonths.length - 1];
+  const dashboardMonths = firstMonth ? getMonthRange(firstMonth, finalMonth) : [lastCompletedMonth];
+  const defaultDashMonth = dashboardMonths.includes(lastCompletedMonth) ? lastCompletedMonth : dashboardMonths[dashboardMonths.length - 1];
+  dashMonth.innerHTML = dashboardMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+  dashMonth.value = dashboardMonths.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
   document.getElementById('dash-salary-shift').value = store.salaryShiftDay || 0;
   const txMonth = document.getElementById('tx-month-filter');
   const txMonthValue = txMonth.value;
