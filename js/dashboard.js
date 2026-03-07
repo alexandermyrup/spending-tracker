@@ -8,6 +8,14 @@ import {
 
 export { CHART_COLORS };
 export const MAX_VISIBLE_MONTHS = 12;
+const FIXED_SCORECARD_GROUPS = new Set(['Fixed costs', 'Subscriptions', 'Insurance']);
+
+export function getLastCompletedMonth(currentDate = new Date()) {
+  const year = currentDate.getFullYear();
+  const monthIndex = currentDate.getMonth();
+  if (monthIndex === 0) return `${year - 1}-12`;
+  return `${year}-${String(monthIndex).padStart(2, '0')}`;
+}
 
 export function getEffectiveMonth(tx, shiftDay) {
   const raw = tx.date.slice(0, 7);
@@ -105,6 +113,107 @@ export function getMonthlyDashboardData(month, options) {
     catTotals,
     merchantTotals,
     trend: getMonthlyTrendData(store, excludeCovered)
+  };
+}
+
+function getScorecardSpendingType(category, categories) {
+  if (!category) return 'discretionary';
+  for (const [group, cats] of Object.entries(categories)) {
+    if (!cats.includes(category)) continue;
+    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return null;
+    return FIXED_SCORECARD_GROUPS.has(group) ? 'fixed' : 'discretionary';
+  }
+  return 'discretionary';
+}
+
+function getSavingBucket(tx) {
+  if (tx.type !== 'saving' || tx.amount >= 0) return null;
+  return tx.category === 'Investments' ? 'invested' : 'cashSaved';
+}
+
+export function getMonthlyScorecardData(month, options) {
+  const { store, ensureYearBudget } = options;
+  const base = getMonthlyDashboardData(month, options);
+  const [year, monthKey] = month.split('-');
+
+  ensureYearBudget(year);
+
+  const spendingBreakdown = {
+    fixed: { actual: 0, budget: 0 },
+    discretionary: { actual: 0, budget: 0 }
+  };
+  const savings = {
+    cashSaved: 0,
+    invested: 0
+  };
+
+  base.spending.forEach(tx => {
+    const bucket = getScorecardSpendingType(tx.category, store.categories);
+    if (!bucket) return;
+    spendingBreakdown[bucket].actual += Math.abs(tx.amount);
+  });
+
+  base.txs.forEach(tx => {
+    const bucket = getSavingBucket(tx);
+    if (!bucket) return;
+    savings[bucket] += Math.abs(tx.amount);
+  });
+
+  const overBudgetCategories = [];
+  Object.entries(store.categories).forEach(([group, cats]) => {
+    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
+    cats.forEach(cat => {
+      const budget = getBudgetForMonth(store, cat, month, ensureYearBudget);
+      const actual = base.catTotals[cat] || 0;
+      const bucket = getScorecardSpendingType(cat, store.categories);
+      if (bucket) spendingBreakdown[bucket].budget += budget;
+      if (actual > budget) {
+        overBudgetCategories.push({
+          category: cat,
+          actual,
+          budget,
+          variance: actual - budget
+        });
+      }
+    });
+  });
+  overBudgetCategories.sort((a, b) => b.variance - a.variance);
+
+  const budgetVariance = base.floorBudget - base.totalSpend;
+  const remainingCash = base.totalIncome - base.totalSpend - savings.cashSaved - savings.invested;
+  const verdictStatus = budgetVariance >= 0 ? 'positive' : 'negative';
+  const verdictSummary = budgetVariance >= 0
+    ? `Under budget and saved ${Math.max(remainingCash, 0)}`
+    : `Over budget by ${Math.abs(budgetVariance)}`;
+
+  return {
+    month,
+    monthLabel: `${MONTHS[Number.parseInt(monthKey, 10) - 1]} ${year}`,
+    totals: {
+      income: base.totalIncome,
+      loanInflow: base.totalLoan,
+      spent: base.totalSpend,
+      budget: base.floorBudget,
+      cashSaved: savings.cashSaved,
+      invested: savings.invested,
+      remainingCash,
+      uncategorizedCount: base.uncatCount
+    },
+    budget: {
+      total: base.floorBudget,
+      spent: base.totalSpend,
+      variance: budgetVariance,
+      success: budgetVariance >= 0,
+      overBudgetCategories
+    },
+    spendingBreakdown,
+    verdict: {
+      status: verdictStatus,
+      summary: verdictSummary
+    },
+    trend: base.trend,
+    categoryTotals: base.catTotals,
+    merchantTotals: base.merchantTotals
   };
 }
 

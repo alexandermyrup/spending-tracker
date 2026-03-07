@@ -29,7 +29,8 @@ import {
 import {
   getBudgetForMonth,
   getEffectiveMonth,
-  getMonthlyDashboardData,
+  getLastCompletedMonth,
+  getMonthlyScorecardData,
   getRecentMonths,
   getUniqueMonths,
   getYearlyDashboardData
@@ -666,28 +667,33 @@ function renderDashboard() {
   const month = document.getElementById('dash-month').value;
   if (!month) return;
   const excludeCovered = document.getElementById('dash-exclude-covered').checked;
-  const data = getMonthlyDashboardData(month, {
+  const data = getMonthlyScorecardData(month, {
     store,
     excludeCovered,
     ensureYearBudget: year => ensureYearBudget(store, year)
   });
   document.getElementById('dash-surplus').innerHTML = `<div class="surplus-card">
-    <h2>Monthly Cash Flow${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
-    <div class="surplus-row"><span class="surplus-label">Income (true)</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totalIncome)}</span></div>
-    ${data.totalLoan > 0 ? `<div class="surplus-row"><span class="surplus-label">Loan inflow (SU-lån)</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.totalLoan)}</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">Actual spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.totalSpend)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">Saved / invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(-data.totalSave)}</span></div>
-    <div class="surplus-row" style="border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;margin-top:4px"><span class="surplus-label">Budget (spending)</span><span class="surplus-val" style="color:var(--text2)">${fmt(-data.floorBudget)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">${data.budgetVariance >= 0 ? 'Under budget' : 'Over budget'}</span><span class="surplus-val" style="color:${data.budgetVariance >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.budgetVariance)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${data.actualRemaining >= 0 ? 'Remaining' : 'Shortfall'}</span><span class="surplus-val" style="color:${data.actualRemaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.actualRemaining)}</span></div>
+    <h2>Monthly Scorecard${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
+    <div class="text-sm" style="margin-bottom:12px;color:${data.verdict.status === 'positive' ? 'var(--green)' : 'var(--red)'};font-weight:600">
+      ${data.budget.success ? `Under budget by ${fmt(data.budget.variance)}` : `Over budget by ${fmt(-data.budget.variance)}`}
+    </div>
+    <div class="surplus-row"><span class="surplus-label">True income received</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totals.income)}</span></div>
+    ${data.totals.loanInflow > 0 ? `<div class="surplus-row"><span class="surplus-label">Loan inflow (SU-lån)</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.totals.loanInflow)}</span></div>` : ''}
+    <div class="surplus-row"><span class="surplus-label">Spent vs budget</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.budget.spent)} / ${fmt(-data.budget.total)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">Cash saved</span><span class="surplus-val" style="color:var(--green)">${fmt(data.totals.cashSaved)}</span></div>
+    <div class="surplus-row"><span class="surplus-label">Invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(data.totals.invested)}</span></div>
+    <div class="surplus-row total"><span class="surplus-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</span><span class="surplus-val" style="color:${data.totals.remainingCash >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</span></div>
   </div>`;
   document.getElementById('dash-stats').innerHTML = `
-    <div class="stat-card"><div class="label">Spending</div><div class="value negative">${fmt(-data.totalSpend)}</div><div class="sub">${data.floorBudget > 0 ? `${Math.round(data.totalSpend / data.floorBudget * 100)}% of budget` : ''}</div></div>
-    <div class="stat-card"><div class="label">Saved / Invested</div><div class="value" style="color:var(--purple)">${fmt(-data.totalSave)}</div></div>
-    <div class="stat-card"><div class="label">Remaining</div><div class="value ${data.actualRemaining >= 0 ? 'positive' : 'negative'}">${fmt(data.actualRemaining)}</div><div class="sub">income - spending - savings</div></div>
-    ${data.uncatCount > 0 ? `<div class="stat-card" style="border-color:var(--orange)"><div class="label">Uncategorized</div><div class="value" style="color:var(--orange)">${data.uncatCount}</div><div class="sub">need tagging</div></div>` : ''}
+    <div class="stat-card"><div class="label">Fixed costs</div><div class="value negative">${fmt(-data.spendingBreakdown.fixed.actual)}</div><div class="sub">${data.spendingBreakdown.fixed.budget > 0 ? `${Math.round(data.spendingBreakdown.fixed.actual / data.spendingBreakdown.fixed.budget * 100)}% of fixed budget` : 'No fixed budget set'}</div></div>
+    <div class="stat-card"><div class="label">Discretionary</div><div class="value negative">${fmt(-data.spendingBreakdown.discretionary.actual)}</div><div class="sub">${data.spendingBreakdown.discretionary.budget > 0 ? `${Math.round(data.spendingBreakdown.discretionary.actual / data.spendingBreakdown.discretionary.budget * 100)}% of discretionary budget` : 'No discretionary budget set'}</div></div>
+    <div class="stat-card"><div class="label">Cash saved</div><div class="value positive">${fmt(data.totals.cashSaved)}</div></div>
+    <div class="stat-card"><div class="label">Invested</div><div class="value" style="color:var(--purple)">${fmt(data.totals.invested)}</div></div>
+    <div class="stat-card"><div class="label">Over-budget categories</div><div class="value ${data.budget.overBudgetCategories.length === 0 ? 'positive' : 'negative'}">${data.budget.overBudgetCategories.length}</div><div class="sub">${data.budget.overBudgetCategories.length === 0 ? 'clean month' : 'needs diagnosis'}</div></div>
+    <div class="stat-card"><div class="label">Remaining cash</div><div class="value ${data.totals.remainingCash >= 0 ? 'positive' : 'negative'}">${fmt(data.totals.remainingCash)}</div><div class="sub">after spending, savings, investing</div></div>
+    ${data.totals.uncategorizedCount > 0 ? `<div class="stat-card" style="border-color:var(--orange)"><div class="label">Uncategorized</div><div class="value" style="color:var(--orange)">${data.totals.uncategorizedCount}</div><div class="sub">need tagging</div></div>` : ''}
   `;
-  const sortedCats = Object.entries(data.catTotals).sort((a, b) => b[1] - a[1]);
+  const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
   document.getElementById('dash-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 12).map(([cat, val], i) => {
     const budgetAmt = getBudgetForMonth(store, cat, month, year => ensureYearBudget(store, year));
@@ -716,7 +722,7 @@ function renderDashboard() {
     cats.forEach(cat => {
       const budget = getBudgetForMonth(store, cat, month, year => ensureYearBudget(store, year));
       if (budget <= 0) return;
-      const actual = data.catTotals[cat] || 0;
+      const actual = data.categoryTotals[cat] || 0;
       const pct = Math.round(actual / budget * 100);
       const cls = pct > 100 ? 'over' : pct > 80 ? 'warn' : 'ok';
       budgetHTML.push(`<div class="budget-item">
@@ -1081,10 +1087,12 @@ function updateCatFilter() {
 function populateFilters() {
   const allMonths = getUniqueMonths(store.transactions, store.salaryShiftDay || 0);
   const months = getRecentMonths(store.transactions, store.salaryShiftDay || 0);
-  const currentMonth = getEffectiveMonth({ date: new Date().toISOString().slice(0, 10), amount: 1, type: 'income' }, store.salaryShiftDay || 0);
   const dashMonth = document.getElementById('dash-month');
-  dashMonth.innerHTML = months.map(m => `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>${m}</option>`).join('');
-  if (months.length > 0 && !months.includes(currentMonth)) dashMonth.value = months[months.length - 1];
+  const dashMonthValue = dashMonth.value;
+  const lastCompletedMonth = getLastCompletedMonth(new Date());
+  const defaultDashMonth = months.includes(lastCompletedMonth) ? lastCompletedMonth : months[months.length - 1];
+  dashMonth.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+  dashMonth.value = months.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
   document.getElementById('dash-salary-shift').value = store.salaryShiftDay || 0;
   const txMonth = document.getElementById('tx-month-filter');
   const txMonthValue = txMonth.value;

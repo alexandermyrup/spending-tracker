@@ -1,6 +1,7 @@
 import {
   CHART_COLORS,
   DEFAULT_CATEGORIES,
+  ensureYearBudget,
   normalizeStore,
   getDefaultYearBudget,
   exportPayload
@@ -14,7 +15,9 @@ import {
   txFingerprint
 } from './transactions.js';
 import {
+  getLastCompletedMonth,
   getEffectiveMonth,
+  getMonthlyScorecardData,
   getRecentMonths,
   getUniqueMonths,
   getYearlyDashboardData
@@ -225,6 +228,11 @@ runner.suite('Transaction logic', test => {
 });
 
 runner.suite('Salary shift consistency', test => {
+  test('getLastCompletedMonth returns the previous calendar month', () => {
+    assertEquals(getLastCompletedMonth(new Date('2026-03-07T12:00:00Z')), '2026-02');
+    assertEquals(getLastCompletedMonth(new Date('2026-01-03T12:00:00Z')), '2025-12');
+  });
+
   test('getEffectiveMonth shifts qualifying income after cutoff', () => {
     const tx = { date: '2026-01-28', amount: 5000, type: 'income' };
     assertEquals(getEffectiveMonth(tx, 25), '2026-02');
@@ -250,6 +258,114 @@ runner.suite('Salary shift consistency', test => {
     assertEquals(months.length, 12, 'Should only expose the last 12 months');
     assertEquals(months[0], '2025-03');
     assertEquals(months[11], '2026-02');
+  });
+});
+
+runner.suite('Monthly scorecard', test => {
+  function createScorecardStore() {
+    const store = createStore({
+      transactions: [
+        { id: 1, date: '2026-02-01', amount: 22000, merchant: 'SU', description: '', type: 'income', category: 'SU', covered: false },
+        { id: 2, date: '2026-02-03', amount: 3000, merchant: 'SU loan', description: '', type: 'loan', category: '', covered: false },
+        { id: 3, date: '2026-02-02', amount: -4800, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent + utilities', covered: false },
+        { id: 4, date: '2026-02-04', amount: -173, merchant: 'OpenAI', description: '', type: 'spending', category: 'OpenAI', covered: false },
+        { id: 5, date: '2026-02-08', amount: -2800, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 6, date: '2026-02-12', amount: -600, merchant: 'Restaurant', description: '', type: 'spending', category: 'Eating out', covered: false },
+        { id: 7, date: '2026-02-15', amount: -1200, merchant: 'Pension transfer', description: '', type: 'saving', category: 'Pension', covered: false },
+        { id: 8, date: '2026-02-20', amount: -900, merchant: 'Nordnet', description: '', type: 'saving', category: 'Investments', covered: false },
+        { id: 9, date: '2026-02-22', amount: -700, merchant: 'Friend repayment', description: '', type: 'spending', category: 'Travel', covered: true }
+      ]
+    });
+
+    Object.keys(store.budgets['2026']).forEach(cat => {
+      store.budgets['2026'][cat]['02'] = 0;
+    });
+    store.budgets['2026']['Rent + utilities']['02'] = 5000;
+    store.budgets['2026']['OpenAI']['02'] = 173;
+    store.budgets['2026']['Groceries']['02'] = 3200;
+    store.budgets['2026']['Eating out']['02'] = 300;
+    store.budgets['2026']['Travel']['02'] = 1500;
+
+    return store;
+  }
+
+  test('separates true income, spending, cash savings, and investing for the scorecard', () => {
+    const store = createScorecardStore();
+    const result = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.totals.income, 22000, 'Loan inflows should not count as true income');
+    assertEquals(result.totals.loanInflow, 3000);
+    assertEquals(result.totals.spent, 8373);
+    assertEquals(result.totals.cashSaved, 1200);
+    assertEquals(result.totals.invested, 900);
+    assertEquals(result.totals.remainingCash, 11527);
+  });
+
+  test('excludes covered items from headline metrics by default', () => {
+    const store = createScorecardStore();
+    const excluded = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+    const included = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: false,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(excluded.totals.spent, 8373);
+    assertEquals(included.totals.spent, 9073);
+  });
+
+  test('reports fixed versus discretionary spending separately', () => {
+    const store = createScorecardStore();
+    const result = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertDeepEqual(result.spendingBreakdown, {
+      fixed: { actual: 4973, budget: 5173 },
+      discretionary: { actual: 3400, budget: 5000 }
+    });
+  });
+
+  test('treats budget success independently from savings transfers', () => {
+    const store = createScorecardStore();
+    const result = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.budget.total, 10173);
+    assertEquals(result.budget.variance, 1800);
+    assertEquals(result.budget.success, true);
+    assertEquals(result.budget.overBudgetCategories.length, 1);
+    assertEquals(result.budget.overBudgetCategories[0].category, 'Eating out');
+    assertEquals(result.verdict.status, 'positive');
+  });
+
+  test('returns a negative verdict for an over-budget month', () => {
+    const store = createScorecardStore();
+    store.transactions.push({ id: 10, date: '2026-02-24', amount: -3000, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false });
+    store.budgets['2026']['Nightlife']['02'] = 800;
+
+    const result = getMonthlyScorecardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.budget.success, false);
+    assertEquals(result.verdict.status, 'negative');
+    assert(result.verdict.summary.includes('Over budget'), 'Negative verdict should call out overspending');
   });
 });
 
