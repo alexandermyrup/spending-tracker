@@ -469,7 +469,9 @@ function getNextExpectedDate(lastDate, cadence) {
 function isStillActiveRecurring(lastDate, asOf, cadence) {
   const gapMonths = monthDiff(lastDate, asOf);
   if (cadence === 'annual') return gapMonths <= 13;
-  return gapMonths <= 2;
+  const lastCompletedMonth = getLastCompletedMonth(asOf);
+  const lastObservedMonth = `${lastDate.getUTCFullYear()}-${String(lastDate.getUTCMonth() + 1).padStart(2, '0')}`;
+  return lastObservedMonth === lastCompletedMonth;
 }
 
 export function detectRecurringObligations(options) {

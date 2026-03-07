@@ -604,7 +604,7 @@ runner.suite('Savings and obligations', test => {
     const store = createRecurringStore();
     const result = detectRecurringObligations({
       store,
-      asOfDate: '2026-04-20',
+      asOfDate: '2026-05-20',
       excludeCovered: true
     });
 
@@ -616,7 +616,7 @@ runner.suite('Savings and obligations', test => {
     assertEquals(rent.nextExpectedDate, '2026-05-02');
   });
 
-  test('detects skipped-month subscriptions as recurring', () => {
+  test('does not show monthly subscriptions that were not active in the last full month', () => {
     const store = createRecurringStore();
     const result = detectRecurringObligations({
       store,
@@ -625,15 +625,14 @@ runner.suite('Savings and obligations', test => {
     });
 
     const cloud = result.find(item => item.category === 'iCloud');
-    assert(cloud, 'iCloud should still be detected after a skipped month');
-    assertEquals(cloud.cadence, 'monthly');
+    assertEquals(!!cloud, false);
   });
 
   test('detects annual obligations separately', () => {
     const store = createRecurringStore();
     const result = detectRecurringObligations({
       store,
-      asOfDate: '2026-04-20',
+      asOfDate: '2026-05-20',
       excludeCovered: true
     });
 
@@ -647,7 +646,7 @@ runner.suite('Savings and obligations', test => {
     const store = createRecurringStore();
     const result = detectRecurringObligations({
       store,
-      asOfDate: '2026-04-20',
+      asOfDate: '2026-05-20',
       excludeCovered: true
     });
 
@@ -664,7 +663,7 @@ runner.suite('Savings and obligations', test => {
 
     const result = detectRecurringObligations({
       store,
-      asOfDate: '2026-04-20',
+      asOfDate: '2026-05-20',
       excludeCovered: true
     });
 

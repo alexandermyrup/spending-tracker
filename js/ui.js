@@ -76,6 +76,12 @@ function fmtShort(n) {
   return new Intl.NumberFormat('da-DK').format(n);
 }
 
+function getNextMonthDateString(yearMonth) {
+  const [year, month] = yearMonth.split('-').map(value => Number.parseInt(value, 10));
+  const date = new Date(Date.UTC(year, month, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
 function esc(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -733,7 +739,7 @@ function renderDashboard() {
     </div>`;
   const obligations = detectRecurringObligations({
     store,
-    asOfDate: `${month}-28`,
+    asOfDate: getNextMonthDateString(month),
     excludeCovered
   });
   document.getElementById('dash-obligations').innerHTML = obligations.length === 0
