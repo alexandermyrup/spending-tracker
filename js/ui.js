@@ -751,17 +751,17 @@ function renderDashboard() {
     <div class="scorecard-ledger">
       <div class="scorecard-ledger-row">
         <div class="scorecard-ledger-label">True income</div>
-        <div class="scorecard-ledger-value" style="color:#9ae6b4">${fmt(data.totals.income)}</div>
+        <div class="scorecard-ledger-value" style="color:var(--green)">${fmt(data.totals.income)}</div>
         <div class="scorecard-ledger-copy">${data.totals.loanInflow > 0 ? `Loan inflow kept separate at ${fmt(data.totals.loanInflow)}.` : 'No loan inflow counted as income.'}</div>
       </div>
       <div class="scorecard-ledger-row">
         <div class="scorecard-ledger-label">Spent vs budget</div>
-        <div class="scorecard-ledger-value" style="color:#ffd1c9">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
+        <div class="scorecard-ledger-value" style="color:var(--red)">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
         <div class="scorecard-ledger-copy">${data.budget.overBudgetCategories.length} category${data.budget.overBudgetCategories.length === 1 ? '' : 'ies'} over budget in ${data.monthShortLabel}.</div>
       </div>
       <div class="scorecard-ledger-row">
         <div class="scorecard-ledger-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
-        <div class="scorecard-ledger-value" style="color:${data.totals.remainingCash >= 0 ? '#bfdbfe' : '#ffd1c9'}">${fmt(data.totals.remainingCash)}</div>
+        <div class="scorecard-ledger-value" style="color:${data.totals.remainingCash >= 0 ? 'var(--accent)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</div>
         <div class="scorecard-ledger-copy">Fixed ${fmt(data.spendingBreakdown.fixed.actual)} • Discretionary ${fmt(data.spendingBreakdown.discretionary.actual)}</div>
       </div>
     </div>
@@ -771,14 +771,14 @@ function renderDashboard() {
         : 'No category overspent this month.'}
       <div style="margin-top:10px">
         <div class="scorecard-flow-row">
-          <div class="scorecard-flow-label" style="color:rgba(244,237,227,0.74)">Fixed</div>
-          <div class="scorecard-flow-track" style="background:rgba(244,237,227,0.12)"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.fixed.actual, fixedShareMax)}%;background:linear-gradient(90deg,#9bb7d7,#d3e2f4)"></div></div>
-          <div class="scorecard-flow-value" style="color:#f4ede3">${fmt(data.spendingBreakdown.fixed.actual)}</div>
+          <div class="scorecard-flow-label">Fixed</div>
+          <div class="scorecard-flow-track"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.fixed.actual, fixedShareMax)}%;background:linear-gradient(90deg,#94a3b8,#cbd5e1)"></div></div>
+          <div class="scorecard-flow-value">${fmt(data.spendingBreakdown.fixed.actual)}</div>
         </div>
         <div class="scorecard-flow-row" style="margin-top:8px">
-          <div class="scorecard-flow-label" style="color:rgba(244,237,227,0.74)">Flexible</div>
-          <div class="scorecard-flow-track" style="background:rgba(244,237,227,0.12)"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.discretionary.actual, fixedShareMax)}%;background:linear-gradient(90deg,#f0c089,#d7824e)"></div></div>
-          <div class="scorecard-flow-value" style="color:#f4ede3">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
+          <div class="scorecard-flow-label">Flexible</div>
+          <div class="scorecard-flow-track"><div class="scorecard-flow-fill" style="width:${pct(data.spendingBreakdown.discretionary.actual, fixedShareMax)}%;background:linear-gradient(90deg,#fdba74,#fb923c)"></div></div>
+          <div class="scorecard-flow-value">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
         </div>
       </div>
     </div>
@@ -849,7 +849,7 @@ function renderDashboard() {
     const h = m.total / maxTrend * 120;
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
       <div class="text-xs mono fw-500">${fmt(-m.total)}</div>
-      <div style="width:100%;height:${h}px;background:${m.month === month ? 'linear-gradient(180deg, #1f5fbf, #5b89d6)' : 'linear-gradient(180deg, #d9d0c2, #bfb3a0)'};border-radius:12px 12px 4px 4px;min-height:4px;margin:6px 0"></div>
+      <div style="width:100%;height:${h}px;background:${m.month === month ? 'var(--accent)' : '#cbd5e1'};border-radius:10px 10px 4px 4px;min-height:4px;margin:6px 0"></div>
       <div class="text-xs text-muted">${m.month.slice(5)}</div></div>`;
   }).join('')}</div>`;
   const budgetHTML = [];
