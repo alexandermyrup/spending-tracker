@@ -15,9 +15,13 @@ import {
   txFingerprint
 } from './transactions.js';
 import {
+  classifyOverspendPattern,
+  getCategoryComparisons,
+  getCategoryBudgetStatus,
   getLastCompletedMonth,
   getEffectiveMonth,
   getMonthlyScorecardData,
+  getOverspentCategories,
   getRecentMonths,
   getUniqueMonths,
   getYearlyDashboardData
@@ -368,6 +372,140 @@ runner.suite('Monthly scorecard', test => {
     assertEquals(result.budget.success, false);
     assertEquals(result.verdict.status, 'negative');
     assert(result.verdict.summary.includes('Over budget'), 'Negative verdict should call out overspending');
+  });
+});
+
+runner.suite('Budget diagnosis', test => {
+  function createDiagnosisStore() {
+    const store = createStore({
+      transactions: [
+        { id: 1, date: '2026-01-05', amount: -3000, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 2, date: '2026-01-10', amount: -0, merchant: 'Cafe', description: '', type: 'spending', category: 'Eating out', covered: false },
+        { id: 3, date: '2026-01-18', amount: -300, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 4, date: '2026-01-25', amount: -300, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 18, date: '2026-01-14', amount: -500, merchant: 'Train', description: '', type: 'spending', category: 'Travel', covered: false },
+
+        { id: 5, date: '2026-02-05', amount: -3200, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 6, date: '2026-02-10', amount: -0, merchant: 'Cafe', description: '', type: 'spending', category: 'Eating out', covered: false },
+        { id: 7, date: '2026-02-18', amount: -320, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 8, date: '2026-02-25', amount: -320, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 19, date: '2026-02-14', amount: -400, merchant: 'Train', description: '', type: 'spending', category: 'Travel', covered: false },
+
+        { id: 9, date: '2026-03-05', amount: -3100, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 10, date: '2026-03-10', amount: -0, merchant: 'Trip', description: '', type: 'spending', category: 'Travel', covered: false },
+        { id: 11, date: '2026-03-18', amount: -360, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 12, date: '2026-03-25', amount: -360, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+
+        { id: 13, date: '2026-04-05', amount: -2900, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 14, date: '2026-04-12', amount: -4500, merchant: 'Airline', description: '', type: 'spending', category: 'Travel', covered: false },
+        { id: 15, date: '2026-04-18', amount: -430, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 16, date: '2026-04-22', amount: -430, merchant: 'Bar', description: '', type: 'spending', category: 'Nightlife', covered: false },
+        { id: 17, date: '2026-04-09', amount: -320, merchant: 'Cafe', description: '', type: 'spending', category: 'Eating out', covered: false }
+      ]
+    });
+
+    Object.keys(store.budgets['2026']).forEach(cat => {
+      ['01', '02', '03', '04'].forEach(month => {
+        store.budgets['2026'][cat][month] = 0;
+      });
+    });
+
+    ['01', '02', '03', '04'].forEach(month => {
+      store.budgets['2026']['Groceries'][month] = 2600;
+      store.budgets['2026']['Eating out'][month] = 300;
+      store.budgets['2026']['Nightlife'][month] = 600;
+      store.budgets['2026']['Travel'][month] = 1500;
+    });
+
+    return store;
+  }
+
+  test('ranks overspent categories by budget impact', () => {
+    const store = createDiagnosisStore();
+    const result = getOverspentCategories('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.length, 4);
+    assertEquals(result[0].category, 'Travel');
+    assertEquals(result[0].variance, 3000);
+    assertEquals(result[1].category, 'Groceries');
+    assertEquals(result[2].category, 'Nightlife');
+    assertEquals(result[3].category, 'Eating out');
+  });
+
+  test('returns budget, last month, and trailing 3-month comparisons', () => {
+    const store = createDiagnosisStore();
+    const result = getCategoryComparisons('Nightlife', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.current.actual, 860);
+    assertEquals(result.budget.amount, 600);
+    assertEquals(result.previousMonth.actual, 720);
+    assertEquals(result.threeMonthAverage.actual, 653.33);
+  });
+
+  test('classifies category over budget but below trailing average as budget issue', () => {
+    const store = createDiagnosisStore();
+    const result = classifyOverspendPattern('Groceries', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.code, 'budget-issue');
+  });
+
+  test('classifies one large transaction as one-off overspend', () => {
+    const store = createDiagnosisStore();
+    const result = classifyOverspendPattern('Travel', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.code, 'one-off');
+  });
+
+  test('classifies repeated small overspends as recurring habit', () => {
+    const store = createDiagnosisStore();
+    const result = classifyOverspendPattern('Nightlife', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.code, 'recurring-habit');
+  });
+
+  test('returns no-history when there is no meaningful prior data', () => {
+    const store = createDiagnosisStore();
+    const result = classifyOverspendPattern('Eating out', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.code, 'no-history');
+  });
+
+  test('returns category budget status for a single category', () => {
+    const store = createDiagnosisStore();
+    const result = getCategoryBudgetStatus('Groceries', '2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.actual, 2900);
+    assertEquals(result.budget, 2600);
+    assertEquals(result.variance, 300);
+    assertEquals(result.isOverBudget, true);
   });
 });
 

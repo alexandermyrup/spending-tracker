@@ -27,10 +27,13 @@ import {
   normalizeMerchantName
 } from './transactions.js';
 import {
+  classifyOverspendPattern,
+  getCategoryComparisons,
   getBudgetForMonth,
   getEffectiveMonth,
   getLastCompletedMonth,
   getMonthlyScorecardData,
+  getOverspentCategories,
   getRecentMonths,
   getUniqueMonths,
   getYearlyDashboardData
@@ -700,6 +703,33 @@ function renderDashboard() {
     <div class="stat-card"><div class="label">Remaining cash</div><div class="value ${data.totals.remainingCash >= 0 ? 'positive' : 'negative'}">${fmt(data.totals.remainingCash)}</div><div class="sub">after spending, savings, investing</div></div>
     ${data.totals.uncategorizedCount > 0 ? `<div class="stat-card" style="border-color:var(--orange)"><div class="label">Uncategorized</div><div class="value" style="color:var(--orange)">${data.totals.uncategorizedCount}</div><div class="sub">need tagging</div></div>` : ''}
   `;
+  const overspent = getOverspentCategories(month, {
+    store,
+    excludeCovered,
+    ensureYearBudget: year => ensureYearBudget(store, year)
+  });
+  document.getElementById('dash-diagnosis').innerHTML = overspent.length === 0
+    ? '<p class="text-muted">No overspent categories this month.</p>'
+    : `<div style="display:flex;flex-direction:column;gap:12px">${overspent.slice(0, 4).map(status => {
+      const comparisons = getCategoryComparisons(status.category, month, {
+        store,
+        excludeCovered,
+        ensureYearBudget: year => ensureYearBudget(store, year)
+      });
+      const pattern = classifyOverspendPattern(status.category, month, {
+        store,
+        excludeCovered,
+        ensureYearBudget: year => ensureYearBudget(store, year)
+      });
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+        <div class="flex-between" style="margin-bottom:6px">
+          <strong>${esc(status.category)}</strong>
+          <span class="mono" style="color:var(--red)">${fmt(-status.variance)} over</span>
+        </div>
+        <div class="text-sm text-muted" style="margin-bottom:6px">${pattern.label}</div>
+        <div class="text-sm text-muted">Budget ${fmt(-status.budget)} | Last month ${fmt(-comparisons.previousMonth.actual)} | 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)}</div>
+      </div>`;
+    }).join('')}</div>`;
   const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
   document.getElementById('dash-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 12).map(([cat, val], i) => {

@@ -218,6 +218,126 @@ export function getMonthlyScorecardData(month, options) {
   };
 }
 
+function formatMonthKey(year, monthIndex) {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+}
+
+function getPreviousMonth(yearMonth, offset = 1) {
+  const [year, month] = yearMonth.split('-').map(value => Number.parseInt(value, 10));
+  const date = new Date(Date.UTC(year, month - 1 - offset, 1));
+  return formatMonthKey(date.getUTCFullYear(), date.getUTCMonth());
+}
+
+function roundCurrency(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function getCategoryTransactions(category, month, options) {
+  const { store, excludeCovered } = options;
+  const shiftDay = store.salaryShiftDay || 0;
+  let txs = store.transactions.filter(tx =>
+    !tx.splitInto &&
+    getEffectiveMonth(tx, shiftDay) === month &&
+    tx.type === 'spending' &&
+    tx.amount < 0 &&
+    tx.category === category
+  );
+  if (excludeCovered) txs = txs.filter(tx => !tx.covered);
+  return txs;
+}
+
+export function getCategoryBudgetStatus(category, month, options) {
+  const { store, ensureYearBudget } = options;
+  const actual = Math.abs(getCategoryTransactions(category, month, options).reduce((sum, tx) => sum + tx.amount, 0));
+  const budget = getBudgetForMonth(store, category, month, ensureYearBudget);
+  const variance = actual - budget;
+  return {
+    category,
+    month,
+    actual,
+    budget,
+    variance,
+    remaining: budget - actual,
+    isOverBudget: variance > 0
+  };
+}
+
+export function getOverspentCategories(month, options) {
+  const { store } = options;
+  const overspent = [];
+  Object.entries(store.categories).forEach(([group, cats]) => {
+    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
+    cats.forEach(category => {
+      const status = getCategoryBudgetStatus(category, month, options);
+      if (status.isOverBudget) overspent.push(status);
+    });
+  });
+  return overspent.sort((a, b) => b.variance - a.variance || b.actual - a.actual);
+}
+
+export function getCategoryComparisons(category, month, options) {
+  const current = getCategoryBudgetStatus(category, month, options);
+  const previousMonth = getPreviousMonth(month, 1);
+  const previous = getCategoryBudgetStatus(category, previousMonth, options);
+  const trailingMonths = [1, 2, 3].map(offset => getPreviousMonth(month, offset));
+  const trailingStatuses = trailingMonths.map(previousMonthKey => getCategoryBudgetStatus(category, previousMonthKey, options));
+  const averageActual = trailingStatuses.reduce((sum, status) => sum + status.actual, 0) / trailingStatuses.length;
+
+  return {
+    category,
+    month,
+    current,
+    budget: {
+      amount: current.budget,
+      variance: current.variance
+    },
+    previousMonth: {
+      month: previousMonth,
+      actual: previous.actual,
+      varianceFromCurrent: current.actual - previous.actual
+    },
+    threeMonthAverage: {
+      months: trailingMonths,
+      actual: roundCurrency(averageActual),
+      varianceFromCurrent: roundCurrency(current.actual - averageActual)
+    }
+  };
+}
+
+export function classifyOverspendPattern(category, month, options) {
+  const comparisons = getCategoryComparisons(category, month, options);
+  const currentTxs = getCategoryTransactions(category, month, options);
+  const overBy = comparisons.current.variance;
+  if (overBy <= 0) {
+    return { code: 'within-budget', label: 'Within budget' };
+  }
+
+  const priorNonZeroMonths = comparisons.threeMonthAverage.months
+    .map(previousMonth => getCategoryBudgetStatus(category, previousMonth, options))
+    .filter(status => status.actual > 0);
+
+  if (priorNonZeroMonths.length < 2) {
+    return { code: 'no-history', label: 'No meaningful history' };
+  }
+
+  const largestTx = currentTxs.reduce((max, tx) => Math.max(max, Math.abs(tx.amount)), 0);
+  const singleLargeShare = comparisons.current.actual > 0 ? largestTx / comparisons.current.actual : 0;
+  if (currentTxs.length <= 2 && singleLargeShare >= 0.6 && comparisons.previousMonth.actual <= comparisons.current.budget) {
+    return { code: 'one-off', label: 'One-off event' };
+  }
+
+  const recurringOverBudgetMonths = priorNonZeroMonths.filter(status => status.isOverBudget).length;
+  if (recurringOverBudgetMonths >= 2 && currentTxs.length >= 2) {
+    return { code: 'recurring-habit', label: 'Recurring habit' };
+  }
+
+  if (comparisons.current.actual <= comparisons.threeMonthAverage.actual) {
+    return { code: 'budget-issue', label: 'Likely budget issue' };
+  }
+
+  return { code: 'one-off', label: 'One-off event' };
+}
+
 export function getYearlyDashboardData(year, options) {
   const excludeCovered = options.excludeCovered;
   const transactions = options.transactions;
