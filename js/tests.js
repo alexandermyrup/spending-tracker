@@ -297,6 +297,8 @@ runner.suite('Monthly scorecard', test => {
       ensureYearBudget: year => ensureYearBudget(store, year)
     });
 
+    assertEquals(result.monthLabel, 'Feb 2026');
+    assertEquals(result.monthShortLabel, 'Feb 26');
     assertEquals(result.totals.income, 22000, 'Loan inflows should not count as true income');
     assertEquals(result.totals.loanInflow, 3000);
     assertEquals(result.totals.spent, 8373);

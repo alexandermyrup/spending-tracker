@@ -680,7 +680,7 @@ function renderDashboard() {
     ensureYearBudget: year => ensureYearBudget(store, year)
   });
   document.getElementById('dash-surplus').innerHTML = `<div class="surplus-card">
-    <h2>Monthly Scorecard${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
+    <h2>Monthly Scorecard <span class="text-xs text-muted">(${data.monthShortLabel})</span>${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
     <div class="text-sm" style="margin-bottom:12px;color:${data.verdict.status === 'positive' ? 'var(--green)' : 'var(--red)'};font-weight:600">
       ${data.budget.success ? `Under budget by ${fmt(data.budget.variance)}` : `Over budget by ${fmt(-data.budget.variance)}`}
     </div>

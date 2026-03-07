@@ -189,6 +189,7 @@ export function getMonthlyScorecardData(month, options) {
   return {
     month,
     monthLabel: `${MONTHS[Number.parseInt(monthKey, 10) - 1]} ${year}`,
+    monthShortLabel: `${MONTHS[Number.parseInt(monthKey, 10) - 1]} ${year.slice(2)}`,
     totals: {
       income: base.totalIncome,
       loanInflow: base.totalLoan,
