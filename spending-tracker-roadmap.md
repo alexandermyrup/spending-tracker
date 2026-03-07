@@ -23,6 +23,7 @@
 - Test suite expanded to 61 tests (19 new tests covering extracted functions)
 - Normalize merchantMap keys: use `normalizeMerchantName()` for all merchantMap storage/lookup so formatting differences (spaces, punctuation) don't break matching
 - Clean 2025 CSV merchant names in `resolveMerchant()`: strip `Den DD.MM` date suffixes, foreign currency prefixes, `Nordea pay`/`Bs betaling`/`Pay modpost.` prefixes, handle MobilePay-in-desc format. Test suite at 119 tests.
+- Monthly scorecard overview + budget diagnosis layer: last completed month default, true income vs loan inflow separation, covered hidden by default, savings vs investing split, fixed vs discretionary split, and ranked overspend diagnosis.
 
 ## Backlog
 
@@ -35,6 +36,7 @@
 - **Pre-load historical data**: Import Nov 25 / Dec 25 / Jan 26 transactions from existing Excel. One-time conversion. Gives the certainty engine training data and makes the dashboard useful historically. Scope: ~1 session.
 
 ### P2: Important, after P1 lands
+- **Budget diagnosis: add 1-year average comparison**: Extend the diagnosis layer so each overspent category can also be compared against a trailing 12-month average, alongside budget, last month, and 3-month average. Useful for separating seasonal spikes from true behavior changes. Scope: ~1 session.
 - **Review budget gap**: Audit the gap between budgeted and actual spending across categories. Identify where budgets are consistently over/under reality and adjust. Scope: ~1 session.
 - **Income budget from Excel**: Import 2026 income projections from Budget26 Excel sheet into the spending tracker's budget system. Populate monthly income expectations so the yearly dashboard and forecast use real projections instead of trailing averages. Scope: ~30 min. File ready in uploads.
 - **Salary month-shift rule**: Configurable setting to auto-assign income received after day X (default: 25) to the following month's budget. Solves the "paid on the 28th but it's next month's money" problem. Approach: add threshold day setting in dashboard, apply shift during budget aggregation (not on the raw transaction date). Scope: ~1 session.

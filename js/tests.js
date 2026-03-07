@@ -16,14 +16,17 @@ import {
 } from './transactions.js';
 import {
   classifyOverspendPattern,
+  detectRecurringObligations,
   getCategoryComparisons,
   getCategoryBudgetStatus,
   getLastCompletedMonth,
   getEffectiveMonth,
   getMonthlyScorecardData,
+  getSavingsProgressData,
   getOverspentCategories,
   getRecentMonths,
   getUniqueMonths,
+  getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
 
@@ -506,6 +509,149 @@ runner.suite('Budget diagnosis', test => {
     assertEquals(result.budget, 2600);
     assertEquals(result.variance, 300);
     assertEquals(result.isOverBudget, true);
+  });
+});
+
+runner.suite('Savings and obligations', test => {
+  function createProgressStore() {
+    const store = createStore({
+      transactions: [
+        { id: 1, date: '2026-01-01', amount: 22000, merchant: 'SU', description: '', type: 'income', category: 'SU', covered: false },
+        { id: 2, date: '2026-01-05', amount: -1200, merchant: 'Pension', description: '', type: 'saving', category: 'Pension', covered: false },
+        { id: 3, date: '2026-01-12', amount: -800, merchant: 'Nordnet', description: '', type: 'saving', category: 'Investments', covered: false },
+        { id: 4, date: '2026-01-15', amount: 3000, merchant: 'SU loan', description: '', type: 'loan', category: '', covered: false },
+
+        { id: 5, date: '2026-02-01', amount: 22000, merchant: 'SU', description: '', type: 'income', category: 'SU', covered: false },
+        { id: 6, date: '2026-02-05', amount: -0, merchant: 'Pension', description: '', type: 'saving', category: 'Pension', covered: false },
+        { id: 7, date: '2026-02-12', amount: -1500, merchant: 'Nordnet', description: '', type: 'saving', category: 'Investments', covered: false },
+        { id: 8, date: '2026-02-15', amount: 3000, merchant: 'SU loan', description: '', type: 'loan', category: '', covered: false },
+
+        { id: 9, date: '2026-03-01', amount: 22000, merchant: 'SU', description: '', type: 'income', category: 'SU', covered: false },
+        { id: 10, date: '2026-03-05', amount: -900, merchant: 'Pension', description: '', type: 'saving', category: 'Pension', covered: false },
+        { id: 11, date: '2026-03-12', amount: -1100, merchant: 'Nordnet', description: '', type: 'saving', category: 'Investments', covered: false },
+        { id: 12, date: '2026-03-20', amount: -600, merchant: 'Covered savings', description: '', type: 'saving', category: 'Pension', covered: true }
+      ]
+    });
+    return store;
+  }
+
+  function createRecurringStore() {
+    const store = createStore({
+      transactions: [
+        { id: 1, date: '2026-01-02', amount: -4800, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent + utilities', covered: false },
+        { id: 2, date: '2026-02-02', amount: -4820, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent + utilities', covered: false },
+        { id: 3, date: '2026-03-02', amount: -4790, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent + utilities', covered: false },
+        { id: 4, date: '2026-04-02', amount: -4810, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent + utilities', covered: false },
+
+        { id: 5, date: '2026-01-09', amount: -89, merchant: 'Apple', description: '', type: 'spending', category: 'iCloud', covered: false },
+        { id: 6, date: '2026-02-09', amount: -89, merchant: 'Apple', description: '', type: 'spending', category: 'iCloud', covered: false },
+        { id: 7, date: '2026-04-09', amount: -89, merchant: 'Apple', description: '', type: 'spending', category: 'iCloud', covered: false },
+
+        { id: 8, date: '2025-04-15', amount: -671, merchant: 'Danmark', description: '', type: 'spending', category: 'Sygesikring Danmark', covered: false },
+        { id: 9, date: '2026-04-15', amount: -671, merchant: 'Danmark', description: '', type: 'spending', category: 'Sygesikring Danmark', covered: false },
+
+        { id: 10, date: '2026-01-04', amount: -120, merchant: 'Corner shop', description: '', type: 'spending', category: 'Other', covered: false },
+        { id: 11, date: '2026-02-18', amount: -490, merchant: 'Corner shop', description: '', type: 'spending', category: 'Other', covered: false },
+        { id: 12, date: '2026-04-25', amount: -180, merchant: 'Corner shop', description: '', type: 'spending', category: 'Other', covered: false }
+      ]
+    });
+    return store;
+  }
+
+  test('returns monthly savings progress with cash and investing separated', () => {
+    const store = createProgressStore();
+    const result = getSavingsProgressData('2026-03', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.month, '2026-03');
+    assertEquals(result.monthly.cashSaved, 900);
+    assertEquals(result.monthly.invested, 1100);
+    assertEquals(result.monthly.total, 2000);
+    assertEquals(result.monthly.loanInflow, 0);
+  });
+
+  test('returns ytd savings progress through the requested month', () => {
+    const store = createProgressStore();
+    const result = getYtdSavingsProgress('2026-03', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.ytd.cashSaved, 2100);
+    assertEquals(result.ytd.invested, 3400);
+    assertEquals(result.ytd.total, 5500);
+    assertEquals(result.ytd.monthCount, 3);
+    assertEquals(result.ytd.loanInflow, 6000);
+  });
+
+  test('treats investments-only months separately from cash savings', () => {
+    const store = createProgressStore();
+    const result = getSavingsProgressData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: year => ensureYearBudget(store, year)
+    });
+
+    assertEquals(result.monthly.cashSaved, 0);
+    assertEquals(result.monthly.invested, 1500);
+  });
+
+  test('detects monthly recurring obligations with slight amount variation', () => {
+    const store = createRecurringStore();
+    const result = detectRecurringObligations({
+      store,
+      asOfDate: '2026-04-20',
+      excludeCovered: true
+    });
+
+    const rent = result.find(item => item.category === 'Rent + utilities');
+    assert(rent, 'Rent should be detected as recurring');
+    assertEquals(rent.cadence, 'monthly');
+    assertEquals(rent.fixed, true);
+    assertEquals(rent.typicalAmount, 4805);
+    assertEquals(rent.nextExpectedDate, '2026-05-02');
+  });
+
+  test('detects skipped-month subscriptions as recurring', () => {
+    const store = createRecurringStore();
+    const result = detectRecurringObligations({
+      store,
+      asOfDate: '2026-04-20',
+      excludeCovered: true
+    });
+
+    const cloud = result.find(item => item.category === 'iCloud');
+    assert(cloud, 'iCloud should still be detected after a skipped month');
+    assertEquals(cloud.cadence, 'monthly');
+  });
+
+  test('detects annual obligations separately', () => {
+    const store = createRecurringStore();
+    const result = detectRecurringObligations({
+      store,
+      asOfDate: '2026-04-20',
+      excludeCovered: true
+    });
+
+    const annual = result.find(item => item.category === 'Sygesikring Danmark');
+    assert(annual, 'Annual insurance should be detected');
+    assertEquals(annual.cadence, 'annual');
+    assertEquals(annual.fixed, true);
+  });
+
+  test('does not over-detect irregular spending as recurring', () => {
+    const store = createRecurringStore();
+    const result = detectRecurringObligations({
+      store,
+      asOfDate: '2026-04-20',
+      excludeCovered: true
+    });
+
+    assertEquals(result.some(item => item.category === 'Other'), false);
   });
 });
 

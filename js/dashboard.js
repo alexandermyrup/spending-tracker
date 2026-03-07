@@ -232,6 +232,28 @@ function roundCurrency(value) {
   return Math.round(value * 100) / 100;
 }
 
+function getMonthDate(yearMonth) {
+  const [year, month] = yearMonth.split('-').map(value => Number.parseInt(value, 10));
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
+function isMonthOnOrBefore(month, limitMonth) {
+  return getMonthDate(month).getTime() <= getMonthDate(limitMonth).getTime();
+}
+
+function getSavingTransactions(month, options) {
+  const { store, excludeCovered } = options;
+  const shiftDay = store.salaryShiftDay || 0;
+  let txs = store.transactions.filter(tx =>
+    !tx.splitInto &&
+    getEffectiveMonth(tx, shiftDay) === month &&
+    tx.type === 'saving' &&
+    tx.amount < 0
+  );
+  if (excludeCovered) txs = txs.filter(tx => !tx.covered);
+  return txs;
+}
+
 function getCategoryTransactions(category, month, options) {
   const { store, excludeCovered } = options;
   const shiftDay = store.salaryShiftDay || 0;
@@ -336,6 +358,155 @@ export function classifyOverspendPattern(category, month, options) {
   }
 
   return { code: 'one-off', label: 'One-off event' };
+}
+
+export function getSavingsProgressData(month, options) {
+  const { store } = options;
+  const savingTxs = getSavingTransactions(month, options);
+  const cashSaved = savingTxs
+    .filter(tx => tx.category !== 'Investments')
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const invested = savingTxs
+    .filter(tx => tx.category === 'Investments')
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const loanInflow = store.transactions
+    .filter(tx => !tx.splitInto && getEffectiveMonth(tx, store.salaryShiftDay || 0) === month && tx.type === 'loan')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  return {
+    month,
+    monthly: {
+      cashSaved,
+      invested,
+      total: cashSaved + invested,
+      loanInflow
+    },
+    transactions: savingTxs
+  };
+}
+
+export function getYtdSavingsProgress(month, options) {
+  const { store } = options;
+  const targetYear = month.slice(0, 4);
+  const months = getUniqueMonths(store.transactions, store.salaryShiftDay || 0)
+    .filter(entry => entry.startsWith(`${targetYear}-`) && isMonthOnOrBefore(entry, month));
+  const monthly = months.map(entry => getSavingsProgressData(entry, options));
+  const ytd = monthly.reduce((acc, item) => {
+    acc.cashSaved += item.monthly.cashSaved;
+    acc.invested += item.monthly.invested;
+    acc.total += item.monthly.total;
+    acc.loanInflow += item.monthly.loanInflow;
+    return acc;
+  }, { cashSaved: 0, invested: 0, total: 0, loanInflow: 0 });
+
+  return {
+    month,
+    ytd: {
+      ...ytd,
+      monthCount: months.length
+    },
+    monthly
+  };
+}
+
+function averageAmount(transactions) {
+  if (transactions.length === 0) return 0;
+  return Math.round(transactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) / transactions.length);
+}
+
+function hasStableAmounts(transactions, toleranceRatio = 0.25) {
+  if (transactions.length === 0) return false;
+  const amounts = transactions.map(tx => Math.abs(tx.amount));
+  const min = Math.min(...amounts);
+  const max = Math.max(...amounts);
+  if (min === 0) return max === 0;
+  return (max - min) / min <= toleranceRatio;
+}
+
+function parseIsoDate(dateString) {
+  const [year, month, day] = dateString.split('-').map(value => Number.parseInt(value, 10));
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatIsoDate(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function monthDiff(a, b) {
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
+}
+
+function isFixedCategory(category, categories) {
+  for (const [group, cats] of Object.entries(categories)) {
+    if (!cats.includes(category)) continue;
+    return FIXED_SCORECARD_GROUPS.has(group);
+  }
+  return false;
+}
+
+function detectCadence(dates) {
+  if (dates.length >= 2) {
+    const monthGaps = [];
+    for (let i = 1; i < dates.length; i++) {
+      monthGaps.push(monthDiff(dates[i - 1], dates[i]));
+    }
+    if (monthGaps.length >= 2 && monthGaps.every(gap => gap >= 1 && gap <= 2)) return 'monthly';
+    if (monthGaps.length === 1 && monthGaps[0] >= 11 && monthGaps[0] <= 13) return 'annual';
+  }
+  return null;
+}
+
+function getNextExpectedDate(lastDate, cadence) {
+  const next = new Date(lastDate.getTime());
+  if (cadence === 'annual') {
+    next.setUTCFullYear(next.getUTCFullYear() + 1);
+  } else {
+    next.setUTCMonth(next.getUTCMonth() + 1);
+  }
+  return formatIsoDate(next);
+}
+
+export function detectRecurringObligations(options) {
+  const { store, asOfDate, excludeCovered } = options;
+  const shiftDay = store.salaryShiftDay || 0;
+  const asOf = parseIsoDate(asOfDate || new Date().toISOString().slice(0, 10));
+  const grouped = new Map();
+
+  store.transactions.forEach(tx => {
+    if (tx.splitInto || tx.type !== 'spending' || tx.amount >= 0) return;
+    if (excludeCovered && tx.covered) return;
+    const effectiveMonth = getEffectiveMonth(tx, shiftDay);
+    if (getMonthDate(effectiveMonth).getTime() > Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), 1)) return;
+    const key = `${tx.category}::${tx.merchant}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(tx);
+  });
+
+  const obligations = [];
+  grouped.forEach((transactions, key) => {
+    if (transactions.length < 2) return;
+    const [category, merchant] = key.split('::');
+    const sorted = transactions.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const dates = sorted.map(tx => parseIsoDate(tx.date));
+    const cadence = detectCadence(dates);
+    if (!cadence) return;
+    if (!hasStableAmounts(sorted, cadence === 'annual' ? 0.1 : 0.25)) return;
+    if (cadence === 'monthly' && sorted.length < 3) return;
+    const typicalAmount = averageAmount(sorted);
+    const lastDate = dates[dates.length - 1];
+    obligations.push({
+      category,
+      merchant,
+      cadence,
+      fixed: isFixedCategory(category, store.categories),
+      typicalAmount,
+      nextExpectedDate: getNextExpectedDate(lastDate, cadence),
+      lastAmount: Math.abs(sorted[sorted.length - 1].amount),
+      transactionCount: sorted.length
+    });
+  });
+
+  return obligations.sort((a, b) => a.nextExpectedDate.localeCompare(b.nextExpectedDate) || b.typicalAmount - a.typicalAmount);
 }
 
 export function getYearlyDashboardData(year, options) {

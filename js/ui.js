@@ -28,14 +28,17 @@ import {
 } from './transactions.js';
 import {
   classifyOverspendPattern,
+  detectRecurringObligations,
   getCategoryComparisons,
   getBudgetForMonth,
   getEffectiveMonth,
   getLastCompletedMonth,
   getMonthlyScorecardData,
+  getSavingsProgressData,
   getOverspentCategories,
   getRecentMonths,
   getUniqueMonths,
+  getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
 
@@ -690,10 +693,13 @@ function renderDashboard() {
   const month = document.getElementById('dash-month').value;
   if (!month) return;
   const excludeCovered = document.getElementById('dash-exclude-covered').checked;
-  const data = getMonthlyScorecardData(month, {
+  const dashboardOptions = {
     store,
     excludeCovered,
     ensureYearBudget: year => ensureYearBudget(store, year)
+  };
+  const data = getMonthlyScorecardData(month, {
+    ...dashboardOptions
   });
   document.getElementById('dash-surplus').innerHTML = `<div class="surplus-card">
     <h2>Monthly Scorecard <span class="text-xs text-muted">(${data.monthShortLabel})</span>${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted by day ${store.salaryShiftDay})</span>` : ''}</h2>
@@ -716,24 +722,35 @@ function renderDashboard() {
     <div class="stat-card"><div class="label">Remaining cash</div><div class="value ${data.totals.remainingCash >= 0 ? 'positive' : 'negative'}">${fmt(data.totals.remainingCash)}</div><div class="sub">after spending, savings, investing</div></div>
     ${data.totals.uncategorizedCount > 0 ? `<div class="stat-card" style="border-color:var(--orange)"><div class="label">Uncategorized</div><div class="value" style="color:var(--orange)">${data.totals.uncategorizedCount}</div><div class="sub">need tagging</div></div>` : ''}
   `;
-  const overspent = getOverspentCategories(month, {
+  const savings = getSavingsProgressData(month, dashboardOptions);
+  const savingsYtd = getYtdSavingsProgress(month, dashboardOptions);
+  document.getElementById('dash-savings-progress').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="surplus-row"><span class="surplus-label">Cash saved (${data.monthShortLabel})</span><span class="surplus-val" style="color:var(--green)">${fmt(savings.monthly.cashSaved)}</span></div>
+      <div class="surplus-row"><span class="surplus-label">Invested (${data.monthShortLabel})</span><span class="surplus-val" style="color:var(--purple)">${fmt(savings.monthly.invested)}</span></div>
+      <div class="surplus-row"><span class="surplus-label">YTD cash saved</span><span class="surplus-val" style="color:var(--green)">${fmt(savingsYtd.ytd.cashSaved)}</span></div>
+      <div class="surplus-row"><span class="surplus-label">YTD invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(savingsYtd.ytd.invested)}</span></div>
+      <div class="surplus-row total"><span class="surplus-label">YTD total progress</span><span class="surplus-val">${fmt(savingsYtd.ytd.total)}</span></div>
+    </div>`;
+  const obligations = detectRecurringObligations({
     store,
-    excludeCovered,
-    ensureYearBudget: year => ensureYearBudget(store, year)
+    asOfDate: `${month}-28`,
+    excludeCovered
   });
+  document.getElementById('dash-obligations').innerHTML = obligations.length === 0
+    ? '<p class="text-muted">No recurring obligations detected yet.</p>'
+    : `<div style="display:flex;flex-direction:column;gap:10px">${obligations.slice(0, 4).map(item => `
+      <div style="border-bottom:1px solid var(--border);padding-bottom:8px">
+        <div class="flex-between"><strong>${esc(item.category)}</strong><span class="mono">${fmt(-item.typicalAmount)}</span></div>
+        <div class="text-sm text-muted">${item.fixed ? 'Fixed' : 'Recurring'} • ${item.cadence} • next ${item.nextExpectedDate}</div>
+      </div>
+    `).join('')}</div>`;
+  const overspent = getOverspentCategories(month, dashboardOptions);
   document.getElementById('dash-diagnosis').innerHTML = overspent.length === 0
     ? '<p class="text-muted">No overspent categories this month.</p>'
     : `<div style="display:flex;flex-direction:column;gap:12px">${overspent.slice(0, 4).map(status => {
-      const comparisons = getCategoryComparisons(status.category, month, {
-        store,
-        excludeCovered,
-        ensureYearBudget: year => ensureYearBudget(store, year)
-      });
-      const pattern = classifyOverspendPattern(status.category, month, {
-        store,
-        excludeCovered,
-        ensureYearBudget: year => ensureYearBudget(store, year)
-      });
+      const comparisons = getCategoryComparisons(status.category, month, dashboardOptions);
+      const pattern = classifyOverspendPattern(status.category, month, dashboardOptions);
       return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">
         <div class="flex-between" style="margin-bottom:6px">
           <strong>${esc(status.category)}</strong>
