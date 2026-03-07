@@ -528,6 +528,28 @@ tr:hover { background: #f9fafb; }
 
 <div class="toast" id="toast"></div>
 
-<script type="module" src="./js/app.js"></script>
+<script type="module">
+const APP_ENTRY = './js/app.js';
+const VERSION_METADATA_URL = './version.json';
+
+async function loadApp() {
+  let entryUrl = APP_ENTRY;
+  try {
+    const response = await fetch(VERSION_METADATA_URL, { cache: 'no-store' });
+    if (response.ok) {
+      const metadata = await response.json();
+      const build = String(metadata?.build || '').trim();
+      if (build) entryUrl = `${APP_ENTRY}?v=${encodeURIComponent(build)}`;
+    }
+  } catch {
+    // Fall back to the base entry if version metadata is unavailable.
+  }
+  await import(entryUrl);
+}
+
+loadApp().catch(error => {
+  console.error('Failed to load app bundle', error);
+});
+</script>
 </body>
 </html>
