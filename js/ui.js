@@ -40,6 +40,7 @@ import {
 } from './dashboard.js';
 
 const APP_VERSION = 'v0.2';
+const APP_VERSION_COMMIT_URL = 'https://api.github.com/repos/alexandermyrup/spending-tracker/commits/main';
 
 let store = loadStore();
 let pendingImport = [];
@@ -89,9 +90,21 @@ function toast(msg) {
   window.setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-function renderAppVersion() {
+async function renderAppVersion() {
   const badge = document.getElementById('app-version-badge');
-  if (badge) badge.textContent = APP_VERSION;
+  if (!badge) return;
+  badge.textContent = APP_VERSION;
+  try {
+    const response = await fetch(APP_VERSION_COMMIT_URL, {
+      headers: { Accept: 'application/vnd.github+json' }
+    });
+    if (!response.ok) return;
+    const commit = await response.json();
+    const shortSha = String(commit?.sha || '').slice(0, 7);
+    if (shortSha) badge.textContent = `${APP_VERSION}.${shortSha}`;
+  } catch {
+    // Keep the base version if the network request fails.
+  }
 }
 
 function rerenderAll() {
