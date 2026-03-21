@@ -944,7 +944,7 @@ function renderDashboard() {
     </div>`;
   }).join('')}</div>`;
 
-  const budgetHTML = [];
+  const budgetItems = [];
   Object.entries(store.categories).forEach(([group, cats]) => {
     if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
     cats.forEach(cat => {
@@ -952,23 +952,31 @@ function renderDashboard() {
       if (budget <= 0) return;
       const actual = data.categoryTotals[cat] || 0;
       const pct = Math.round(actual / budget * 100);
-      const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
-      budgetHTML.push(`<div class="border border-slate-200 rounded-lg p-3">
-        <div class="flex justify-between items-center text-sm mb-2">
-          <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-600 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
-        </div>
-        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of budget used">
-          <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
-        </div>
-        <div class="flex justify-between text-[11px] text-slate-600 mt-1.5 tabular-nums">
-          <span>${pct}%</span>
-          <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
-        </div>
-      </div>`);
+      budgetItems.push({ cat, actual, budget, pct });
     });
   });
-  document.getElementById('dash-budget').innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${budgetHTML.join('') || '<p class="text-sm text-slate-500">No budgets set for this month.</p>'}</div>`;
+  budgetItems.sort((a, b) => b.pct - a.pct);
+  const budgetHTML = budgetItems.map(({ cat, actual, budget, pct }) => {
+    const over = actual > budget;
+    const diff = Math.abs(actual - budget);
+    const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
+    const statusColor = over ? 'text-red-500' : 'text-slate-500';
+    const statusText = over ? `${fmt(-diff)} over` : `${fmt(-diff)} left`;
+    return `<div class="flex items-center gap-3 py-2.5 ${over ? '' : ''}" style="min-height:36px">
+      <span class="text-sm font-medium w-32 sm:w-40 shrink-0 truncate" title="${esc(cat)}">${esc(cat)}</span>
+      <div class="flex-1 flex items-center gap-2 min-w-0">
+        <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of budget used">
+          <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
+        </div>
+        <span class="text-xs tabular-nums text-slate-500 shrink-0 w-10 text-right">${pct}%</span>
+      </div>
+      <span class="text-xs tabular-nums text-slate-600 shrink-0 w-28 sm:w-36 text-right">${fmt(-actual)} / ${fmt(-budget)}</span>
+      <span class="text-xs tabular-nums ${statusColor} shrink-0 w-20 sm:w-24 text-right">${statusText}</span>
+    </div>`;
+  });
+  document.getElementById('dash-budget').innerHTML = budgetItems.length > 0
+    ? `<div class="divide-y divide-slate-100">${budgetHTML.join('')}</div>`
+    : '<p class="text-sm text-slate-500">No budgets set for this month.</p>';
 }
 
 function renderYearlyDashboard() {
