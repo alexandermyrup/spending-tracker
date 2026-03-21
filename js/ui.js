@@ -60,6 +60,7 @@ let pendingImport = [];
 let lastImportedIds = [];
 let splitTxId = null;
 let budgetEventsBound = false;
+let modalTriggerEl = null;
 
 function getStore() {
   return store;
@@ -237,7 +238,7 @@ function renderImportPreview() {
   tbody.innerHTML = stats.fresh.map(tx => {
     const autocat = autoMatchMerchant(tx.merchant, tx.amount, store);
     return `<tr class="hover:bg-slate-50/50">
-      <td class="py-2.5 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-400">Pending</em>' : tx.date}</td>
+      <td class="py-2.5 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-500">Pending</em>' : tx.date}</td>
       <td class="py-2.5 px-3 font-medium">${esc(tx.merchant)}</td>
       <td class="py-2.5 px-3 text-slate-500">${esc(tx.description)}</td>
       <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-600'}">${fmt(tx.amount)}</td>
@@ -402,6 +403,7 @@ function createAndSelectInGroup(txId, name, group) {
 function filterCatOptions(input) {
   const val = input.value.toLowerCase();
   const dd = input.closest('.cat-dropdown');
+  dd.querySelectorAll('.cat-option.kb-focus').forEach(el => el.classList.remove('kb-focus'));
   let exactMatch = false;
   dd.querySelectorAll('.cat-option').forEach(el => {
     const catText = el.textContent.toLowerCase().replace('remove category', '').trim();
@@ -476,8 +478,37 @@ function openCatDropdown(event, txId) {
     ${validGroups.map(g => `<div class="cat-group-pick" data-group="${esc(g)}" style="padding:3px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-bottom:2px">${esc(g)}</div>`).join('')}
   </div>`;
   dd.innerHTML = html;
+  dd.setAttribute('role', 'listbox');
+  dd.querySelectorAll('.cat-option').forEach(el => el.setAttribute('role', 'option'));
   const input = dd.querySelector('input');
   input.addEventListener('input', () => filterCatOptions(input));
+  input.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      closeCatDropdowns();
+      return;
+    }
+    const visibleOptions = [...dd.querySelectorAll('.cat-option')].filter(el => el.style.display !== 'none');
+    if (visibleOptions.length === 0) return;
+    const focused = dd.querySelector('.cat-option.kb-focus');
+    let idx = focused ? visibleOptions.indexOf(focused) : -1;
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      if (focused) focused.classList.remove('kb-focus');
+      idx = idx < visibleOptions.length - 1 ? idx + 1 : 0;
+      visibleOptions[idx].classList.add('kb-focus');
+      visibleOptions[idx].scrollIntoView({ block: 'nearest' });
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (focused) focused.classList.remove('kb-focus');
+      idx = idx > 0 ? idx - 1 : visibleOptions.length - 1;
+      visibleOptions[idx].classList.add('kb-focus');
+      visibleOptions[idx].scrollIntoView({ block: 'nearest' });
+    } else if (ev.key === 'Enter' && focused) {
+      ev.preventDefault();
+      focused.click();
+    }
+  });
   dd.addEventListener('click', ev => {
     ev.stopPropagation();
     const opt = ev.target.closest('.cat-option');
@@ -514,6 +545,7 @@ function openCatDropdown(event, txId) {
 function openSplitModal(txId) {
   const tx = store.transactions.find(t => t.id === txId);
   if (!tx) return;
+  modalTriggerEl = document.activeElement;
   splitTxId = txId;
   document.getElementById('split-original').innerHTML = `<strong>${esc(tx.merchant)}</strong> on ${tx.date} for <strong>${fmt(tx.amount)}</strong>`;
   const partsEl = document.getElementById('split-parts');
@@ -699,13 +731,13 @@ function renderTransactions() {
       : band === 'medium'
         ? `${suggestBase} bg-amber-50 text-amber-600 border border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`
         : `${suggestBase} bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`;
-    const restoreAction = isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction" aria-label="Restore split">&#8634;</span>` : '';
+    const restoreAction = isSplitChild ? `<button type="button" class="cursor-pointer text-sm text-slate-500 opacity-60 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-slate-100" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction" aria-label="Restore split">&#8634;</button>` : '';
     const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-600';
     const rowBg = isSplitChild ? 'bg-blue-50/30' : isDupe ? 'bg-red-50/30' : 'hover:bg-slate-50/50';
     return `<tr class="${rowBg}">
-      <td class="py-3 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-400">Pending</em>' : tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
+      <td class="py-3 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-500">Pending</em>' : tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
       <td class="py-3 px-3 font-medium">${esc(tx.merchant)}${isRecurring ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-blue-600 bg-blue-50" title="Recurring subscription">&#8635;</span>' : ''}</td>
-      <td class="py-3 px-3 text-slate-500 max-w-[260px] truncate">${esc(tx.description)}</td>
+      <td class="py-3 px-3 text-slate-500 max-w-[260px] truncate tx-col-desc">${esc(tx.description)}</td>
       <td class="py-3 px-3 text-right tabular-nums font-medium ${amountColor}">${fmt(tx.amount)}</td>
       <td class="py-3 px-3"><div class="cat-select-wrap relative inline-block">${tx.category
         ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer border border-dashed border-slate-300 bg-slate-50 hover:border-blue-500 hover:bg-blue-50 transition-colors" onclick="openCatDropdown(event, ${tx.id})">${esc(tx.category)}</span>`
@@ -722,12 +754,12 @@ function renderTransactions() {
         `}
         <option value="ignore" ${tx.type === 'ignore' ? 'selected' : ''}>Ignore</option>
       </select></td>
-      <td class="py-3 px-3 text-center"><span class="cursor-pointer text-sm inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 ${tx.covered ? 'opacity-100' : 'opacity-30 hover:opacity-70'} transition-all" onclick="toggleCovered(${tx.id})" aria-label="${tx.covered ? 'Unmark covered' : 'Mark covered'}">${tx.covered ? '&#10003;' : '&#9675;'}</span></td>
+      <td class="py-3 px-3 text-center tx-col-covered"><button type="button" class="cursor-pointer text-sm inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-slate-100 ${tx.covered ? 'opacity-100' : 'opacity-40 hover:opacity-70'} transition-all" onclick="toggleCovered(${tx.id})" aria-label="${tx.covered ? 'Unmark covered' : 'Mark covered'}">${tx.covered ? '&#10003;' : '&#9675;'}</button></td>
       <td class="py-3 px-1">
         <div class="flex items-center gap-0.5">
-          ${!isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100" onclick="openSplitModal(${tx.id})" title="Split transaction" aria-label="Split">&#x2702;</span>` : ''}
+          ${!isSplitChild ? `<button type="button" class="cursor-pointer text-sm text-slate-500 opacity-60 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-slate-100" onclick="openSplitModal(${tx.id})" title="Split transaction" aria-label="Split">&#x2702;</button>` : ''}
           ${restoreAction}
-          <span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-red-500 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-red-50" onclick="deleteTx(${tx.id})" title="Delete transaction" aria-label="Delete">&#x2715;</span>
+          <button type="button" class="cursor-pointer text-sm text-slate-500 opacity-60 hover:opacity-100 hover:text-red-500 transition-all inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-red-50" onclick="deleteTx(${tx.id})" title="Delete transaction" aria-label="Delete">&#x2715;</button>
         </div>
       </td>
     </tr>`;
@@ -760,7 +792,7 @@ function renderDashboard() {
       <div class="flex flex-wrap items-center gap-2.5 mb-5">
         <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">${data.monthLabel}</span>
         <span class="px-2.5 py-1 rounded-full text-xs font-bold ${badgeClass}">${data.budget.success ? 'Under budget' : 'Over budget'}</span>
-        ${store.salaryShiftDay ? `<span class="text-xs text-slate-400">Salary shifted by day ${store.salaryShiftDay}</span>` : ''}
+        ${store.salaryShiftDay ? `<span class="text-xs text-slate-600">Salary shifted by day ${store.salaryShiftDay}</span>` : ''}
       </div>
       <div class="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6 items-start scorecard-main">
         <div>
@@ -773,17 +805,17 @@ function renderDashboard() {
             <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
               <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Fixed spending</div>
               <div class="text-xl font-bold tabular-nums tracking-tight">${fmt(data.spendingBreakdown.fixed.actual)}</div>
-              <div class="text-xs text-slate-500 mt-1">Core monthly obligations</div>
+              <div class="text-xs text-slate-600 mt-1">Core monthly obligations</div>
             </div>
             <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
               <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Flexible spending</div>
               <div class="text-xl font-bold tabular-nums tracking-tight">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
-              <div class="text-xs text-slate-500 mt-1">Everything outside fixed costs</div>
+              <div class="text-xs text-slate-600 mt-1">Everything outside fixed costs</div>
             </div>
             <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
               <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Biggest miss</div>
               <div class="text-xl font-bold tabular-nums tracking-tight">${biggestMiss ? esc(biggestMiss.category) : 'None'}</div>
-              <div class="text-xs text-slate-500 mt-1">${biggestMiss ? `${fmt(biggestMiss.variance)} over budget` : 'No overspent categories'}</div>
+              <div class="text-xs text-slate-600 mt-1">${biggestMiss ? `${fmt(biggestMiss.variance)} over budget` : 'No overspent categories'}</div>
             </div>
           </div>
         </div>
@@ -791,22 +823,22 @@ function renderDashboard() {
           <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
             <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">True income</div>
             <div class="text-2xl font-bold tabular-nums tracking-tight text-emerald-600">${fmt(data.totals.income)}</div>
-            <div class="text-xs text-slate-500 mt-1.5">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow does not count as income.'}</div>
+            <div class="text-xs text-slate-600 mt-1.5">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow does not count as income.'}</div>
           </div>
           <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
             <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Spent vs budget</div>
             <div class="text-2xl font-bold tabular-nums tracking-tight text-red-500">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
-            <div class="text-xs text-slate-500 mt-1.5">${data.budget.overBudgetCategories.length} ${data.budget.overBudgetCategories.length === 1 ? 'category' : 'categories'} over budget.</div>
+            <div class="text-xs text-slate-600 mt-1.5">${data.budget.overBudgetCategories.length} ${data.budget.overBudgetCategories.length === 1 ? 'category' : 'categories'} over budget.</div>
           </div>
           <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
             <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Invested</div>
             <div class="text-2xl font-bold tabular-nums tracking-tight text-violet-600">${fmt(data.totals.invested)}</div>
-            <div class="text-xs text-slate-500 mt-1.5">Shown separately from budget success.</div>
+            <div class="text-xs text-slate-600 mt-1.5">Shown separately from budget success.</div>
           </div>
           <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
             <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
             <div class="text-2xl font-bold tabular-nums tracking-tight ${data.totals.remainingCash >= 0 ? 'text-blue-600' : 'text-red-500'}">${fmt(data.totals.remainingCash)}</div>
-            <div class="text-xs text-slate-500 mt-1.5">${data.totals.remainingCash >= 0 ? 'Cash left after spending and investing.' : 'Spending and investing exceeded true income.'}</div>
+            <div class="text-xs text-slate-600 mt-1.5">${data.totals.remainingCash >= 0 ? 'Cash left after spending and investing.' : 'Spending and investing exceeded true income.'}</div>
           </div>
         </div>
       </div>
@@ -818,19 +850,19 @@ function renderDashboard() {
   const savingsYtd = getYtdSavingsProgress(month, dashboardOptions);
   document.getElementById('dash-savings-progress').innerHTML = `<div class="space-y-0">
     <div class="flex justify-between items-start py-3 text-sm">
-      <div><div class="font-medium">Invested (${data.monthShortLabel})</div><div class="text-xs text-slate-500 mt-0.5">Monthly committed capital</div></div>
+      <div><div class="font-medium">Invested (${data.monthShortLabel})</div><div class="text-xs text-slate-600 mt-0.5">Monthly committed capital</div></div>
       <strong class="tabular-nums text-violet-600">${fmt(savings.monthly.invested)}</strong>
     </div>
     <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
-      <div><div class="font-medium">Cash saved (YTD)</div><div class="text-xs text-slate-500 mt-0.5">Non-investment savings transfers</div></div>
+      <div><div class="font-medium">Cash saved (YTD)</div><div class="text-xs text-slate-600 mt-0.5">Non-investment savings transfers</div></div>
       <strong class="tabular-nums text-emerald-600">${fmt(savingsYtd.ytd.cashSaved)}</strong>
     </div>
     <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
-      <div><div class="font-medium">Invested (YTD)</div><div class="text-xs text-slate-500 mt-0.5">Keeps savings visible without counting against budget</div></div>
+      <div><div class="font-medium">Invested (YTD)</div><div class="text-xs text-slate-600 mt-0.5">Keeps savings visible without counting against budget</div></div>
       <strong class="tabular-nums text-violet-600">${fmt(savingsYtd.ytd.invested)}</strong>
     </div>
     <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
-      <div><div class="font-medium">Total progress (YTD)</div><div class="text-xs text-slate-500 mt-0.5">${savingsYtd.ytd.monthCount} month${savingsYtd.ytd.monthCount === 1 ? '' : 's'} tracked</div></div>
+      <div><div class="font-medium">Total progress (YTD)</div><div class="text-xs text-slate-600 mt-0.5">${savingsYtd.ytd.monthCount} month${savingsYtd.ytd.monthCount === 1 ? '' : 's'} tracked</div></div>
       <strong class="tabular-nums">${fmt(savingsYtd.ytd.total)}</strong>
     </div>
   </div>`;
@@ -846,7 +878,7 @@ function renderDashboard() {
       <div class="flex justify-between items-start py-3 ${i > 0 ? 'border-t border-slate-100' : ''} text-sm">
         <div>
           <div class="font-medium">${esc(item.category)}</div>
-          <div class="text-xs text-slate-500 mt-0.5">${item.fixed ? 'Fixed' : 'Recurring'} &bull; ${item.cadence} &bull; next ${item.nextExpectedDate}</div>
+          <div class="text-xs text-slate-600 mt-0.5">${item.fixed ? 'Fixed' : 'Recurring'} &bull; ${item.cadence} &bull; next ${item.nextExpectedDate}</div>
         </div>
         <strong class="tabular-nums">${fmt(-item.typicalAmount)}</strong>
       </div>
@@ -881,7 +913,7 @@ function renderDashboard() {
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
     return `<div class="flex items-center gap-2">
-      <div class="w-28 text-right text-xs text-slate-500 truncate" title="${esc(cat)}">${esc(cat)}</div>
+      <div class="w-28 text-right text-xs text-slate-600 truncate" title="${esc(cat)}">${esc(cat)}</div>
       <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
         <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
           <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
@@ -897,7 +929,7 @@ function renderDashboard() {
     ? '<p class="text-sm text-slate-500 py-2">No merchant outflows to show for this month.</p>'
     : sortedMerchants.map((entry, i) =>
       `<div class="flex justify-between items-start py-3 ${i > 0 ? 'border-t border-slate-100' : ''} text-sm">
-        <div><div class="font-medium">${esc(entry[0])}</div><div class="text-xs text-slate-500 mt-0.5">Merchant outflow</div></div>
+        <div><div class="font-medium">${esc(entry[0])}</div><div class="text-xs text-slate-600 mt-0.5">Merchant outflow</div></div>
         <strong class="tabular-nums">${fmt(-entry[1])}</strong>
       </div>`
     ).join('');
@@ -906,9 +938,9 @@ function renderDashboard() {
   document.getElementById('dash-trend').innerHTML = `<div class="flex items-end gap-2.5" style="height:180px;padding-top:12px">${data.trend.map(m => {
     const h = m.total / maxTrend * 120;
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
-      <div class="text-[10px] tabular-nums font-medium text-slate-600">${fmt(-m.total)}</div>
+      <div class="text-[11px] tabular-nums font-medium text-slate-600">${fmt(-m.total)}</div>
       <div class="w-full rounded-t-lg" style="height:${h}px;background:${m.month === month ? 'rgb(37 99 235)' : 'rgb(203 213 225)'};min-height:4px;margin:6px 0"></div>
-      <div class="text-[10px] text-slate-500">${m.month.slice(5)}</div>
+      <div class="text-[11px] text-slate-600">${m.month.slice(5)}</div>
     </div>`;
   }).join('')}</div>`;
 
@@ -924,12 +956,12 @@ function renderDashboard() {
       budgetHTML.push(`<div class="border border-slate-200 rounded-lg p-3">
         <div class="flex justify-between items-center text-sm mb-2">
           <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-500 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
+          <span class="text-xs text-slate-600 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
         </div>
-        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of budget used">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
-        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5 tabular-nums">
+        <div class="flex justify-between text-[11px] text-slate-600 mt-1.5 tabular-nums">
           <span>${pct}%</span>
           <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
         </div>
@@ -954,7 +986,7 @@ function renderYearlyDashboard() {
 
   document.getElementById('year-summary').innerHTML = `<div class="relative overflow-hidden rounded-2xl border border-blue-200/60 bg-gradient-to-br from-blue-50 via-indigo-50/30 to-slate-50 p-6 sm:p-8">
     <div class="relative z-10">
-      <h2 class="text-lg font-bold mb-1">${year} Overview${data.ytd.monthCount < 12 ? ` (${data.ytd.monthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-slate-400 font-normal">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
+      <h2 class="text-lg font-bold mb-1">${year} Overview${data.ytd.monthCount < 12 ? ` (${data.ytd.monthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-slate-600 font-normal">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
       <div class="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200/40">
         <span class="text-sm text-slate-500">Expected annual loan (SU-lan):</span>
         <input type="number" id="loan-budget-input" value="${data.annualLoanBudget}" min="0" step="100" class="w-28 px-2 py-1 border border-slate-200 rounded-lg text-sm tabular-nums focus:outline-none focus:border-blue-500" onchange="saveLoanBudget('${year}', this.value)">
@@ -977,12 +1009,12 @@ function renderYearlyDashboard() {
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Annual Budget</div>
       <div class="text-xl font-bold tabular-nums">${fmt(-data.annual.budget)}</div>
-      <div class="text-xs text-slate-500 mt-1">spending categories</div>
+      <div class="text-xs text-slate-600 mt-1">spending categories</div>
     </div>
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Spend</div>
       <div class="text-xl font-bold tabular-nums text-red-500">${fmt(-data.annual.avgSpend)}</div>
-      <div class="text-xs text-slate-500 mt-1">over ${data.ytd.monthCount} month${data.ytd.monthCount !== 1 ? 's' : ''}</div>
+      <div class="text-xs text-slate-600 mt-1">over ${data.ytd.monthCount} month${data.ytd.monthCount !== 1 ? 's' : ''}</div>
     </div>
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Income</div>
@@ -991,7 +1023,7 @@ function renderYearlyDashboard() {
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Budget Used</div>
       <div class="text-xl font-bold tabular-nums ${data.ytd.spend <= data.ytd.budget ? 'text-emerald-600' : 'text-red-500'}">${data.annual.budget > 0 ? `${Math.round(data.ytd.spend / data.annual.budget * 100)}%` : '0%'}</div>
-      <div class="text-xs text-slate-500 mt-1">of annual budget</div>
+      <div class="text-xs text-slate-600 mt-1">of annual budget</div>
     </div>`;
 
   const maxBar = Math.max(...data.monthData.map(m => Math.max(m.spend, m.budget)), 1);
@@ -1003,12 +1035,12 @@ function renderYearlyDashboard() {
     const displayAmt = isFuture ? m.budget : m.spend;
     const hDisplay = isFuture ? hBudget : hSpend;
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
-      <div class="text-[10px] tabular-nums font-medium ${isFuture ? 'text-slate-400 italic' : 'text-slate-600'}">${displayAmt > 0 ? fmtShort(displayAmt) : ''}</div>
+      <div class="text-[11px] tabular-nums font-medium ${isFuture ? 'text-slate-500 italic' : 'text-slate-600'}">${displayAmt > 0 ? fmtShort(displayAmt) : ''}</div>
       <div class="w-full relative">
         <div class="w-full rounded-t" style="height:${Math.max(hDisplay, 2)}px;background:${barColor};min-height:2px;margin:2px 0;${isFuture ? 'opacity:0.5' : ''}"></div>
         ${!isFuture && m.budget > 0 ? `<div class="absolute left-0 right-0 h-0.5 bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>` : ''}
       </div>
-      <div class="text-[10px] text-slate-500">${m.month}</div>
+      <div class="text-[11px] text-slate-600">${m.month}</div>
     </div>`;
   }).join('')}</div>
   <div class="flex gap-4 mt-2 text-[11px] text-slate-500">
@@ -1024,7 +1056,7 @@ function renderYearlyDashboard() {
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
     return `<div class="flex items-center gap-2">
-      <div class="w-28 text-right text-xs text-slate-500 truncate" title="${esc(cat)}">${esc(cat)}</div>
+      <div class="w-28 text-right text-xs text-slate-600 truncate" title="${esc(cat)}">${esc(cat)}</div>
       <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
         <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
           <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
@@ -1047,12 +1079,12 @@ function renderYearlyDashboard() {
       budgetVsActual.push(`<div class="border border-slate-200 rounded-lg p-3">
         <div class="flex justify-between items-center text-sm mb-2">
           <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-500 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
+          <span class="text-xs text-slate-600 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
         </div>
-        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of annual budget used">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
-        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5 tabular-nums">
+        <div class="flex justify-between text-[11px] text-slate-600 mt-1.5 tabular-nums">
           <span>${pct}%</span>
           <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
         </div>
@@ -1191,7 +1223,7 @@ function renderCategoryManager() {
       const count = store.transactions.filter(tx => tx.category === cat).length;
       const item = document.createElement('div');
       item.className = 'flex items-center justify-between py-2 px-2 rounded-lg text-sm hover:bg-slate-50 transition-colors';
-      item.innerHTML = `<span>${esc(cat)} <span class="text-xs text-slate-500">(${count} txns)</span></span><div class="flex gap-2"></div>`;
+      item.innerHTML = `<span>${esc(cat)} <span class="text-xs text-slate-600">(${count} txns)</span></span><div class="flex gap-2"></div>`;
       const btnWrap = item.querySelector('.flex.gap-2');
       const renameBtn = document.createElement('button');
       renameBtn.className = 'px-2 py-0.5 rounded text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors';
@@ -1213,12 +1245,17 @@ function renderCategoryManager() {
 }
 
 function openNewCatModal() {
+  modalTriggerEl = document.activeElement;
   document.getElementById('modal-new-cat').classList.add('open');
   document.getElementById('new-cat-name').focus();
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  if (modalTriggerEl && typeof modalTriggerEl.focus === 'function') {
+    modalTriggerEl.focus();
+    modalTriggerEl = null;
+  }
 }
 
 function addNewCategory() {
@@ -1383,10 +1420,16 @@ function switchDashView(view) {
 
 function switchSection(section) {
   document.querySelectorAll('.nav-item[data-section]').forEach(el => {
-    el.classList.toggle('active', el.dataset.section === section);
+    const isActive = el.dataset.section === section;
+    el.classList.toggle('active', isActive);
+    if (isActive) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
   document.querySelectorAll('.mobile-nav-item[data-section]').forEach(el => {
-    el.classList.toggle('active', el.dataset.section === section);
+    const isActive = el.dataset.section === section;
+    el.classList.toggle('active', isActive);
+    if (isActive) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
   document.querySelectorAll('.section-content').forEach(el => {
     el.classList.toggle('hidden', el.id !== `tab-${section}`);
@@ -1482,6 +1525,19 @@ export function initApp() {
   bindImportEvents();
   bindBudgetEditorEvents();
   document.addEventListener('click', closeCatDropdowns);
+  document.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') {
+      const openDropdowns = document.querySelectorAll('.cat-dropdown');
+      if (openDropdowns.length > 0) {
+        closeCatDropdowns();
+        return;
+      }
+      const openModal = document.querySelector('.modal-overlay.open');
+      if (openModal) {
+        closeModal(openModal.id);
+      }
+    }
+  });
   rerenderAll();
   if (sanitized > 0) toast(`Auto-cleared ${sanitized} mismatched category${sanitized !== 1 ? 's' : ''}.`);
 }

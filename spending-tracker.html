@@ -40,10 +40,10 @@ tailwind.config = {
   .cat-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 50; background: white; border: 1px solid rgba(15,23,42,0.1); border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(15,23,42,0.04), 0 10px 25px rgba(15,23,42,0.1); min-width: 220px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
   .cat-dropdown.open { display: block; }
   .cat-dropdown input { width: 100%; padding: 10px 12px; border: none; border-bottom: 1px solid rgba(15,23,42,0.08); font-size: 13px; outline: none; border-radius: 0.75rem 0.75rem 0 0; }
-  .cat-dropdown .cat-option { padding: 8px 12px; cursor: pointer; font-size: 13px; min-height: 32px; display: flex; align-items: center; }
-  .cat-dropdown .cat-option:hover { background: rgb(239 246 255); }
-  .cat-dropdown .cat-group-header { padding: 8px 12px; font-size: 10px; font-weight: 600; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.05em; background: rgb(248 250 252); }
-  .cat-dropdown .cat-new { padding: 8px 12px; cursor: pointer; font-size: 13px; color: rgb(37 99 235); font-weight: 500; border-top: 1px solid rgba(15,23,42,0.08); min-height: 32px; display: flex; align-items: center; }
+  .cat-dropdown .cat-option { padding: 8px 12px; cursor: pointer; font-size: 13px; min-height: 44px; display: flex; align-items: center; }
+  .cat-dropdown .cat-option:hover, .cat-dropdown .cat-option.kb-focus { background: rgb(239 246 255); }
+  .cat-dropdown .cat-group-header { padding: 8px 12px; font-size: 11px; font-weight: 600; color: rgb(71 85 105); text-transform: uppercase; letter-spacing: 0.05em; background: rgb(248 250 252); }
+  .cat-dropdown .cat-new { padding: 8px 12px; cursor: pointer; font-size: 13px; color: rgb(37 99 235); font-weight: 500; border-top: 1px solid rgba(15,23,42,0.08); min-height: 44px; display: flex; align-items: center; }
   .cat-dropdown .cat-new:hover { background: rgb(239 246 255); }
   .cat-group-pick:hover { background: rgb(239 246 255); color: rgb(37 99 235); }
   /* Modal */
@@ -57,23 +57,29 @@ tailwind.config = {
   /* Budget table */
   .budget-table { border-collapse: collapse; font-size: 12px; width: 100%; }
   .budget-table th, .budget-table td { padding: 4px 6px; border: 1px solid rgba(15,23,42,0.08); white-space: nowrap; }
-  .budget-table th { background: rgb(248 250 252); font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 1; font-size: 11px; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.04em; }
+  .budget-table th { background: rgb(248 250 252); font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 1; font-size: 11px; color: rgb(71 85 105); text-transform: uppercase; letter-spacing: 0.04em; }
   .budget-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: rgb(241 245 249); min-width: 140px; }
   .budget-table td:first-child { font-weight: 500; position: sticky; left: 0; background: white; z-index: 1; min-width: 140px; }
-  .budget-table .group-row td { background: rgb(241 245 249); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; color: rgb(100 116 139); }
+  .budget-table .group-row td { background: rgb(241 245 249); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; color: rgb(71 85 105); }
   .budget-table .total-row td { background: rgb(248 250 252); font-weight: 600; border-top: 2px solid rgb(203 213 225); }
-  .budget-table input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; }
-  .budget-table input[type="number"]:hover { border-color: rgba(15,23,42,0.12); }
+  .budget-table input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid rgba(15,23,42,0.08); border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; min-height: 36px; }
+  .budget-table input[type="number"]:hover { border-color: rgba(15,23,42,0.18); }
   .budget-table input[type="number"]:focus { outline: none; border-color: rgb(37 99 235); background: rgb(239 246 255); }
   .budget-table .col-total { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
-  .budget-table .col-avg { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: rgb(100 116 139); }
+  .budget-table .col-avg { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: rgb(71 85 105); }
   @media (max-width: 1024px) {
     .scorecard-main { grid-template-columns: 1fr !important; }
     .scorecard-breakdown { grid-template-columns: 1fr !important; }
   }
+  @media (max-width: 767px) {
+    .tx-col-desc, .tx-col-covered { display: none; }
+    .toast-el { bottom: 5rem !important; right: 1rem !important; left: 1rem !important; max-width: none !important; }
+  }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased">
+
+<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">Skip to main content</a>
 
 <!-- Top Nav -->
 <nav class="fixed top-0 w-full h-14 flex items-center justify-between px-4 sm:px-6 bg-white/80 backdrop-blur-md border-b border-slate-200/60 z-50">
@@ -96,7 +102,7 @@ tailwind.config = {
 <aside class="hidden lg:flex fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-60 flex-col bg-slate-50 border-r border-slate-200 z-40">
   <div class="px-5 pt-5 pb-3">
     <h1 class="text-lg font-bold text-slate-900">Spending Tracker</h1>
-    <p class="text-[11px] font-medium text-slate-400 tracking-wider uppercase mt-0.5">Personal Finance</p>
+    <p class="text-[11px] font-medium text-slate-500 tracking-wider uppercase mt-0.5">Personal Finance</p>
   </div>
   <nav class="flex-1 px-3 space-y-0.5 mt-4">
     <a href="#" data-section="dashboard" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
@@ -118,7 +124,7 @@ tailwind.config = {
 </aside>
 
 <!-- Main Content -->
-<main class="lg:ml-60 pt-14 min-h-screen pb-20 lg:pb-0">
+<main id="main-content" class="lg:ml-60 pt-14 min-h-screen pb-20 lg:pb-0">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
     <!-- DASHBOARD -->
@@ -150,7 +156,7 @@ tailwind.config = {
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div class="flex justify-between items-baseline mb-4">
             <h2 class="text-base font-semibold">Budget Diagnosis</h2>
-            <span class="text-xs text-slate-500">Top overspends only</span>
+            <span class="text-xs text-slate-600">Top overspends only</span>
           </div>
           <div id="dash-diagnosis"></div>
         </div>
@@ -158,14 +164,14 @@ tailwind.config = {
           <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <div class="flex justify-between items-baseline mb-4">
               <h2 class="text-base font-semibold">Savings Progress</h2>
-              <span class="material-symbols-outlined text-slate-400" style="font-size:20px">savings</span>
+              <span class="material-symbols-outlined text-slate-500" style="font-size:20px">savings</span>
             </div>
             <div id="dash-savings-progress"></div>
           </div>
           <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <div class="flex justify-between items-baseline mb-4">
               <h2 class="text-base font-semibold">Recurring Obligations</h2>
-              <span class="material-symbols-outlined text-slate-400" style="font-size:20px">event_repeat</span>
+              <span class="material-symbols-outlined text-slate-500" style="font-size:20px">event_repeat</span>
             </div>
             <div id="dash-obligations"></div>
           </div>
@@ -248,10 +254,10 @@ tailwind.config = {
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="border-b-2 border-slate-200 bg-slate-50/50">
-              <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <th class="py-3 px-3">Date</th><th class="py-3 px-3">Merchant</th><th class="py-3 px-3">Description</th>
-                <th class="py-3 px-3 text-right">Amount</th><th class="py-3 px-3">Category</th><th class="py-3 px-3">Type</th>
-                <th class="py-3 px-3 text-center">Covered</th><th class="py-3 px-1"></th>
+              <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                <th scope="col" class="py-3 px-3">Date</th><th scope="col" class="py-3 px-3">Merchant</th><th scope="col" class="py-3 px-3 tx-col-desc">Description</th>
+                <th scope="col" class="py-3 px-3 text-right">Amount</th><th scope="col" class="py-3 px-3">Category</th><th scope="col" class="py-3 px-3">Type</th>
+                <th scope="col" class="py-3 px-3 text-center tx-col-covered">Covered</th><th scope="col" class="py-3 px-1"></th>
               </tr>
             </thead>
             <tbody id="tx-body" class="divide-y divide-slate-100"></tbody>
@@ -266,7 +272,7 @@ tailwind.config = {
         <h2 class="text-base font-semibold mb-1">Import Nordea CSV</h2>
         <p class="text-sm text-slate-500 mb-5">Export from Nordea Netbank and drop the CSV file below. Duplicates are skipped automatically.</p>
         <div class="import-area border-2 border-dashed border-slate-300 rounded-2xl p-10 sm:p-16 text-center cursor-pointer transition-all hover:border-blue-500 hover:bg-blue-50/30" id="import-area" onclick="document.getElementById('csv-input').click()">
-          <span class="material-symbols-outlined text-slate-400 mb-3 block mx-auto" style="font-size:40px">cloud_upload</span>
+          <span class="material-symbols-outlined text-slate-500 mb-3 block mx-auto" style="font-size:40px">cloud_upload</span>
           <p class="text-sm text-slate-500">Drop CSV file here or click to browse</p>
           <input type="file" id="csv-input" class="hidden" accept=".csv" onchange="handleCSV(event)">
         </div>
@@ -282,9 +288,9 @@ tailwind.config = {
           <div class="overflow-x-auto max-h-[400px] overflow-y-auto rounded-lg border border-slate-200">
             <table class="w-full text-left text-sm">
               <thead class="border-b-2 border-slate-200 bg-slate-50/50 sticky top-0">
-                <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  <th class="py-3 px-3">Date</th><th class="py-3 px-3">Merchant</th><th class="py-3 px-3">Description</th>
-                  <th class="py-3 px-3 text-right">Amount</th><th class="py-3 px-3">Auto Category</th>
+                <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                  <th scope="col" class="py-3 px-3">Date</th><th scope="col" class="py-3 px-3">Merchant</th><th scope="col" class="py-3 px-3">Description</th>
+                  <th scope="col" class="py-3 px-3 text-right">Amount</th><th scope="col" class="py-3 px-3">Auto Category</th>
                 </tr>
               </thead>
               <tbody id="import-body" class="divide-y divide-slate-100"></tbody>
@@ -324,33 +330,33 @@ tailwind.config = {
 
 <!-- Mobile Bottom Nav -->
 <nav class="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 grid grid-cols-5 gap-1 z-50 lg:hidden">
-  <button data-section="dashboard" class="mobile-nav-item active flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+  <button data-section="dashboard" class="mobile-nav-item active flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
     <span class="material-symbols-outlined mb-0.5" aria-hidden="true">dashboard</span> Dash
   </button>
-  <button data-section="transactions" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+  <button data-section="transactions" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
     <span class="material-symbols-outlined mb-0.5" aria-hidden="true">receipt_long</span> Trans
   </button>
-  <button data-section="import" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+  <button data-section="import" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
     <span class="material-symbols-outlined mb-0.5" aria-hidden="true">upload_file</span> Import
   </button>
-  <button data-section="budgets" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+  <button data-section="budgets" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
     <span class="material-symbols-outlined mb-0.5" aria-hidden="true">calculate</span> Budget
   </button>
-  <button data-section="categories" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+  <button data-section="categories" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
     <span class="material-symbols-outlined mb-0.5" aria-hidden="true">category</span> Cats
   </button>
 </nav>
 
 <!-- New Category Modal -->
-<div class="modal-overlay" id="modal-new-cat">
+<div class="modal-overlay" id="modal-new-cat" role="dialog" aria-modal="true" aria-labelledby="modal-new-cat-title">
   <div class="bg-white rounded-2xl p-6 max-w-md w-[90%] max-h-[80vh] overflow-y-auto shadow-2xl">
-    <h2 class="text-base font-semibold mb-4">New Category</h2>
+    <h2 id="modal-new-cat-title" class="text-base font-semibold mb-4">New Category</h2>
     <div class="mb-3">
-      <label class="block text-xs font-medium text-slate-500 mb-1">Name</label>
+      <label for="new-cat-name" class="block text-xs font-medium text-slate-600 mb-1">Name</label>
       <input type="text" id="new-cat-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
     </div>
     <div class="mb-3">
-      <label class="block text-xs font-medium text-slate-500 mb-1">Group</label>
+      <label for="new-cat-group" class="block text-xs font-medium text-slate-600 mb-1">Group</label>
       <select id="new-cat-group" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
         <option value="Fixed costs">Fixed costs</option><option value="Subscriptions">Subscriptions</option>
         <option value="Insurance">Insurance</option><option value="Variable">Variable</option><option value="Savings">Savings</option>
@@ -365,9 +371,9 @@ tailwind.config = {
 </div>
 
 <!-- Split Transaction Modal -->
-<div class="modal-overlay" id="modal-split">
+<div class="modal-overlay" id="modal-split" role="dialog" aria-modal="true" aria-labelledby="modal-split-title">
   <div class="bg-white rounded-2xl p-6 max-w-xl w-[90%] max-h-[80vh] overflow-y-auto shadow-2xl">
-    <h2 class="text-base font-semibold mb-3">Split Transaction</h2>
+    <h2 id="modal-split-title" class="text-base font-semibold mb-3">Split Transaction</h2>
     <div id="split-original" class="text-sm text-slate-500 mb-4"></div>
     <div id="split-parts" class="space-y-2"></div>
     <div class="mt-3">
@@ -381,7 +387,7 @@ tailwind.config = {
   </div>
 </div>
 
-<div class="toast-el fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl text-sm z-[200] shadow-lg max-w-sm" id="toast"></div>
+<div class="toast-el fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl text-sm z-[200] shadow-lg max-w-sm" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module">
 const APP_ENTRY = './js/app.js';
