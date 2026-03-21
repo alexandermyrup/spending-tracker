@@ -1033,11 +1033,14 @@ function renderYearlyDashboard() {
   });
 
   // Cash flow bars: income vs spending paired, YoY dot on spending
-  const maxCashflow = Math.max(...data.monthData.map(m => Math.max(m.inc, m.spend)), 1);
+  const maxCashflow = Math.max(...data.monthData.map(m => Math.max(m.inc, m.spend, m.budget)), data.annual.avgIncome, 1);
   document.getElementById('year-cashflow-bars').innerHTML = `<div class="flex items-end gap-2" style="height:200px">${data.monthData.map((m, i) => {
     const isFuture = !m.hasActuals && !m.isPast;
-    const hIncome = m.inc / maxCashflow * 170;
-    const hSpend = m.spend / maxCashflow * 170;
+    const avgIncome = data.annual.avgIncome;
+    const displayIncome = isFuture ? avgIncome : m.inc;
+    const displaySpend = isFuture ? m.budget : m.spend;
+    const hIncome = displayIncome / maxCashflow * 170;
+    const hSpend = displaySpend / maxCashflow * 170;
     const prevSpend = prevData.monthData[i]?.spend || 0;
     const hPrevSpend = prevSpend / maxCashflow * 170;
     const overBudget = m.hasActuals && m.spend > m.budget && m.budget > 0;
@@ -1050,7 +1053,7 @@ function renderYearlyDashboard() {
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
       <div class="flex gap-[2px] items-end w-full justify-center relative" style="height:100%">
         <div class="w-[42%] rounded-t ${incomeClass}" style="height:${Math.max(hIncome, 2)}px"></div>
-        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(isFuture ? m.budget / maxCashflow * 170 : hSpend, 2)}px">${yoyDot}</div>
+        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(hSpend, 2)}px">${yoyDot}</div>
       </div>
       <div class="text-[11px] ${labelClass} mt-2">${m.month}</div>
     </div>`;
