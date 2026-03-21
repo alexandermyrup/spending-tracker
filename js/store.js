@@ -8,7 +8,7 @@ export const DEFAULT_CATEGORIES = {
   'Fixed costs': ['Rent + utilities','Transport','Mobile','Internet','Contacts','Macbook payment','Gym','KAB venteliste'],
   'Subscriptions': ['OpenAI','iCloud','F1TV','EA Play Pro','M365','Google','WHOOP'],
   'Insurance': ['Hövding forsikring','Accident insurance','Sygesikring Danmark'],
-  'Variable': ['Groceries','Eating out','Nightlife','Travel','Skincare','Vitamins','Pharmacy','Toiletries','Clothes','Laundry','Haircut','Tandlæge','Gift cost','Transfer out','Fun','Other'],
+  'Variable': ['Groceries','Eating out','Nightlife','Travel','Skincare','Vitamins','Pharmacy','Toiletries','Clothes','Laundry','Haircut','Tandlæge','Gift cost','Transfer out','Home','Fun','Other'],
   'Savings': ['Pension','Investments'],
   'Income': ['SU','Part-time job','Feriepenge','Reimbursement','Interest','Other income']
 };
@@ -31,7 +31,7 @@ export function getDefaultYearBudget() {
     'Hövding forsikring': 27, 'Accident insurance': 117, 'Sygesikring Danmark': 0,
     'Groceries': 3200, 'Eating out': 300, 'Nightlife': 800, 'Travel': 0,
     'Skincare': 200, 'Vitamins': 0, 'Pharmacy': 0, 'Toiletries': 200, 'Clothes': 0, 'Laundry': 100,
-    'Haircut': 0, 'Tandlæge': 0, 'Gift cost': 0, 'Transfer out': 0, 'Fun': 200, 'Other': 0,
+    'Haircut': 0, 'Tandlæge': 0, 'Gift cost': 0, 'Transfer out': 0, 'Home': 0, 'Fun': 200, 'Other': 0,
     'Pension': 6000, 'Investments': 3000
   };
   const overrides = {
