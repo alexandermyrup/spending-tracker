@@ -906,45 +906,7 @@ function renderDashboard() {
       </div>`;
     }).join('');
 
-  const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);
-  const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  document.getElementById('dash-category-chart').innerHTML = `<div class="space-y-1.5">${sortedCats.slice(0, 12).map(([cat, val], i) => {
-    const budgetAmt = getBudgetForMonth(store, cat, month, year => ensureYearBudget(store, year));
-    const pct = val / Math.max(maxCat, budgetAmt) * 100;
-    const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
-    return `<div class="flex items-center gap-2">
-      <div class="w-28 text-right text-xs text-slate-600 truncate" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
-        <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
-          <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
-        </div>
-        ${budgetAmt > 0 ? `<div class="absolute top-0 bottom-0 w-0.5 bg-slate-900/50 z-[1]" style="left:${Math.min(budgetPct, 100)}%" title="Budget: ${fmt(-budgetAmt)}"></div>` : ''}
-      </div>
-      <div class="w-20 text-right text-xs tabular-nums flex-shrink-0">${fmt(-val)}</div>
-    </div>`;
-  }).join('')}</div>`;
-
-  const sortedMerchants = Object.entries(data.merchantTotals).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  document.getElementById('dash-merchants').innerHTML = sortedMerchants.length === 0
-    ? '<p class="text-sm text-slate-500 py-2">No merchant outflows to show for this month.</p>'
-    : sortedMerchants.map((entry, i) =>
-      `<div class="flex justify-between items-start py-3 ${i > 0 ? 'border-t border-slate-100' : ''} text-sm">
-        <div><div class="font-medium">${esc(entry[0])}</div><div class="text-xs text-slate-600 mt-0.5">Merchant outflow</div></div>
-        <strong class="tabular-nums">${fmt(-entry[1])}</strong>
-      </div>`
-    ).join('');
-
-  const maxTrend = Math.max(...data.trend.map(m => m.total), 1);
-  document.getElementById('dash-trend').innerHTML = `<div class="flex items-end gap-2.5" style="height:180px;padding-top:12px">${data.trend.map(m => {
-    const h = m.total / maxTrend * 120;
-    return `<div class="flex-1 flex flex-col items-center justify-end h-full">
-      <div class="text-[11px] tabular-nums font-medium text-slate-600">${fmt(-m.total)}</div>
-      <div class="w-full rounded-t-lg" style="height:${h}px;background:${m.month === month ? 'rgb(37 99 235)' : 'rgb(203 213 225)'};min-height:4px;margin:6px 0"></div>
-      <div class="text-[11px] text-slate-600">${m.month.slice(5)}</div>
-    </div>`;
-  }).join('')}</div>`;
-
-  const budgetItems = [];
+  const breakdownItems = [];
   Object.entries(store.categories).forEach(([group, cats]) => {
     if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
     cats.forEach(cat => {
@@ -952,30 +914,37 @@ function renderDashboard() {
       if (budget <= 0) return;
       const actual = data.categoryTotals[cat] || 0;
       const pct = Math.round(actual / budget * 100);
-      budgetItems.push({ cat, actual, budget, pct });
+      const comparisons = getCategoryComparisons(cat, month, dashboardOptions);
+      breakdownItems.push({ cat, actual, budget, pct, comparisons });
     });
   });
-  budgetItems.sort((a, b) => b.pct - a.pct);
-  const budgetHTML = budgetItems.map(({ cat, actual, budget, pct }) => {
+  breakdownItems.sort((a, b) => b.pct - a.pct);
+  const breakdownHTML = breakdownItems.map(({ cat, actual, budget, pct, comparisons }, i) => {
     const over = actual > budget;
     const diff = Math.abs(actual - budget);
     const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
-    const statusColor = over ? 'text-red-500' : 'text-slate-500';
+    const statusColor = over ? 'text-red-500 font-semibold' : 'text-slate-500';
     const statusText = over ? `${fmt(-diff)} over` : `${fmt(-diff)} left`;
-    return `<div class="flex items-center gap-3 py-2.5 ${over ? '' : ''}" style="min-height:36px">
-      <span class="text-sm font-medium w-32 sm:w-40 shrink-0 truncate" title="${esc(cat)}">${esc(cat)}</span>
-      <div class="flex-1 flex items-center gap-2 min-w-0">
+    const deemphasize = pct < 60 ? 'opacity-60' : '';
+    return `<div class="py-3.5 ${i > 0 ? 'border-t border-slate-100' : ''} ${deemphasize}">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-medium w-36 sm:w-44 shrink-0 truncate" title="${esc(cat)}">${esc(cat)}</span>
         <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of budget used">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
         <span class="text-xs tabular-nums text-slate-500 shrink-0 w-10 text-right">${pct}%</span>
+        <span class="text-xs tabular-nums text-slate-600 shrink-0 w-32 text-right">${fmt(-actual)} / ${fmt(-budget)}</span>
+        <span class="text-xs tabular-nums ${statusColor} shrink-0 w-24 text-right">${statusText}</span>
       </div>
-      <span class="text-xs tabular-nums text-slate-600 shrink-0 w-28 sm:w-36 text-right">${fmt(-actual)} / ${fmt(-budget)}</span>
-      <span class="text-xs tabular-nums ${statusColor} shrink-0 w-20 sm:w-24 text-right">${statusText}</span>
+      <div class="flex gap-4 mt-1.5 ml-36 sm:ml-44 pl-3 text-[11px] text-slate-400 tabular-nums">
+        <span>Last mo: ${fmt(-comparisons.previousMonth.actual)}</span>
+        <span>3-mo avg: ${fmt(-comparisons.threeMonthAverage.actual)}</span>
+        <span>1-yr avg: ${fmt(-comparisons.twelveMonthAverage.actual)}</span>
+      </div>
     </div>`;
   });
-  document.getElementById('dash-budget').innerHTML = budgetItems.length > 0
-    ? `<div class="divide-y divide-slate-100">${budgetHTML.join('')}</div>`
+  document.getElementById('dash-category-breakdown').innerHTML = breakdownItems.length > 0
+    ? breakdownHTML.join('')
     : '<p class="text-sm text-slate-500">No budgets set for this month.</p>';
 }
 

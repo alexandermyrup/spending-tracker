@@ -176,33 +176,12 @@ tailwind.config = {
             <div id="dash-obligations"></div>
           </div>
         </div>
-        <div class="space-y-4">
-          <div class="flex justify-between items-center px-1">
-            <h2 class="text-base font-semibold">Drill Down</h2>
-            <p class="text-sm text-slate-500 max-w-md text-right hidden sm:block">Category, merchant, and trend detail.</p>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex justify-between items-baseline mb-4">
+            <h2 class="text-base font-semibold">Category Breakdown</h2>
+            <span class="text-xs text-slate-500">Sorted by most over budget</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
-            <div class="space-y-6">
-              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h2 class="text-base font-semibold mb-4">Spending by Category</h2>
-                <div id="dash-category-chart"></div>
-              </div>
-              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h2 class="text-base font-semibold mb-4">Budget vs Actual</h2>
-                <div id="dash-budget"></div>
-              </div>
-            </div>
-            <div class="space-y-6">
-              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h2 class="text-base font-semibold mb-4">Top Merchants</h2>
-                <div id="dash-merchants"></div>
-              </div>
-              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-                <h2 class="text-base font-semibold mb-4">Monthly Trend</h2>
-                <div id="dash-trend"></div>
-              </div>
-            </div>
-          </div>
+          <div id="dash-category-breakdown"></div>
         </div>
       </div>
 
