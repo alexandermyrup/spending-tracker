@@ -943,9 +943,19 @@ function renderDashboard() {
       </div>
     </div>`;
   });
-  document.getElementById('dash-category-breakdown').innerHTML = breakdownItems.length > 0
-    ? breakdownHTML.join('')
-    : '<p class="text-sm text-slate-500">No budgets set for this month.</p>';
+  const breakdownEl = document.getElementById('dash-category-breakdown');
+  breakdownEl.innerHTML = breakdownItems.length > 0
+    ? `<div class="border-t border-slate-200 mt-4 pt-2">
+        <div class="flex justify-between items-baseline mb-2 px-1">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">All categories</span>
+          <span class="text-[11px] text-slate-400">Sorted by most over budget</span>
+        </div>
+        ${breakdownHTML.join('')}
+      </div>`
+    : '<p class="text-sm text-slate-500 mt-4 pt-4 border-t border-slate-200">No budgets set for this month.</p>';
+  breakdownEl.classList.add('hidden');
+  const toggleBtn = document.getElementById('dash-breakdown-toggle');
+  if (toggleBtn) toggleBtn.textContent = 'Show all categories';
 }
 
 function renderYearlyDashboard() {
@@ -1455,6 +1465,18 @@ function bindImportEvents() {
   });
 }
 
+function toggleCategoryBreakdown() {
+  const el = document.getElementById('dash-category-breakdown');
+  const btn = document.getElementById('dash-breakdown-toggle');
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden');
+    btn.textContent = 'Hide all categories';
+  } else {
+    el.classList.add('hidden');
+    btn.textContent = 'Show all categories';
+  }
+}
+
 function bindGlobalActions() {
   Object.assign(window, {
     addNewCategory,
@@ -1488,6 +1510,7 @@ function bindGlobalActions() {
     setTxType,
     switchDashView,
     switchSection,
+    toggleCategoryBreakdown,
     toggleCovered,
     updateCatFilter
   });
