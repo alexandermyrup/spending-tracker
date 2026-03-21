@@ -17,50 +17,53 @@ tailwind.config = {
 }
 </script>
 <style>
-  body { font-family: 'Inter', system-ui, sans-serif; }
+  body { font-family: 'Inter', system-ui, sans-serif; font-synthesis: none; -webkit-font-smoothing: antialiased; }
   .tabular-nums { font-variant-numeric: tabular-nums; }
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
     vertical-align: middle;
     font-size: 20px;
   }
+  /* Selection & placeholder */
+  ::selection { background: rgb(191 219 254); color: rgb(15 23 42); }
+  ::placeholder { color: rgb(148 163 184); opacity: 1; }
   /* Navigation */
   .nav-item { color: rgb(100 116 139); }
   .nav-item:hover { background: rgb(241 245 249); color: rgb(51 65 85); }
-  .nav-item.active { background: white; color: rgb(15 23 42); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .nav-item.active { background: white; color: rgb(15 23 42); box-shadow: 0 1px 2px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04); }
   .mobile-nav-item { color: rgb(100 116 139); }
   .mobile-nav-item.active { background: rgb(239 246 255); color: rgb(37 99 235); border-radius: 0.5rem; }
   /* Dashboard view toggle */
   .dash-view-btn { color: rgb(100 116 139); }
-  .dash-view-btn.active { background: rgb(37 99 235); color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  .dash-view-btn.active { background: rgb(37 99 235); color: white; box-shadow: 0 1px 2px rgba(37,99,235,0.2); }
   /* Category dropdown */
-  .cat-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 50; background: white; border: 1px solid rgb(226 232 240); border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.12); min-width: 220px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
+  .cat-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 50; background: white; border: 1px solid rgba(15,23,42,0.1); border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(15,23,42,0.04), 0 10px 25px rgba(15,23,42,0.1); min-width: 220px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
   .cat-dropdown.open { display: block; }
-  .cat-dropdown input { width: 100%; padding: 10px 12px; border: none; border-bottom: 1px solid rgb(226 232 240); font-size: 13px; outline: none; border-radius: 0.75rem 0.75rem 0 0; }
-  .cat-dropdown .cat-option { padding: 7px 12px; cursor: pointer; font-size: 13px; }
+  .cat-dropdown input { width: 100%; padding: 10px 12px; border: none; border-bottom: 1px solid rgba(15,23,42,0.08); font-size: 13px; outline: none; border-radius: 0.75rem 0.75rem 0 0; }
+  .cat-dropdown .cat-option { padding: 8px 12px; cursor: pointer; font-size: 13px; min-height: 32px; display: flex; align-items: center; }
   .cat-dropdown .cat-option:hover { background: rgb(239 246 255); }
-  .cat-dropdown .cat-group-header { padding: 7px 12px; font-size: 10px; font-weight: 600; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.05em; background: rgb(248 250 252); }
-  .cat-dropdown .cat-new { padding: 7px 12px; cursor: pointer; font-size: 13px; color: rgb(37 99 235); font-weight: 500; border-top: 1px solid rgb(226 232 240); }
+  .cat-dropdown .cat-group-header { padding: 8px 12px; font-size: 10px; font-weight: 600; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.05em; background: rgb(248 250 252); }
+  .cat-dropdown .cat-new { padding: 8px 12px; cursor: pointer; font-size: 13px; color: rgb(37 99 235); font-weight: 500; border-top: 1px solid rgba(15,23,42,0.08); min-height: 32px; display: flex; align-items: center; }
   .cat-dropdown .cat-new:hover { background: rgb(239 246 255); }
   .cat-group-pick:hover { background: rgb(239 246 255); color: rgb(37 99 235); }
   /* Modal */
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 100; justify-content: center; align-items: center; }
   .modal-overlay.open { display: flex; }
   /* Toast */
-  .toast-el { transform: translateY(100px); opacity: 0; transition: all 0.3s ease; }
+  .toast-el { transform: translateY(100px); opacity: 0; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s ease-out; }
   .toast-el.show { transform: translateY(0); opacity: 1; }
   /* Import drag */
   .import-area.dragover { border-color: rgb(37 99 235) !important; background: rgb(239 246 255) !important; }
   /* Budget table */
   .budget-table { border-collapse: collapse; font-size: 12px; width: 100%; }
-  .budget-table th, .budget-table td { padding: 4px 6px; border: 1px solid rgb(226 232 240); white-space: nowrap; }
+  .budget-table th, .budget-table td { padding: 4px 6px; border: 1px solid rgba(15,23,42,0.08); white-space: nowrap; }
   .budget-table th { background: rgb(248 250 252); font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 1; font-size: 11px; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.04em; }
   .budget-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: rgb(241 245 249); min-width: 140px; }
   .budget-table td:first-child { font-weight: 500; position: sticky; left: 0; background: white; z-index: 1; min-width: 140px; }
   .budget-table .group-row td { background: rgb(241 245 249); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; color: rgb(100 116 139); }
   .budget-table .total-row td { background: rgb(248 250 252); font-weight: 600; border-top: 2px solid rgb(203 213 225); }
-  .budget-table input[type="number"] { width: 60px; padding: 2px 4px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; }
-  .budget-table input[type="number"]:hover { border-color: rgb(226 232 240); }
+  .budget-table input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; }
+  .budget-table input[type="number"]:hover { border-color: rgba(15,23,42,0.12); }
   .budget-table input[type="number"]:focus { outline: none; border-color: rgb(37 99 235); background: rgb(239 246 255); }
   .budget-table .col-total { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
   .budget-table .col-avg { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: rgb(100 116 139); }
@@ -77,12 +80,12 @@ tailwind.config = {
   <h2 id="nav-section-title" class="text-sm font-semibold text-slate-900 lg:hidden">Dashboard</h2>
   <div class="flex items-center gap-2 ml-auto">
     <span id="app-version-badge" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200">v0.2</span>
-    <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors" onclick="exportData()">
-      <span class="material-symbols-outlined" style="font-size:18px">download</span>
+    <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors" onclick="exportData()">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">download</span>
       <span class="hidden sm:inline">Export</span>
     </button>
-    <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors">
-      <span class="material-symbols-outlined" style="font-size:18px">upload</span>
+    <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors">
+      <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">upload</span>
       <span class="hidden sm:inline">Import JSON</span>
       <input type="file" accept=".json" class="hidden" onchange="importJSON(event)">
     </label>
@@ -97,19 +100,19 @@ tailwind.config = {
   </div>
   <nav class="flex-1 px-3 space-y-0.5 mt-4">
     <a href="#" data-section="dashboard" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined">dashboard</span> Dashboard
+      <span class="material-symbols-outlined" aria-hidden="true">dashboard</span> Dashboard
     </a>
     <a href="#" data-section="transactions" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined">receipt_long</span> Transactions
+      <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Transactions
     </a>
     <a href="#" data-section="import" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined">upload_file</span> Import CSV
+      <span class="material-symbols-outlined" aria-hidden="true">upload_file</span> Import CSV
     </a>
     <a href="#" data-section="budgets" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined">calculate</span> Budgets
+      <span class="material-symbols-outlined" aria-hidden="true">calculate</span> Budgets
     </a>
     <a href="#" data-section="categories" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined">category</span> Categories
+      <span class="material-symbols-outlined" aria-hidden="true">category</span> Categories
     </a>
   </nav>
 </aside>
@@ -237,7 +240,7 @@ tailwind.config = {
           <option value="recent-imports">Review: Recent imports</option>
         </select>
         <input type="text" id="tx-search" placeholder="Search merchant..." class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white ml-auto focus:outline-none focus:border-blue-500" oninput="renderTransactions()">
-        <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors" onclick="clearAllTransactions()">Clear All</button>
+        <button class="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors" onclick="clearAllTransactions()">Clear All</button>
       </div>
       <div id="conflict-banner"></div>
       <div id="tx-summary" class="text-sm text-slate-500 mb-4"></div>
@@ -271,8 +274,8 @@ tailwind.config = {
           <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <span id="import-count" class="text-sm font-medium"></span>
             <div class="flex gap-2">
-              <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="confirmImport()">Import All</button>
-              <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="cancelImport()">Cancel</button>
+              <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="confirmImport()">Import All</button>
+              <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="cancelImport()">Cancel</button>
             </div>
           </div>
           <div id="import-meta" class="text-sm text-slate-500 mb-4 flex flex-wrap gap-3"></div>
@@ -309,8 +312,8 @@ tailwind.config = {
     <section id="tab-categories" class="section-content hidden">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-base font-semibold">Category Manager</h2>
-        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="openNewCatModal()">
-          <span class="material-symbols-outlined" style="font-size:18px">add</span> New Category
+        <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="openNewCatModal()">
+          <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">add</span> New Category
         </button>
       </div>
       <div id="cat-manager" class="space-y-6"></div>
@@ -322,19 +325,19 @@ tailwind.config = {
 <!-- Mobile Bottom Nav -->
 <nav class="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 grid grid-cols-5 gap-1 z-50 lg:hidden">
   <button data-section="dashboard" class="mobile-nav-item active flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5">dashboard</span> Dash
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">dashboard</span> Dash
   </button>
   <button data-section="transactions" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5">receipt_long</span> Trans
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">receipt_long</span> Trans
   </button>
   <button data-section="import" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5">upload_file</span> Import
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">upload_file</span> Import
   </button>
   <button data-section="budgets" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5">calculate</span> Budget
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">calculate</span> Budget
   </button>
   <button data-section="categories" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5">category</span> Cats
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">category</span> Cats
   </button>
 </nav>
 
@@ -355,8 +358,8 @@ tailwind.config = {
       </select>
     </div>
     <div class="flex justify-end gap-2 mt-5">
-      <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-new-cat')">Cancel</button>
-      <button class="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="addNewCategory()">Add</button>
+      <button class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-new-cat')">Cancel</button>
+      <button class="px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="addNewCategory()">Add</button>
     </div>
   </div>
 </div>
@@ -372,8 +375,8 @@ tailwind.config = {
     </div>
     <div id="split-remainder" class="text-sm font-medium mt-3"></div>
     <div class="flex justify-end gap-2 mt-5">
-      <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-split')">Cancel</button>
-      <button class="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" id="split-confirm-btn" onclick="confirmSplit()">Split</button>
+      <button class="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-split')">Cancel</button>
+      <button class="px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" id="split-confirm-btn" onclick="confirmSplit()">Split</button>
     </div>
   </div>
 </div>

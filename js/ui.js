@@ -534,19 +534,19 @@ function addSplitPartRow(container, amount, category, type) {
   const tx = store.transactions.find(t => t.id === splitTxId);
   const isPositive = tx && tx.amount > 0;
   const row = document.createElement('div');
-  row.className = 'grid grid-cols-[1fr_100px_120px_auto] gap-2 items-end p-3 border border-slate-200 rounded-lg';
+  row.className = 'grid grid-cols-[1fr_100px_120px_auto] gap-2 items-end p-3 border border-slate-200/80 rounded-lg';
   row.innerHTML = `
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Label / Category</label>
-      <input type="text" class="split-cat w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500" value="${esc(category)}" placeholder="e.g. SU (grant)">
+      <input type="text" class="split-cat w-full px-2.5 py-2 rounded-md border border-slate-200/80 text-sm focus:outline-none focus:border-blue-500" value="${esc(category)}" placeholder="e.g. SU (grant)">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Amount</label>
-      <input type="number" class="split-amt w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500" value="${Math.abs(amount)}" step="0.01" min="0">
+      <input type="number" class="split-amt w-full px-2.5 py-2 rounded-md border border-slate-200/80 text-sm tabular-nums focus:outline-none focus:border-blue-500" value="${Math.abs(amount)}" step="0.01" min="0">
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Type</label>
-      <select class="split-type w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500">
+      <select class="split-type w-full px-2.5 py-2 rounded-md border border-slate-200/80 text-sm focus:outline-none focus:border-blue-500">
         ${isPositive ? `
           <option value="income" ${type === 'income' ? 'selected' : ''}>Income</option>
           <option value="loan" ${type === 'loan' ? 'selected' : ''}>Loan inflow</option>
@@ -684,7 +684,7 @@ function renderTransactions() {
   document.getElementById('conflict-banner').innerHTML = getConflictBannerHtml(derived.conflicts);
   const summaryEl = document.getElementById('tx-summary');
   const visibleSuggestions = displayTxs.filter(tx => !tx.category && autoMatchMerchant(tx.merchant, tx.amount, store)?.category).length;
-  summaryEl.innerHTML = `${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}`;
+  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}`;
   const tbody = document.getElementById('tx-body');
   tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
@@ -699,7 +699,7 @@ function renderTransactions() {
       : band === 'medium'
         ? `${suggestBase} bg-amber-50 text-amber-600 border border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`
         : `${suggestBase} bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`;
-    const restoreAction = isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction">&#8634;</span>` : '';
+    const restoreAction = isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction" aria-label="Restore split">&#8634;</span>` : '';
     const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-600';
     const rowBg = isSplitChild ? 'bg-blue-50/30' : isDupe ? 'bg-red-50/30' : 'hover:bg-slate-50/50';
     return `<tr class="${rowBg}">
@@ -722,12 +722,12 @@ function renderTransactions() {
         `}
         <option value="ignore" ${tx.type === 'ignore' ? 'selected' : ''}>Ignore</option>
       </select></td>
-      <td class="py-3 px-3 text-center"><span class="cursor-pointer text-sm ${tx.covered ? 'opacity-100' : 'opacity-30 hover:opacity-70'} transition-opacity" onclick="toggleCovered(${tx.id})">${tx.covered ? '&#10003;' : '&#9675;'}</span></td>
+      <td class="py-3 px-3 text-center"><span class="cursor-pointer text-sm inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 ${tx.covered ? 'opacity-100' : 'opacity-30 hover:opacity-70'} transition-all" onclick="toggleCovered(${tx.id})" aria-label="${tx.covered ? 'Unmark covered' : 'Mark covered'}">${tx.covered ? '&#10003;' : '&#9675;'}</span></td>
       <td class="py-3 px-1">
-        <div class="flex items-center gap-1">
-          ${!isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all" onclick="openSplitModal(${tx.id})" title="Split transaction">&#x2702;</span>` : ''}
+        <div class="flex items-center gap-0.5">
+          ${!isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100" onclick="openSplitModal(${tx.id})" title="Split transaction" aria-label="Split">&#x2702;</span>` : ''}
           ${restoreAction}
-          <span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-red-500 transition-all" onclick="deleteTx(${tx.id})" title="Delete transaction">&#x2715;</span>
+          <span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-red-500 transition-all inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-red-50" onclick="deleteTx(${tx.id})" title="Delete transaction" aria-label="Delete">&#x2715;</span>
         </div>
       </td>
     </tr>`;
@@ -765,7 +765,7 @@ function renderDashboard() {
       <div class="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6 items-start scorecard-main">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">How the month went</div>
-          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 max-w-[11ch]">${data.budget.success ? `Under budget by ${verdictAmount}` : `Over budget by ${verdictAmount}`}</h2>
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 max-w-[11ch]" style="text-wrap:balance">${data.budget.success ? `Under budget by ${verdictAmount}` : `Over budget by ${verdictAmount}`}</h2>
           <p class="text-sm text-slate-500 leading-relaxed max-w-[52ch]">${data.budget.overBudgetCategories.length > 0
             ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview answers the month first, then gives you the top reasons before the lower drill-down cards.`
             : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</p>
@@ -924,12 +924,12 @@ function renderDashboard() {
       budgetHTML.push(`<div class="border border-slate-200 rounded-lg p-3">
         <div class="flex justify-between items-center text-sm mb-2">
           <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-500">${fmt(-actual)} / ${fmt(-budget)}</span>
+          <span class="text-xs text-slate-500 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
         </div>
         <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
-        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5">
+        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5 tabular-nums">
           <span>${pct}%</span>
           <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
         </div>
@@ -1047,12 +1047,12 @@ function renderYearlyDashboard() {
       budgetVsActual.push(`<div class="border border-slate-200 rounded-lg p-3">
         <div class="flex justify-between items-center text-sm mb-2">
           <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-500">${fmt(-actual)} / ${fmt(-budget)}</span>
+          <span class="text-xs text-slate-500 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
         </div>
         <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
-        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5">
+        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5 tabular-nums">
           <span>${pct}%</span>
           <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
         </div>
