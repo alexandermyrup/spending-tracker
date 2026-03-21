@@ -1178,7 +1178,7 @@ function renderBudgetEditor() {
       let rowTotal = 0;
       html += `<tr><td>${esc(cat)}</td>`;
       MONTH_KEYS.forEach(m => {
-        const val = yb[cat][m] || 0;
+        const val = Number(yb[cat][m]) || 0;
         rowTotal += val;
         if (group === SAVINGS_GROUP) savingTotals[m] += val;
         else if (group !== INCOME_GROUP) grandTotals[m] += val;

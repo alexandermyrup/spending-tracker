@@ -127,6 +127,17 @@ export function normalizeStore(rawStore) {
     cats.forEach(cat => ensureCategoryBudgetEntry(normalized.budgets, cat));
   });
 
+  // Sanitize budget values: coerce strings to numbers
+  Object.values(normalized.budgets).forEach(yearBudget => {
+    Object.keys(yearBudget).forEach(cat => {
+      if (typeof yearBudget[cat] === 'object' && yearBudget[cat] !== null) {
+        Object.keys(yearBudget[cat]).forEach(m => {
+          yearBudget[cat][m] = Number(yearBudget[cat][m]) || 0;
+        });
+      }
+    });
+  });
+
   const normalizedMap = {};
   Object.entries(normalized.merchantMap).forEach(([key, value]) => {
     normalizedMap[normalizeMerchantName(key)] = value;
