@@ -104,7 +104,6 @@ export const MERCHANT_PATTERNS = [
   { p: 'UBER *TRIP', c: 'Nightlife', t: 'spending' },
   { p: 'UBR* PENDING.UBER', c: 'Nightlife', t: 'spending' },
   { p: 'Revolut', c: 'Transfer out', t: 'spending' },
-  { p: 'Lars Myrup', c: 'Transfer out', t: 'spending' },
   { p: 'Oliver Myrup', c: 'Transfer out', t: 'spending' },
   { p: 'EVENTIM', c: 'Fun', t: 'spending' },
   { p: 'GEBR. HEINEMANN', c: 'Travel', t: 'spending' },
