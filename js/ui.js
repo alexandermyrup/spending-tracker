@@ -1021,72 +1021,94 @@ function renderYearlyDashboard() {
       <div class="text-xs text-slate-600 mt-1">of annual budget</div>
     </div>`;
 
-  const maxBar = Math.max(...data.monthData.map(m => Math.max(m.spend, m.budget)), 1);
-  document.getElementById('year-monthly-bars').innerHTML = `<div class="flex items-end gap-1" style="height:180px;padding-top:10px">${data.monthData.map(m => {
-    const hSpend = m.spend / maxBar * 140;
-    const hBudget = m.budget / maxBar * 140;
-    const isFuture = !m.hasActuals && !m.isPast;
-    const barColor = isFuture ? 'rgb(226 232 240)' : (m.spend > m.budget && m.budget > 0 ? 'rgb(239 68 68)' : 'rgb(37 99 235)');
-    const displayAmt = isFuture ? m.budget : m.spend;
-    const hDisplay = isFuture ? hBudget : hSpend;
-    return `<div class="flex-1 flex flex-col items-center justify-end h-full">
-      <div class="text-[11px] tabular-nums font-medium ${isFuture ? 'text-slate-500 italic' : 'text-slate-600'}">${displayAmt > 0 ? fmtShort(displayAmt) : ''}</div>
-      <div class="w-full relative">
-        <div class="w-full rounded-t" style="height:${Math.max(hDisplay, 2)}px;background:${barColor};min-height:2px;margin:2px 0;${isFuture ? 'opacity:0.5' : ''}"></div>
-        ${!isFuture && m.budget > 0 ? `<div class="absolute left-0 right-0 h-0.5 bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>` : ''}
-      </div>
-      <div class="text-[11px] text-slate-600">${m.month}</div>
-    </div>`;
-  }).join('')}</div>
-  <div class="flex gap-4 mt-2 text-[11px] text-slate-500">
-    <span><span class="inline-block w-3 h-3 bg-blue-600 rounded-sm align-middle mr-1"></span>Actual</span>
-    <span><span class="inline-block w-3 h-0.5 bg-amber-500 rounded align-middle mr-1"></span>Budget</span>
-    <span><span class="inline-block w-3 h-3 bg-slate-200 rounded-sm align-middle mr-1 opacity-50"></span>Forecast</span>
-  </div>`;
+  // Get previous year data for YoY comparison
+  const prevYear = String(Number.parseInt(year, 10) - 1);
+  const prevData = getYearlyDashboardData(prevYear, {
+    excludeCovered,
+    transactions: store.transactions,
+    budgets: store.budgets,
+    categories: store.categories,
+    loanBudget: store.loanBudget,
+    salaryShiftDay: store.salaryShiftDay
+  });
 
-  const sortedCats = Object.entries(data.catTotals).sort((a, b) => b[1] - a[1]);
-  const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  document.getElementById('year-category-chart').innerHTML = `<div class="space-y-1.5">${sortedCats.slice(0, 15).map(([cat, val], i) => {
-    const budgetAmt = data.catBudgets[cat] || 0;
-    const pct = val / Math.max(maxCat, budgetAmt) * 100;
-    const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
-    return `<div class="flex items-center gap-2">
-      <div class="w-28 text-right text-xs text-slate-600 truncate" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
-        <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
-          <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
-        </div>
-        ${budgetAmt > 0 ? `<div class="absolute top-0 bottom-0 w-0.5 bg-slate-900/50 z-[1]" style="left:${Math.min(budgetPct, 100)}%" title="Annual budget: ${fmt(-budgetAmt)}"></div>` : ''}
+  // Cash flow bars: income vs spending paired, YoY dot on spending
+  const maxCashflow = Math.max(...data.monthData.map(m => Math.max(m.inc, m.spend)), 1);
+  document.getElementById('year-cashflow-bars').innerHTML = `<div class="flex items-end gap-2" style="height:200px">${data.monthData.map((m, i) => {
+    const isFuture = !m.hasActuals && !m.isPast;
+    const hIncome = m.inc / maxCashflow * 170;
+    const hSpend = m.spend / maxCashflow * 170;
+    const prevSpend = prevData.monthData[i]?.spend || 0;
+    const hPrevSpend = prevSpend / maxCashflow * 170;
+    const overBudget = m.hasActuals && m.spend > m.budget && m.budget > 0;
+    const incomeClass = isFuture ? 'bg-emerald-100' : 'bg-emerald-500';
+    const spendClass = isFuture ? 'bg-slate-100' : (overBudget ? 'bg-red-500' : 'bg-blue-500');
+    const labelClass = isFuture ? 'text-slate-300' : 'text-slate-400';
+    const yoyDot = !isFuture && prevSpend > 0
+      ? `<div class="absolute left-1/2 -translate-x-1/2 w-[7px] h-[7px] rounded-full border-[1.5px] border-slate-400 bg-white" style="bottom:${hPrevSpend}px" title="${prevYear}: ${fmtShort(prevSpend)}"></div>`
+      : '';
+    return `<div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-[2px] items-end w-full justify-center relative" style="height:100%">
+        <div class="w-[42%] rounded-t ${incomeClass}" style="height:${Math.max(hIncome, 2)}px"></div>
+        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(isFuture ? m.budget / maxCashflow * 170 : hSpend, 2)}px">${yoyDot}</div>
       </div>
-      <div class="w-20 text-right text-xs tabular-nums flex-shrink-0">${fmt(-val)}</div>
+      <div class="text-[11px] ${labelClass} mt-2">${m.month}</div>
     </div>`;
   }).join('')}</div>`;
 
-  const budgetVsActual = [];
-  Object.entries(store.categories).forEach(([group, cats]) => {
-    if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
-    cats.forEach(cat => {
-      const budget = data.catBudgets[cat] || 0;
-      if (budget <= 0 && !(data.catTotals[cat] > 0)) return;
-      const actual = data.catTotals[cat] || 0;
-      const pct = budget > 0 ? Math.round(actual / budget * 100) : (actual > 0 ? 999 : 0);
-      const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
-      budgetVsActual.push(`<div class="border border-slate-200 rounded-lg p-3">
-        <div class="flex justify-between items-center text-sm mb-2">
-          <span class="font-medium">${esc(cat)}</span>
-          <span class="text-xs text-slate-600 tabular-nums">${fmt(-actual)} / ${fmt(-budget)}</span>
-        </div>
-        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of annual budget used">
-          <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
-        </div>
-        <div class="flex justify-between text-[11px] text-slate-600 mt-1.5 tabular-nums">
-          <span>${pct}%</span>
-          <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
-        </div>
-      </div>`);
-    });
+  // Net inflow area chart
+  const netData = data.monthData.map(m => {
+    const isFuture = !m.hasActuals && !m.isPast;
+    const net = isFuture ? (data.annual.avgIncome - m.budget) : (m.inc - m.spend - m.save);
+    return { net, isFuture, month: m.month };
   });
-  document.getElementById('year-budget-vs-actual').innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${budgetVsActual.join('') || '<p class="text-sm text-slate-500">No budgets set.</p>'}</div>`;
+  const maxNet = Math.max(Math.abs(Math.min(...netData.map(n => n.net))), Math.max(...netData.map(n => n.net)), 1);
+  const svgW = 720;
+  const svgH = 64;
+  const mid = svgH / 2;
+  const points = netData.map((n, i) => {
+    const x = 30 + (i * (svgW - 60) / 11);
+    const y = mid - (n.net / maxNet * (mid - 6));
+    return { x, y, isFuture: n.isFuture };
+  });
+  const actualPts = points.filter(p => !p.isFuture);
+  const forecastPts = points.filter(p => p.isFuture);
+  const lastActual = actualPts[actualPts.length - 1];
+  const actualLine = actualPts.map(p => `${p.x},${p.y}`).join(' ');
+  const forecastLine = lastActual
+    ? [lastActual, ...forecastPts].map(p => `${p.x},${p.y}`).join(' ')
+    : forecastPts.map(p => `${p.x},${p.y}`).join(' ');
+  const ytdNet = data.ytd.income - data.ytd.spend - data.ytd.save;
+  const eoyNet = data.forecast.remaining;
+  document.getElementById('year-net-inflow').innerHTML = `
+    <div class="relative" style="height:${svgH}px">
+      <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-full" preserveAspectRatio="none">
+        <line x1="0" y1="${mid}" x2="${svgW}" y2="${mid}" stroke="#f1f5f9" stroke-width="1"/>
+        ${actualLine ? `<polyline points="${actualLine}" fill="none" stroke="#10b981" stroke-width="2" stroke-linejoin="round"/>` : ''}
+        ${forecastLine ? `<polyline points="${forecastLine}" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
+        ${lastActual ? `<circle cx="${lastActual.x}" cy="${lastActual.y}" r="3.5" fill="${ytdNet >= 0 ? '#10b981' : '#ef4444'}"/>` : ''}
+      </svg>
+      <div class="absolute left-0 text-[9px] text-slate-300" style="top:0">+${fmtShort(maxNet)}</div>
+      <div class="absolute left-0 text-[9px] text-slate-300" style="top:${mid - 4}px">0</div>
+      <div class="absolute left-0 text-[9px] text-slate-300" style="bottom:0">-${fmtShort(maxNet)}</div>
+      ${lastActual ? `<div class="absolute text-[10px] font-medium ${ytdNet >= 0 ? 'text-emerald-400' : 'text-red-400'}" style="left:${lastActual.x + 8}px;top:${lastActual.y - 6}px">${fmtShort(ytdNet)}</div>` : ''}
+      ${forecastPts.length > 0 ? `<div class="absolute text-[10px] font-medium ${eoyNet >= 0 ? 'text-emerald-400' : 'text-red-400'}" style="right:4px;top:${points[points.length - 1].y - 12}px">EOY ${fmtShort(eoyNet)}</div>` : ''}
+    </div>`;
+
+  // Summary line
+  document.getElementById('year-cashflow-summary').innerHTML = `
+    <div class="flex justify-between items-center text-sm text-slate-500">
+      <div class="flex gap-4 tabular-nums">
+        <span>In: <strong class="text-emerald-600">${fmtShort(data.ytd.income)}</strong></span>
+        <span>Out: <strong class="text-slate-700">${fmtShort(data.ytd.spend)}</strong></span>
+        <span>Net: <strong class="${ytdNet >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdNet)}</strong></span>
+      </div>
+      <span class="text-[11px] ${data.ytd.income > data.ytd.spend ? 'text-emerald-600' : 'text-red-500'}">
+        ${data.ytd.income > data.ytd.spend
+          ? `Income exceeds spending by ${fmtShort(data.ytd.income - data.ytd.spend)}`
+          : `Spending exceeds income by ${fmtShort(data.ytd.spend - data.ytd.income)}`}
+      </span>
+    </div>`;
 
   document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/30 to-orange-50/20 p-6 sm:p-8">
     <div class="relative z-10">
