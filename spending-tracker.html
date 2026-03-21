@@ -4,512 +4,381 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spending Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+    },
+  },
+}
+</script>
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #f6f7fb; --card: #fff; --card-strong: #fff; --border: #dfe3ea; --text: #181a1f; --text2: #667085;
-  --accent: #2563eb; --accent-light: #dbeafe; --green: #16a34a; --green-light: #dcfce7;
-  --red: #dc2626; --red-light: #fee2e2; --orange: #ea580c; --orange-light: #fff7ed;
-  --purple: #7c3aed; --purple-light: #f3e8ff; --ink: #0f172a; --paper-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  --radius: 16px; --shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
-}
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
-button { cursor: pointer; font-family: inherit; }
-input, select, textarea { font-family: inherit; }
-
-.app { max-width: 1280px; margin: 0 auto; padding: 16px; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-.header-title { display: flex; align-items: center; gap: 10px; }
-.header h1 { font-size: 20px; font-weight: 600; }
-.version-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--text2); background: #f3f4f6; border: 1px solid var(--border); }
-.header-actions { display: flex; gap: 8px; }
-
-.tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
-.tab { padding: 8px 16px; background: none; border: none; font-size: 14px; color: var(--text2); border-bottom: 2px solid transparent; transition: all 0.15s; }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
-.card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-.card h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
-
-.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
-.stat-card .label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.stat-card .value { font-size: 22px; font-weight: 600; }
-.stat-card .sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
-.stat-card .value.positive { color: var(--green); }
-.stat-card .value.negative { color: var(--red); }
-
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: all 0.15s; }
-.btn:hover { background: #f8fafc; }
-.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
-.btn-danger { color: var(--red); border-color: var(--red); }
-.btn-danger:hover { background: var(--red-light); }
-
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; padding: 8px 10px; font-weight: 500; color: var(--text2); border-bottom: 2px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
-td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-td:nth-child(3) { white-space: normal; min-width: 120px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-tr:hover { background: #f9fafb; }
-.amount { font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; }
-.amount.expense { color: var(--red); }
-.amount.income { color: var(--green); }
-.amount.saving { color: var(--purple); }
-
-.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
-.badge-category { background: var(--accent-light); color: var(--accent); }
-.badge-covered { background: var(--green-light); color: var(--green); }
-.badge-uncategorized { background: var(--orange-light); color: var(--orange); }
-.badge-duplicate { background: #fef2f2; color: var(--red); border: 1px dashed var(--red); padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 500; cursor: help; margin-left: 4px; }
-
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 4px; }
-.form-group input, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
-.form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-
-.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
-.modal-overlay.open { display: flex; }
-.modal { background: var(--card); border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-.modal h2 { margin-bottom: 16px; }
-.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
-
-.cat-select-wrap { position: relative; display: inline-block; }
-.cat-select-trigger { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px dashed var(--border); background: #f9fafb; transition: all 0.15s; }
-.cat-select-trigger:hover { border-color: var(--accent); background: var(--accent-light); }
-.cat-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 50; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); min-width: 220px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
-.cat-dropdown.open { display: block; }
-.cat-dropdown input { width: 100%; padding: 8px 10px; border: none; border-bottom: 1px solid var(--border); font-size: 13px; outline: none; }
-.cat-dropdown .cat-option { padding: 6px 10px; cursor: pointer; font-size: 13px; }
-.cat-dropdown .cat-option:hover { background: var(--accent-light); }
-.cat-dropdown .cat-group-header { padding: 6px 10px; font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; background: #f9fafb; }
-.cat-dropdown .cat-new { padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--accent); font-weight: 500; border-top: 1px solid var(--border); }
-.cat-dropdown .cat-new:hover { background: var(--accent-light); }
-
-.covered-toggle { cursor: pointer; font-size: 14px; opacity: 0.3; transition: opacity 0.15s; }
-.covered-toggle:hover { opacity: 0.7; }
-.covered-toggle.active { opacity: 1; }
-.type-select { padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; background: var(--card); cursor: pointer; }
-
-.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-.filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
-.dashboard-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); }
-.dashboard-controls .control-cluster { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: #eef2ff; }
-.dashboard-controls .control-field { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); font-size: 13px; color: var(--text2); }
-.dashboard-controls .control-field select { border: none; padding: 0; background: transparent; font-size: 13px; font-weight: 500; color: var(--text); }
-.dashboard-controls .control-field select:focus { outline: none; }
-.dashboard-controls .control-check { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; font-size: 13px; color: var(--text2); }
-.overview-shell { display: grid; gap: 18px; }
-.overview-support-grid, .overview-detail-grid { display: grid; gap: 16px; }
-.overview-support-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.overview-detail-grid { grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); }
-.overview-detail-stack { display: grid; gap: 16px; }
-.muted-card { background: var(--card); }
-.section-heading-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
-.section-heading-row h2 { margin-bottom: 0; }
-.overview-hero { display: grid; gap: 16px; }
-.scorecard-card { background: linear-gradient(135deg, #f8fbff 0%, #f7faf8 100%); border: 1px solid #dbe5f0; border-radius: 24px; padding: 24px; box-shadow: var(--shadow); }
-.scorecard-topline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
-.scorecard-month { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text2); }
-.scorecard-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
-.scorecard-badge.good { background: var(--green-light); color: var(--green); }
-.scorecard-badge.bad { background: var(--red-light); color: var(--red); }
-.scorecard-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr); gap: 20px; align-items: start; }
-.scorecard-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text2); margin-bottom: 8px; }
-.scorecard-verdict { font-size: clamp(34px, 4.6vw, 54px); line-height: 1; letter-spacing: -0.04em; margin-bottom: 10px; max-width: 11ch; font-weight: 700; }
-.scorecard-copy { font-size: 15px; line-height: 1.55; color: var(--text2); max-width: 52ch; }
-.scorecard-facts { display: grid; gap: 10px; }
-.scorecard-fact { padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; background: #fbfcfe; }
-.scorecard-fact-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
-.scorecard-fact-value { font-size: 24px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.scorecard-fact-meta { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text2); }
-.scorecard-breakdown { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
-.scorecard-breakdown-item { padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--border); }
-.scorecard-breakdown-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text2); margin-bottom: 6px; }
-.scorecard-breakdown-value { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.scorecard-breakdown-meta { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text2); }
-.diagnosis-list, .summary-list { display: grid; gap: 0; }
-.diagnosis-card { background: var(--card); }
-.diagnosis-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); }
-.diagnosis-item:first-child { border-top: 0; padding-top: 0; }
-.diagnosis-name { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-.diagnosis-copy { font-size: 13px; line-height: 1.5; color: var(--text2); }
-.diagnosis-over { font-size: 16px; font-weight: 700; color: var(--red); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.diagnosis-type { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 8px; }
-.diagnosis-type.budget-issue { background: #eff6ff; color: var(--accent); }
-.diagnosis-type.one-off { background: #fff7ed; color: var(--orange); }
-.diagnosis-type.recurring-habit { background: #fef2f2; color: var(--red); }
-.diagnosis-type.no-history { background: #f3f4f6; color: var(--text2); }
-.summary-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); font-size: 14px; }
-.summary-row:first-child { border-top: 0; padding-top: 0; }
-.summary-row strong { font-variant-numeric: tabular-nums; }
-.summary-row .meta { font-size: 12px; color: var(--text2); margin-top: 3px; }
-.empty-card-state { color: var(--text2); font-size: 14px; line-height: 1.5; padding: 8px 0; }
-.detail-stage { display: grid; gap: 18px; }
-.detail-stage-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 0 2px; }
-.detail-stage-head h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.detail-stage-head p { max-width: 56ch; color: var(--text2); font-size: 13px; }
-
-.bar-chart { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: flex; align-items: center; gap: 8px; }
-.bar-label { width: 120px; font-size: 12px; text-align: right; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
-.bar-track { flex: 1; height: 24px; background: #f1f5f9; border-radius: 8px; position: relative; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 8px; transition: width 0.3s; display: flex; align-items: center; padding-left: 8px; }
-.bar-fill span { font-size: 11px; font-weight: 500; color: #fff; white-space: nowrap; }
-.bar-budget-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: 0.5; z-index: 1; }
-.bar-value { width: 80px; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-
-.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.budget-item { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.budget-item .budget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.budget-item .budget-cat { font-size: 13px; font-weight: 500; }
-.budget-item .budget-amount { font-size: 12px; color: var(--text2); }
-.budget-progress { width: 100%; height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
-.budget-progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-.budget-progress-fill.ok { background: var(--accent); }
-.budget-progress-fill.warn { background: var(--orange); }
-.budget-progress-fill.over { background: var(--red); }
-.budget-numbers { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; color: var(--text2); }
-
-.import-area { border: 2px dashed var(--border); border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.15s; }
-.import-area:hover, .import-area.dragover { border-color: var(--accent); background: var(--accent-light); }
-.import-area p { color: var(--text2); font-size: 14px; margin-top: 8px; }
-.import-area input { display: none; }
-
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
-@media (max-width: 960px) {
-  .grid-2, .grid-3, .overview-hero, .overview-support-grid, .overview-detail-grid, .scorecard-main { grid-template-columns: 1fr; }
-  .scorecard-breakdown { grid-template-columns: 1fr; }
-  .bar-label { width: 88px; }
-}
-
-.cat-list { display: flex; flex-direction: column; gap: 2px; }
-.cat-list-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
-.cat-list-item:hover { background: #f9fafb; }
-.cat-list-group { margin-bottom: 16px; }
-.cat-list-group h4 { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
-
-/* Budget spreadsheet grid */
-.budget-table-wrap { overflow-x: auto; }
-.budget-table { border-collapse: collapse; font-size: 12px; width: 100%; }
-.budget-table th, .budget-table td { padding: 4px 6px; border: 1px solid var(--border); white-space: nowrap; }
-.budget-table th { background: #f8f9fa; font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 1; }
-.budget-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: #f0f1f3; min-width: 140px; }
-.budget-table td:first-child { font-weight: 500; position: sticky; left: 0; background: var(--card); z-index: 1; min-width: 140px; }
-.budget-table .group-row td { background: #f0f4f8; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; color: var(--text2); }
-.budget-table .total-row td { background: #f8f9fa; font-weight: 600; border-top: 2px solid var(--border); }
-.budget-table input[type="number"] { width: 60px; padding: 2px 4px; border: 1px solid transparent; border-radius: 3px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; }
-.budget-table input[type="number"]:hover { border-color: var(--border); }
-.budget-table input[type="number"]:focus { outline: none; border-color: var(--accent); background: var(--accent-light); }
-.budget-table .col-total { background: #f8f9fa; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
-.budget-table .col-avg { background: #f8f9fa; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: var(--text2); }
-
-/* Surplus card */
-.dash-view-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.surplus-card { background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%); border: 1px solid #c8d6e5; border-radius: var(--radius); padding: 20px; margin-bottom: 24px; }
-.surplus-card h2 { font-size: 16px; margin-bottom: 12px; }
-.surplus-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-.surplus-row.total { border-top: 2px solid rgba(0,0,0,0.1); padding-top: 10px; margin-top: 6px; font-weight: 600; font-size: 16px; }
-.surplus-row .surplus-label { color: var(--text2); }
-.surplus-row .surplus-val { font-variant-numeric: tabular-nums; font-weight: 500; }
-
-.flex { display: flex; }
-.flex-between { display: flex; justify-content: space-between; align-items: center; }
-.gap-8 { gap: 8px; }
-.mb-16 { margin-bottom: 16px; }
-.mb-24 { margin-bottom: 24px; }
-.text-sm { font-size: 13px; }
-.text-xs { font-size: 11px; }
-.text-muted { color: var(--text2); }
-.fw-500 { font-weight: 500; }
-.mono { font-variant-numeric: tabular-nums; }
-.hidden { display: none !important; }
-
-/* Split transaction */
-.split-part { display: grid; grid-template-columns: 1fr 100px 120px; gap: 8px; align-items: end; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
-.split-part .form-group { margin-bottom: 0; }
-.split-part .remove-part { align-self: end; padding: 8px; color: var(--red); cursor: pointer; font-size: 16px; background: none; border: none; }
-.split-icon { cursor: pointer; font-size: 13px; color: var(--text2); opacity: 0.5; transition: opacity 0.15s; }
-.split-icon:hover { opacity: 1; color: var(--accent); }
-.badge-split { background: #f0f4ff; color: var(--accent); font-size: 10px; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
-.tx-actions { display: flex; gap: 4px; align-items: center; }
-.cat-suggest { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; cursor: pointer; background: #fff7ed; color: var(--orange); border: 1px dashed var(--orange); transition: all 0.15s; }
-.cat-suggest:hover { background: var(--green-light); color: var(--green); border-color: var(--green); }
-.cat-suggest-high { background: var(--green-light); color: var(--green); border: 1px solid var(--green); border-style: solid; }
-.cat-suggest-high:hover { background: #bbf7d0; }
-.cat-suggest-medium { background: #fff7ed; color: var(--orange); border: 1px solid var(--orange); border-style: solid; }
-.cat-suggest-medium:hover { background: var(--green-light); color: var(--green); border-color: var(--green); }
-.badge-recurring { display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px; font-size: 10px; color: var(--accent); background: #f0f4ff; margin-left: 4px; cursor: help; }
-.conflict-banner { background: #fef2f2; border: 1px solid var(--red); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
-.conflict-banner summary { cursor: pointer; font-weight: 500; color: var(--red); }
-.conflict-banner .conflict-list { margin-top: 8px; }
-.conflict-banner .conflict-item { padding: 4px 0; border-bottom: 1px solid #fee2e2; font-size: 12px; }
-.cat-group-pick:hover { background: var(--accent-light); color: var(--accent); }
-
-.toast { position: fixed; bottom: 20px; right: 20px; background: var(--text); color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 200; transform: translateY(100px); opacity: 0; transition: all 0.3s; }
-.toast.show { transform: translateY(0); opacity: 1; }
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    vertical-align: middle;
+    font-size: 20px;
+  }
+  /* Navigation */
+  .nav-item { color: rgb(100 116 139); }
+  .nav-item:hover { background: rgb(241 245 249); color: rgb(51 65 85); }
+  .nav-item.active { background: white; color: rgb(15 23 42); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .mobile-nav-item { color: rgb(100 116 139); }
+  .mobile-nav-item.active { background: rgb(239 246 255); color: rgb(37 99 235); border-radius: 0.5rem; }
+  /* Dashboard view toggle */
+  .dash-view-btn { color: rgb(100 116 139); }
+  .dash-view-btn.active { background: rgb(37 99 235); color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+  /* Category dropdown */
+  .cat-dropdown { display: none; position: absolute; top: 100%; left: 0; z-index: 50; background: white; border: 1px solid rgb(226 232 240); border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.12); min-width: 220px; max-height: 300px; overflow-y: auto; margin-top: 4px; }
+  .cat-dropdown.open { display: block; }
+  .cat-dropdown input { width: 100%; padding: 10px 12px; border: none; border-bottom: 1px solid rgb(226 232 240); font-size: 13px; outline: none; border-radius: 0.75rem 0.75rem 0 0; }
+  .cat-dropdown .cat-option { padding: 7px 12px; cursor: pointer; font-size: 13px; }
+  .cat-dropdown .cat-option:hover { background: rgb(239 246 255); }
+  .cat-dropdown .cat-group-header { padding: 7px 12px; font-size: 10px; font-weight: 600; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.05em; background: rgb(248 250 252); }
+  .cat-dropdown .cat-new { padding: 7px 12px; cursor: pointer; font-size: 13px; color: rgb(37 99 235); font-weight: 500; border-top: 1px solid rgb(226 232 240); }
+  .cat-dropdown .cat-new:hover { background: rgb(239 246 255); }
+  .cat-group-pick:hover { background: rgb(239 246 255); color: rgb(37 99 235); }
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+  .modal-overlay.open { display: flex; }
+  /* Toast */
+  .toast-el { transform: translateY(100px); opacity: 0; transition: all 0.3s ease; }
+  .toast-el.show { transform: translateY(0); opacity: 1; }
+  /* Import drag */
+  .import-area.dragover { border-color: rgb(37 99 235) !important; background: rgb(239 246 255) !important; }
+  /* Budget table */
+  .budget-table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .budget-table th, .budget-table td { padding: 4px 6px; border: 1px solid rgb(226 232 240); white-space: nowrap; }
+  .budget-table th { background: rgb(248 250 252); font-weight: 500; text-align: center; position: sticky; top: 0; z-index: 1; font-size: 11px; color: rgb(100 116 139); text-transform: uppercase; letter-spacing: 0.04em; }
+  .budget-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: rgb(241 245 249); min-width: 140px; }
+  .budget-table td:first-child { font-weight: 500; position: sticky; left: 0; background: white; z-index: 1; min-width: 140px; }
+  .budget-table .group-row td { background: rgb(241 245 249); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; color: rgb(100 116 139); }
+  .budget-table .total-row td { background: rgb(248 250 252); font-weight: 600; border-top: 2px solid rgb(203 213 225); }
+  .budget-table input[type="number"] { width: 60px; padding: 2px 4px; border: 1px solid transparent; border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; }
+  .budget-table input[type="number"]:hover { border-color: rgb(226 232 240); }
+  .budget-table input[type="number"]:focus { outline: none; border-color: rgb(37 99 235); background: rgb(239 246 255); }
+  .budget-table .col-total { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+  .budget-table .col-avg { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; color: rgb(100 116 139); }
+  @media (max-width: 1024px) {
+    .scorecard-main { grid-template-columns: 1fr !important; }
+    .scorecard-breakdown { grid-template-columns: 1fr !important; }
+  }
 </style>
 </head>
-<body>
-<div class="app">
-  <div class="header">
-    <div class="header-title">
-      <h1>Spending Tracker</h1>
-      <span id="app-version-badge" class="version-badge">v0.1</span>
-    </div>
-    <div class="header-actions">
-      <button class="btn" onclick="exportData()">Export JSON</button>
-      <label class="btn"><input type="file" accept=".json" style="display:none" onchange="importJSON(event)">Import JSON</label>
-    </div>
-  </div>
+<body class="bg-slate-50 text-slate-900 antialiased">
 
-  <div class="tabs">
-    <button class="tab active" data-tab="dashboard">Dashboard</button>
-    <button class="tab" data-tab="transactions">Transactions</button>
-    <button class="tab" data-tab="import">Import CSV</button>
-    <button class="tab" data-tab="budgets">Budgets</button>
-    <button class="tab" data-tab="categories">Categories</button>
+<!-- Top Nav -->
+<nav class="fixed top-0 w-full h-14 flex items-center justify-between px-4 sm:px-6 bg-white/80 backdrop-blur-md border-b border-slate-200/60 z-50">
+  <h2 id="nav-section-title" class="text-sm font-semibold text-slate-900 lg:hidden">Dashboard</h2>
+  <div class="flex items-center gap-2 ml-auto">
+    <span id="app-version-badge" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200">v0.2</span>
+    <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors" onclick="exportData()">
+      <span class="material-symbols-outlined" style="font-size:18px">download</span>
+      <span class="hidden sm:inline">Export</span>
+    </button>
+    <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors">
+      <span class="material-symbols-outlined" style="font-size:18px">upload</span>
+      <span class="hidden sm:inline">Import JSON</span>
+      <input type="file" accept=".json" class="hidden" onchange="importJSON(event)">
+    </label>
   </div>
+</nav>
 
-  <!-- DASHBOARD -->
-  <div id="tab-dashboard" class="tab-content active">
-    <div class="dashboard-controls">
-      <div class="control-cluster">
-        <button class="btn btn-sm dash-view-btn active" data-view="monthly" onclick="switchDashView('monthly')">Monthly</button>
-        <button class="btn btn-sm dash-view-btn" data-view="yearly" onclick="switchDashView('yearly')">Yearly</button>
+<!-- Sidebar -->
+<aside class="hidden lg:flex fixed left-0 top-0 h-screen w-60 flex-col bg-slate-50 border-r border-slate-200 z-40">
+  <div class="px-5 pt-5 pb-3">
+    <h1 class="text-lg font-bold text-slate-900">Spending Tracker</h1>
+    <p class="text-[11px] font-medium text-slate-400 tracking-wider uppercase mt-0.5">Personal Finance</p>
+  </div>
+  <nav class="flex-1 px-3 space-y-0.5 mt-4">
+    <a href="#" data-section="dashboard" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+      <span class="material-symbols-outlined">dashboard</span> Dashboard
+    </a>
+    <a href="#" data-section="transactions" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+      <span class="material-symbols-outlined">receipt_long</span> Transactions
+    </a>
+    <a href="#" data-section="import" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+      <span class="material-symbols-outlined">upload_file</span> Import CSV
+    </a>
+    <a href="#" data-section="budgets" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+      <span class="material-symbols-outlined">calculate</span> Budgets
+    </a>
+    <a href="#" data-section="categories" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+      <span class="material-symbols-outlined">category</span> Categories
+    </a>
+  </nav>
+</aside>
+
+<!-- Main Content -->
+<main class="lg:ml-60 pt-14 min-h-screen pb-20 lg:pb-0">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="section-content">
+      <div class="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div class="inline-flex rounded-lg bg-slate-100 p-0.5">
+          <button class="dash-view-btn active px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="monthly" onclick="switchDashView('monthly')">Monthly</button>
+          <button class="dash-view-btn px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="yearly" onclick="switchDashView('yearly')">Yearly</button>
+        </div>
+        <select id="dash-month" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderDashboard()"></select>
+        <select id="dash-year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderYearlyDashboard()" style="display:none"></select>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> Exclude covered
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600">
+          Salary shift
+          <select id="dash-salary-shift" class="px-2 py-1 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="saveSalaryShiftDay(this.value)">
+            <option value="0">Off</option>
+            <option value="20">20th</option><option value="21">21st</option><option value="22">22nd</option>
+            <option value="23">23rd</option><option value="24">24th</option><option value="25">25th</option>
+            <option value="26">26th</option><option value="27">27th</option><option value="28">28th</option><option value="29">29th</option>
+          </select>
+        </label>
       </div>
-      <label class="control-field">Month
-        <select id="dash-month" onchange="renderDashboard()"></select>
-      </label>
-      <select id="dash-year" onchange="renderYearlyDashboard()" style="display:none"></select>
-      <label class="control-check">
-        <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard()"> Exclude covered
-      </label>
-      <label class="control-field">Salary shift
-        <select id="dash-salary-shift" onchange="saveSalaryShiftDay(this.value)">
-          <option value="0">Off</option>
-          <option value="20">20th</option>
-          <option value="21">21st</option>
-          <option value="22">22nd</option>
-          <option value="23">23rd</option>
-          <option value="24">24th</option>
-          <option value="25">25th</option>
-          <option value="26">26th</option>
-          <option value="27">27th</option>
-          <option value="28">28th</option>
-          <option value="29">29th</option>
-        </select>
-      </label>
-    </div>
-    <!-- Monthly view -->
-      <div id="dash-monthly-view" class="overview-shell">
-      <div class="overview-hero">
+
+      <!-- Monthly view -->
+      <div id="dash-monthly-view" class="space-y-6">
         <div id="dash-surplus"></div>
-      </div>
-      <div class="card diagnosis-card">
-        <div class="section-heading-row">
-          <h2>Budget Diagnosis</h2>
-          <span class="text-sm text-muted">Top overspends only</span>
-        </div>
-        <div id="dash-diagnosis"></div>
-      </div>
-      <div class="overview-support-grid">
-        <div class="card muted-card">
-          <div class="section-heading-row">
-            <h2>Savings Progress</h2>
-            <span class="text-sm text-muted">Progress, not budget pressure</span>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <div class="flex justify-between items-baseline mb-4">
+            <h2 class="text-base font-semibold">Budget Diagnosis</h2>
+            <span class="text-xs text-slate-500">Top overspends only</span>
           </div>
-          <div id="dash-savings-progress"></div>
+          <div id="dash-diagnosis"></div>
         </div>
-        <div class="card muted-card">
-          <div class="section-heading-row">
-            <h2>Recurring Obligations</h2>
-            <span class="text-sm text-muted">Preview only</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <div class="flex justify-between items-baseline mb-4">
+              <h2 class="text-base font-semibold">Savings Progress</h2>
+              <span class="material-symbols-outlined text-slate-400" style="font-size:20px">savings</span>
+            </div>
+            <div id="dash-savings-progress"></div>
           </div>
-          <div id="dash-obligations"></div>
-        </div>
-      </div>
-      <div class="detail-stage">
-        <div class="detail-stage-head">
-          <h2>Drill Down</h2>
-          <p>Only look below if you want the category, merchant, and trend detail behind the month.</p>
-        </div>
-        <div class="overview-detail-grid">
-          <div class="overview-detail-stack">
-            <div class="card">
-              <div class="section-heading-row">
-                <h2>Spending by Category</h2>
-                <span class="text-sm text-muted">Main drill-down</span>
-              </div>
-              <div id="dash-category-chart"></div>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <div class="flex justify-between items-baseline mb-4">
+              <h2 class="text-base font-semibold">Recurring Obligations</h2>
+              <span class="material-symbols-outlined text-slate-400" style="font-size:20px">event_repeat</span>
             </div>
-            <div class="card">
-              <div class="section-heading-row">
-                <h2>Budget vs Actual</h2>
-                <span class="text-sm text-muted">Category detail</span>
-              </div>
-              <div id="dash-budget"></div>
-            </div>
+            <div id="dash-obligations"></div>
           </div>
-          <div class="overview-detail-stack">
-            <div class="card">
-              <div class="section-heading-row">
-                <h2>Top Merchants</h2>
-                <span class="text-sm text-muted">Largest outflows</span>
+        </div>
+        <div class="space-y-4">
+          <div class="flex justify-between items-center px-1">
+            <h2 class="text-base font-semibold">Drill Down</h2>
+            <p class="text-sm text-slate-500 max-w-md text-right hidden sm:block">Category, merchant, and trend detail.</p>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
+            <div class="space-y-6">
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h2 class="text-base font-semibold mb-4">Spending by Category</h2>
+                <div id="dash-category-chart"></div>
               </div>
-              <div id="dash-merchants"></div>
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h2 class="text-base font-semibold mb-4">Budget vs Actual</h2>
+                <div id="dash-budget"></div>
+              </div>
             </div>
-            <div class="card">
-              <div class="section-heading-row">
-                <h2>Monthly Trend</h2>
-                <span class="text-sm text-muted">Recent context</span>
+            <div class="space-y-6">
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h2 class="text-base font-semibold mb-4">Top Merchants</h2>
+                <div id="dash-merchants"></div>
               </div>
-              <div id="dash-trend"></div>
+              <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                <h2 class="text-base font-semibold mb-4">Monthly Trend</h2>
+                <div id="dash-trend"></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <!-- Yearly view -->
-    <div id="dash-yearly-view" style="display:none">
-      <div id="year-summary"></div>
-      <div id="year-stats" class="stats-row"></div>
-      <div class="card mb-24"><h2>Monthly Breakdown</h2><div id="year-monthly-bars"></div></div>
-      <div class="grid-3 mb-24">
-        <div class="card"><h2>Annual Spending by Category</h2><div id="year-category-chart"></div></div>
-        <div class="card"><h2>Budget vs Actual (Year)</h2><div id="year-budget-vs-actual"></div></div>
-      </div>
-      <div class="card"><h2>Forecast</h2><div id="year-forecast"></div></div>
-    </div>
-  </div>
 
-  <!-- TRANSACTIONS -->
-  <div id="tab-transactions" class="tab-content">
-    <div class="filter-bar mb-16">
-      <select id="tx-month-filter" onchange="renderTransactions()"><option value="all">All months</option></select>
-      <select id="tx-group-filter" onchange="updateCatFilter(); renderTransactions()">
-        <option value="all">All groups</option>
-      </select>
-      <select id="tx-cat-filter" onchange="renderTransactions()"><option value="all">All categories</option></select>
-      <select id="tx-type-filter" onchange="renderTransactions()">
-        <option value="all">All types</option><option value="spending">Spending</option>
-        <option value="saving">Saving/Investing</option><option value="income">Income</option><option value="ignore">Ignored</option>
-      </select>
-      <select id="tx-review-mode" onchange="renderTransactions()">
-        <option value="all">All rows</option>
-        <option value="uncategorized">Review: Uncategorized</option>
-        <option value="low-certainty">Review: Low certainty</option>
-        <option value="conflicts">Review: Conflicts</option>
-        <option value="recent-imports">Review: Recent imports</option>
-      </select>
-      <input type="text" id="tx-search" placeholder="Search merchant..." oninput="renderTransactions()" style="margin-left: auto;">
-      <button class="btn btn-sm btn-danger" onclick="clearAllTransactions()">Clear All</button>
-    </div>
-    <div id="conflict-banner"></div>
-    <div id="tx-summary" class="text-sm text-muted mb-16"></div>
-    <div class="card">
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Merchant</th><th>Description</th><th style="text-align:right">Amount</th><th>Category</th><th>Type</th><th style="text-align:center">Covered</th><th></th></tr></thead>
-          <tbody id="tx-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- IMPORT -->
-  <div id="tab-import" class="tab-content">
-    <div class="card mb-24">
-      <h2>Import Nordea CSV</h2>
-      <p class="text-sm text-muted mb-16">Export from Nordea Netbank and drop the CSV file below. Duplicates are skipped automatically.</p>
-      <div class="import-area" id="import-area" onclick="document.getElementById('csv-input').click()">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-        <p>Drop CSV file here or click to browse</p>
-        <input type="file" id="csv-input" accept=".csv" onchange="handleCSV(event)">
-      </div>
-      <div id="import-preview" class="hidden" style="margin-top: 20px;">
-        <div class="flex-between mb-16">
-          <span id="import-count" class="text-sm fw-500"></span>
-          <div class="flex gap-8">
-            <button class="btn btn-primary" onclick="confirmImport()">Import All</button>
-            <button class="btn" onclick="cancelImport()">Cancel</button>
+      <!-- Yearly view -->
+      <div id="dash-yearly-view" style="display:none" class="space-y-6">
+        <div id="year-summary"></div>
+        <div id="year-stats" class="grid grid-cols-2 sm:grid-cols-4 gap-4"></div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+          <h2 class="text-base font-semibold mb-4">Monthly Breakdown</h2>
+          <div id="year-monthly-bars"></div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h2 class="text-base font-semibold mb-4">Annual Spending by Category</h2>
+            <div id="year-category-chart"></div>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h2 class="text-base font-semibold mb-4">Budget vs Actual (Year)</h2>
+            <div id="year-budget-vs-actual"></div>
           </div>
         </div>
-        <div id="import-meta" class="text-sm text-muted mb-16" style="display:flex;gap:12px;flex-wrap:wrap"></div>
-        <div class="table-wrap" style="max-height: 400px; overflow-y: auto;">
-          <table><thead><tr><th>Date</th><th>Merchant</th><th>Description</th><th style="text-align:right">Amount</th><th>Auto Category</th></tr></thead>
-          <tbody id="import-body"></tbody></table>
+        <div id="year-forecast"></div>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section id="tab-transactions" class="section-content hidden">
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <select id="tx-month-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All months</option></select>
+        <select id="tx-group-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="updateCatFilter(); renderTransactions()"><option value="all">All groups</option></select>
+        <select id="tx-cat-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All categories</option></select>
+        <select id="tx-type-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
+          <option value="all">All types</option><option value="spending">Spending</option>
+          <option value="saving">Saving/Investing</option><option value="income">Income</option><option value="ignore">Ignored</option>
+        </select>
+        <select id="tx-review-mode" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
+          <option value="all">All rows</option>
+          <option value="uncategorized">Review: Uncategorized</option>
+          <option value="low-certainty">Review: Low certainty</option>
+          <option value="conflicts">Review: Conflicts</option>
+          <option value="recent-imports">Review: Recent imports</option>
+        </select>
+        <input type="text" id="tx-search" placeholder="Search merchant..." class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white ml-auto focus:outline-none focus:border-blue-500" oninput="renderTransactions()">
+        <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors" onclick="clearAllTransactions()">Clear All</button>
+      </div>
+      <div id="conflict-banner"></div>
+      <div id="tx-summary" class="text-sm text-slate-500 mb-4"></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="border-b-2 border-slate-200 bg-slate-50/50">
+              <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th class="py-3 px-3">Date</th><th class="py-3 px-3">Merchant</th><th class="py-3 px-3">Description</th>
+                <th class="py-3 px-3 text-right">Amount</th><th class="py-3 px-3">Category</th><th class="py-3 px-3">Type</th>
+                <th class="py-3 px-3 text-center">Covered</th><th class="py-3 px-1"></th>
+              </tr>
+            </thead>
+            <tbody id="tx-body" class="divide-y divide-slate-100"></tbody>
+          </table>
         </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- BUDGETS -->
-  <div id="tab-budgets" class="tab-content">
-    <div class="flex-between mb-16">
-      <div>
-        <h2 style="font-size: 16px; margin-bottom: 4px;">Monthly Budget Grid</h2>
-        <p class="text-sm text-muted">Edit individual cells for months that differ. Right-click a cell to fill the rest of the year.</p>
+    <!-- IMPORT -->
+    <section id="tab-import" class="section-content hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6">
+        <h2 class="text-base font-semibold mb-1">Import Nordea CSV</h2>
+        <p class="text-sm text-slate-500 mb-5">Export from Nordea Netbank and drop the CSV file below. Duplicates are skipped automatically.</p>
+        <div class="import-area border-2 border-dashed border-slate-300 rounded-2xl p-10 sm:p-16 text-center cursor-pointer transition-all hover:border-blue-500 hover:bg-blue-50/30" id="import-area" onclick="document.getElementById('csv-input').click()">
+          <span class="material-symbols-outlined text-slate-400 mb-3 block mx-auto" style="font-size:40px">cloud_upload</span>
+          <p class="text-sm text-slate-500">Drop CSV file here or click to browse</p>
+          <input type="file" id="csv-input" class="hidden" accept=".csv" onchange="handleCSV(event)">
+        </div>
+        <div id="import-preview" class="hidden mt-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <span id="import-count" class="text-sm font-medium"></span>
+            <div class="flex gap-2">
+              <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="confirmImport()">Import All</button>
+              <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="cancelImport()">Cancel</button>
+            </div>
+          </div>
+          <div id="import-meta" class="text-sm text-slate-500 mb-4 flex flex-wrap gap-3"></div>
+          <div class="overflow-x-auto max-h-[400px] overflow-y-auto rounded-lg border border-slate-200">
+            <table class="w-full text-left text-sm">
+              <thead class="border-b-2 border-slate-200 bg-slate-50/50 sticky top-0">
+                <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  <th class="py-3 px-3">Date</th><th class="py-3 px-3">Merchant</th><th class="py-3 px-3">Description</th>
+                  <th class="py-3 px-3 text-right">Amount</th><th class="py-3 px-3">Auto Category</th>
+                </tr>
+              </thead>
+              <tbody id="import-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div class="flex gap-8">
-        <select id="budget-year" onchange="renderBudgetEditor()"></select>
+    </section>
+
+    <!-- BUDGETS -->
+    <section id="tab-budgets" class="section-content hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="text-base font-semibold">Monthly Budget Grid</h2>
+          <p class="text-sm text-slate-500 mt-0.5">Edit individual cells. Right-click to fill rest of year.</p>
+        </div>
+        <select id="budget-year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderBudgetEditor()"></select>
       </div>
-    </div>
-    <div class="card"><div id="budget-editor" class="budget-table-wrap"></div></div>
-  </div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 overflow-x-auto">
+        <div id="budget-editor"></div>
+      </div>
+    </section>
 
-  <!-- CATEGORIES -->
-  <div id="tab-categories" class="tab-content">
-    <div class="flex-between mb-16">
-      <h2 style="font-size: 16px;">Category Manager</h2>
-      <button class="btn btn-primary" onclick="openNewCatModal()">+ New Category</button>
-    </div>
-    <div id="cat-manager"></div>
-  </div>
-</div>
+    <!-- CATEGORIES -->
+    <section id="tab-categories" class="section-content hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold">Category Manager</h2>
+        <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="openNewCatModal()">
+          <span class="material-symbols-outlined" style="font-size:18px">add</span> New Category
+        </button>
+      </div>
+      <div id="cat-manager" class="space-y-6"></div>
+    </section>
 
-<!-- Modals -->
+  </div>
+</main>
+
+<!-- Mobile Bottom Nav -->
+<nav class="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 grid grid-cols-5 gap-1 z-50 lg:hidden">
+  <button data-section="dashboard" class="mobile-nav-item active flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+    <span class="material-symbols-outlined mb-0.5">dashboard</span> Dash
+  </button>
+  <button data-section="transactions" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+    <span class="material-symbols-outlined mb-0.5">receipt_long</span> Trans
+  </button>
+  <button data-section="import" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+    <span class="material-symbols-outlined mb-0.5">upload_file</span> Import
+  </button>
+  <button data-section="budgets" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+    <span class="material-symbols-outlined mb-0.5">calculate</span> Budget
+  </button>
+  <button data-section="categories" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[10px] font-medium transition-all">
+    <span class="material-symbols-outlined mb-0.5">category</span> Cats
+  </button>
+</nav>
+
+<!-- New Category Modal -->
 <div class="modal-overlay" id="modal-new-cat">
-  <div class="modal">
-    <h2>New Category</h2>
-    <div class="form-group"><label>Name</label><input type="text" id="new-cat-name"></div>
-    <div class="form-group"><label>Group</label>
-      <select id="new-cat-group">
+  <div class="bg-white rounded-2xl p-6 max-w-md w-[90%] max-h-[80vh] overflow-y-auto shadow-2xl">
+    <h2 class="text-base font-semibold mb-4">New Category</h2>
+    <div class="mb-3">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Name</label>
+      <input type="text" id="new-cat-name" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+    </div>
+    <div class="mb-3">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Group</label>
+      <select id="new-cat-group" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
         <option value="Fixed costs">Fixed costs</option><option value="Subscriptions">Subscriptions</option>
         <option value="Insurance">Insurance</option><option value="Variable">Variable</option><option value="Savings">Savings</option>
+        <option value="Income">Income</option>
       </select>
     </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal('modal-new-cat')">Cancel</button>
-      <button class="btn btn-primary" onclick="addNewCategory()">Add</button>
+    <div class="flex justify-end gap-2 mt-5">
+      <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-new-cat')">Cancel</button>
+      <button class="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="addNewCategory()">Add</button>
     </div>
   </div>
 </div>
 
 <!-- Split Transaction Modal -->
 <div class="modal-overlay" id="modal-split">
-  <div class="modal" style="max-width: 560px;">
-    <h2>Split Transaction</h2>
-    <div id="split-original" class="text-sm text-muted mb-16"></div>
-    <div id="split-parts"></div>
-    <div style="margin-top: 12px;">
-      <button class="btn btn-sm" onclick="addSplitPart()">+ Add part</button>
+  <div class="bg-white rounded-2xl p-6 max-w-xl w-[90%] max-h-[80vh] overflow-y-auto shadow-2xl">
+    <h2 class="text-base font-semibold mb-3">Split Transaction</h2>
+    <div id="split-original" class="text-sm text-slate-500 mb-4"></div>
+    <div id="split-parts" class="space-y-2"></div>
+    <div class="mt-3">
+      <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="addSplitPart()">+ Add part</button>
     </div>
-    <div id="split-remainder" class="text-sm fw-500" style="margin-top: 12px;"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal('modal-split')">Cancel</button>
-      <button class="btn btn-primary" id="split-confirm-btn" onclick="confirmSplit()">Split</button>
+    <div id="split-remainder" class="text-sm font-medium mt-3"></div>
+    <div class="flex justify-end gap-2 mt-5">
+      <button class="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors" onclick="closeModal('modal-split')">Cancel</button>
+      <button class="px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" id="split-confirm-btn" onclick="confirmSplit()">Split</button>
     </div>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast-el fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl text-sm z-[200] shadow-lg max-w-sm" id="toast"></div>
 
 <script type="module">
 const APP_ENTRY = './js/app.js';

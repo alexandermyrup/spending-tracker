@@ -1,7 +1,7 @@
 import {
   DEFAULT_CATEGORIES,
   INCOME_GROUP,
-  normalizeMerchantMapKey
+  normalizeMerchantName
 } from './store.js';
 
 export const MERCHANT_PATTERNS = [
@@ -125,9 +125,7 @@ export const MERCHANT_PATTERNS = [
   { p: 'SU', c: 'SU', t: 'income', x: true },
 ];
 
-export function normalizeMerchantName(name) {
-  return normalizeMerchantMapKey(name);
-}
+export { normalizeMerchantName } from './store.js';
 
 export function getIncomeCategories(store) {
   return new Set([
@@ -178,7 +176,7 @@ export function computeMerchantStats(transactions) {
   const stats = {};
   transactions.forEach(tx => {
     if (!tx.category || tx.type === 'ignore' || tx.splitInto) return;
-    const key = tx.merchant.toUpperCase();
+    const key = normalizeMerchantName(tx.merchant);
     if (!stats[key]) stats[key] = { count: 0, categories: {}, amounts: [], dates: [] };
     const s = stats[key];
     s.count++;
@@ -236,7 +234,7 @@ export function detectRecurringMerchants(merchantStats) {
 
 export function computeCategoryCertainty(tx, suggestion, merchantStats, recurringMerchants, store) {
   if (!suggestion || !suggestion.category) return 0;
-  const key = tx.merchant.toUpperCase();
+  const key = normalizeMerchantName(tx.merchant);
   const stats = merchantStats[key];
   let historyScore = 0;
   if (stats && stats.categories[suggestion.category]) {
@@ -348,7 +346,7 @@ export function getFilteredTransactions(filters, transactions, store) {
     return true;
   });
   const totalSpending = Math.abs(txs.filter(t => t.amount < 0 && t.type === 'spending').reduce((s, t) => s + t.amount, 0));
-  const totalIncome = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalIncome = txs.filter(t => t.amount > 0 && t.type !== 'loan').reduce((s, t) => s + t.amount, 0);
   const duplicateFingerprints = {};
   transactions.forEach(tx => {
     if (tx.splitInto || tx.splitFrom) return;
@@ -356,16 +354,6 @@ export function getFilteredTransactions(filters, transactions, store) {
     duplicateFingerprints[fp] = (duplicateFingerprints[fp] || 0) + 1;
   });
   const filtered = txs.filter(tx => !tx.splitInto).sort((a, b) => {
-    if (filters.uncategorizedOnly) {
-      const aHasCat = !!a.category;
-      const bHasCat = !!b.category;
-      if (aHasCat !== bHasCat) return aHasCat ? 1 : -1;
-      if (!aHasCat && !bHasCat) {
-        const aSuggestion = !!autoMatchMerchant(a.merchant, a.amount, store);
-        const bSuggestion = !!autoMatchMerchant(b.merchant, b.amount, store);
-        if (aSuggestion !== bSuggestion) return aSuggestion ? -1 : 1;
-      }
-    }
     return b.date.localeCompare(a.date) || b.id - a.id;
   });
   return { filtered, totalSpending, totalIncome, duplicateFingerprints };

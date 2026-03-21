@@ -53,7 +53,7 @@ export function getDefaultYearBudget() {
   return b;
 }
 
-export function normalizeMerchantMapKey(name) {
+export function normalizeMerchantName(name) {
   return String(name || '')
     .replace(/[*\-_.,;:/\\|]/g, '')
     .replace(/\s+/g, ' ')
@@ -125,7 +125,7 @@ export function normalizeStore(rawStore) {
 
   const normalizedMap = {};
   Object.entries(normalized.merchantMap).forEach(([key, value]) => {
-    normalizedMap[normalizeMerchantMapKey(key)] = value;
+    normalizedMap[normalizeMerchantName(key)] = value;
   });
   normalized.merchantMap = normalizedMap;
 

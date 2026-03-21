@@ -47,6 +47,7 @@
 ### P3: Nice to have, park for now
 - **Colour scheme overhaul**: Review and adopt a proper data visualization palette. Reference: https://www.datanovia.com/en/blog/top-r-color-palettes-to-know-for-great-data-visualization/. Currently using a hardcoded 12-colour array for charts. Replace with a perceptually uniform, colourblind-friendly palette (e.g., Viridis, ColorBrewer Set2/Set3). Also review the CSS variables for income/expense/savings colours. Scope: small, ~30 min.
 - **Sankey diagram**: Annual flow visualization (income -> spending categories -> savings). Cool but doesn't change decisions. Build with 6+ months of data. Scope: ~1 session (d3-sankey).
+- **Yearly spending Sankey overview**: Dedicated annual flow view showing how true income moved into fixed costs, discretionary categories, savings, and investing. Keep this out of the monthly overview; treat it as a separate yearly exploration surface. Scope: ~1 session after the yearly UX is stable.
 - **Year-over-year comparison**: Compare spending patterns across years. Earliest useful: mid-2026. Scope: ~1 session.
 - **CSV export**: Export categorized transactions back to CSV. Low urgency given JSON export exists. Scope: small.
 - **Multi-account support**: Only if/when a second bank account or credit card is added. Don't build until the need is real. Scope: medium.

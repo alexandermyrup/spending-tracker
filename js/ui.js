@@ -8,6 +8,7 @@ import {
   ensureYearBudget,
   exportPayload,
   loadStore,
+  normalizeMerchantName,
   normalizeStore,
   saveStore
 } from './store.js';
@@ -23,8 +24,7 @@ import {
   parseNordeaCSV,
   resolveMerchant,
   sanitizeTransactions,
-  txFingerprint,
-  normalizeMerchantName
+  txFingerprint
 } from './transactions.js';
 import {
   classifyOverspendPattern,
@@ -46,6 +46,14 @@ import {
 
 const APP_VERSION = 'v0.2';
 const APP_VERSION_METADATA_URL = './version.json';
+
+const SECTION_TITLES = {
+  dashboard: 'Dashboard',
+  transactions: 'Transactions',
+  import: 'Import CSV',
+  budgets: 'Budgets',
+  categories: 'Categories'
+};
 
 let store = loadStore();
 let pendingImport = [];
@@ -126,21 +134,31 @@ function rerenderAll() {
 }
 
 function commit(message, renderMode = 'all') {
+  derivedCacheVersion++;
   persistStore();
   if (renderMode === 'all') rerenderAll();
   else if (renderMode === 'transactions') renderTransactions();
   else if (renderMode === 'dashboard') {
     renderDashboard();
     renderBudgetEditor();
+  } else if (renderMode === 'budget') {
+    renderDashboard();
   }
   if (message) toast(message);
 }
 
+let derivedCache = null;
+let derivedCacheVersion = 0;
+let derivedCacheComputedAt = -1;
+
 function getDerivedClassification() {
+  if (derivedCache && derivedCacheComputedAt === derivedCacheVersion) return derivedCache;
   const merchantStats = computeMerchantStats(store.transactions);
   const recurring = detectRecurringMerchants(merchantStats);
   const conflicts = detectConflicts(merchantStats);
-  return { merchantStats, recurring, conflicts };
+  derivedCache = { merchantStats, recurring, conflicts };
+  derivedCacheComputedAt = derivedCacheVersion;
+  return derivedCache;
 }
 
 function getImportPreviewMeta(rows) {
@@ -218,12 +236,16 @@ function renderImportPreview() {
   `;
   tbody.innerHTML = stats.fresh.map(tx => {
     const autocat = autoMatchMerchant(tx.merchant, tx.amount, store);
-    return `<tr>
-      <td>${tx.pending ? '<em>Pending</em>' : tx.date}</td>
-      <td>${esc(tx.merchant)}</td>
-      <td class="text-muted">${esc(tx.description)}</td>
-      <td class="amount ${tx.amount < 0 ? 'expense' : 'income'}">${fmt(tx.amount)}</td>
-      <td>${autocat && autocat.category ? `<span class="badge badge-uncategorized">${esc(autocat.category)} ?</span>` : autocat && autocat.type === 'ignore' ? '<span class="badge badge-covered">Ignore</span>' : '<span class="badge badge-uncategorized">?</span>'}</td>
+    return `<tr class="hover:bg-slate-50/50">
+      <td class="py-2.5 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-400">Pending</em>' : tx.date}</td>
+      <td class="py-2.5 px-3 font-medium">${esc(tx.merchant)}</td>
+      <td class="py-2.5 px-3 text-slate-500">${esc(tx.description)}</td>
+      <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-600'}">${fmt(tx.amount)}</td>
+      <td class="py-2.5 px-3">${autocat && autocat.category
+        ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600">${esc(autocat.category)} ?</span>`
+        : autocat && autocat.type === 'ignore'
+          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600">Ignore</span>'
+          : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600">?</span>'}</td>
     </tr>`;
   }).join('');
 }
@@ -249,11 +271,13 @@ function confirmImport() {
   freshRows.forEach(tx => {
     const autocat = autoMatchMerchant(tx.merchant, tx.amount, store);
     let assignedCategory = '';
+    let wasAutoAssigned = false;
     if (autocat && autocat.category) {
-      const key = tx.merchant.toUpperCase();
+      const key = normalizeMerchantName(tx.merchant);
       const stats = merchantStats[key];
       if (recurring[key] && stats && stats.primaryCategoryCount >= 3 && stats.primaryCategory === autocat.category) {
         assignedCategory = autocat.category;
+        wasAutoAssigned = true;
         autoCount++;
       }
     }
@@ -268,6 +292,7 @@ function confirmImport() {
       balance: tx.balance,
       pending: tx.pending,
       category: assignedCategory,
+      manualCategory: wasAutoAssigned,
       type: autocat ? autocat.type : (tx.amount > 0 ? 'income' : 'spending'),
       covered: false
     });
@@ -430,7 +455,7 @@ function openCatDropdown(event, txId) {
   dd.className = 'cat-dropdown open';
   let html = '<input type="text" placeholder="Search or create..." autofocus>';
   if (tx.category) {
-    html += '<div class="cat-option" data-cat="" style="color:var(--red);font-weight:500;border-bottom:1px solid var(--border)">Remove category</div>';
+    html += '<div class="cat-option" data-cat="" style="color:rgb(239 68 68);font-weight:500;border-bottom:1px solid rgb(226 232 240)">Remove category</div>';
   }
   if (isIncome) {
     html += '<div class="cat-group-header">Income</div>';
@@ -446,9 +471,9 @@ function openCatDropdown(event, txId) {
   }
   const validGroups = isIncome ? [INCOME_GROUP] : Object.keys(store.categories).filter(g => g !== INCOME_GROUP);
   html += `<div class="cat-new" id="cat-new-option" style="display:none" data-default-group="${esc(validGroups.length === 1 ? validGroups[0] : '')}">+ Create "<span></span>"</div>`;
-  html += `<div class="cat-new-group-picker" style="display:none;padding:6px 8px;border-top:1px solid var(--border)">
-    <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:500">Add to group:</div>
-    ${validGroups.map(g => `<div class="cat-group-pick" data-group="${esc(g)}" style="padding:3px 8px;border-radius:4px;font-size:12px;cursor:pointer;margin-bottom:2px">${esc(g)}</div>`).join('')}
+  html += `<div class="cat-new-group-picker" style="display:none;padding:6px 8px;border-top:1px solid rgb(226 232 240)">
+    <div style="font-size:11px;color:rgb(100 116 139);margin-bottom:4px;font-weight:500">Add to group:</div>
+    ${validGroups.map(g => `<div class="cat-group-pick" data-group="${esc(g)}" style="padding:3px 8px;border-radius:6px;font-size:12px;cursor:pointer;margin-bottom:2px">${esc(g)}</div>`).join('')}
   </div>`;
   dd.innerHTML = html;
   const input = dd.querySelector('input');
@@ -509,16 +534,19 @@ function addSplitPartRow(container, amount, category, type) {
   const tx = store.transactions.find(t => t.id === splitTxId);
   const isPositive = tx && tx.amount > 0;
   const row = document.createElement('div');
-  row.className = 'split-part';
+  row.className = 'grid grid-cols-[1fr_100px_120px_auto] gap-2 items-end p-3 border border-slate-200 rounded-lg';
   row.innerHTML = `
-    <div class="form-group"><label>Label / Category</label>
-      <input type="text" class="split-cat" value="${esc(category)}" placeholder="e.g. SU (grant)">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Label / Category</label>
+      <input type="text" class="split-cat w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500" value="${esc(category)}" placeholder="e.g. SU (grant)">
     </div>
-    <div class="form-group"><label>Amount</label>
-      <input type="number" class="split-amt" value="${Math.abs(amount)}" step="0.01" min="0">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Amount</label>
+      <input type="number" class="split-amt w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500" value="${Math.abs(amount)}" step="0.01" min="0">
     </div>
-    <div class="form-group"><label>Type</label>
-      <select class="split-type">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Type</label>
+      <select class="split-type w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-500">
         ${isPositive ? `
           <option value="income" ${type === 'income' ? 'selected' : ''}>Income</option>
           <option value="loan" ${type === 'loan' ? 'selected' : ''}>Loan inflow</option>
@@ -529,7 +557,7 @@ function addSplitPartRow(container, amount, category, type) {
         <option value="ignore" ${type === 'ignore' ? 'selected' : ''}>Ignore</option>
       </select>
     </div>
-    <button class="remove-part" type="button">&times;</button>
+    <button class="remove-part self-end p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors text-lg leading-none" type="button">&times;</button>
   `;
   row.querySelector('.split-amt').addEventListener('input', updateSplitRemainder);
   row.querySelector('.remove-part').addEventListener('click', () => {
@@ -551,10 +579,10 @@ function updateSplitRemainder() {
   const el = document.getElementById('split-remainder');
   const btn = document.getElementById('split-confirm-btn');
   if (Math.abs(remainder) < 0.01) {
-    el.innerHTML = '<span style="color:var(--green)">Fully allocated</span>';
+    el.innerHTML = '<span class="text-emerald-600">Fully allocated</span>';
     btn.disabled = false;
   } else {
-    el.innerHTML = `<span style="color:var(--orange)">Remainder: ${fmt(tx.amount > 0 ? remainder : -remainder)}</span>`;
+    el.innerHTML = `<span class="text-amber-600">Remainder: ${fmt(tx.amount > 0 ? remainder : -remainder)}</span>`;
     btn.disabled = Math.abs(remainder) > 0.01;
   }
 }
@@ -562,7 +590,7 @@ function updateSplitRemainder() {
 function confirmSplit() {
   const tx = store.transactions.find(t => t.id === splitTxId);
   if (!tx) return;
-  const parts = document.querySelectorAll('#split-parts .split-part');
+  const parts = document.querySelectorAll('#split-parts > div');
   if (parts.length < 2) {
     toast('Need at least 2 parts.');
     return;
@@ -608,9 +636,12 @@ function confirmSplit() {
 function getConflictBannerHtml(conflicts) {
   const entries = Object.entries(conflicts);
   if (entries.length === 0) return '';
-  return `<details class="conflict-banner"><summary>${entries.length} merchant${entries.length !== 1 ? 's' : ''} with conflicting categories</summary><div class="conflict-list">${entries.map(([name, c]) =>
-    `<div class="conflict-item"><strong>${esc(name)}</strong>: ${Object.entries(c.categories).map(([cat, cnt]) => `${esc(cat)} (${cnt})`).join(', ')}</div>`
-  ).join('')}</div></details>`;
+  return `<details class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm mb-4">
+    <summary class="cursor-pointer font-medium text-red-600">${entries.length} merchant${entries.length !== 1 ? 's' : ''} with conflicting categories</summary>
+    <div class="mt-2 space-y-1">${entries.map(([name, c]) =>
+      `<div class="py-1 border-b border-red-100 last:border-0 text-xs"><strong>${esc(name)}</strong>: ${Object.entries(c.categories).map(([cat, cnt]) => `${esc(cat)} (${cnt})`).join(', ')}</div>`
+    ).join('')}</div>
+  </details>`;
 }
 
 function applyVisibleSuggestions() {
@@ -619,7 +650,6 @@ function applyVisibleSuggestions() {
     month: document.getElementById('tx-month-filter').value,
     category: document.getElementById('tx-cat-filter').value,
     type: document.getElementById('tx-type-filter').value,
-    uncategorizedOnly: false,
     search: document.getElementById('tx-search').value
   };
   const base = getFilteredTransactions(filters, store.transactions, store);
@@ -646,7 +676,6 @@ function renderTransactions() {
     month: document.getElementById('tx-month-filter').value,
     category: document.getElementById('tx-cat-filter').value,
     type: document.getElementById('tx-type-filter').value,
-    uncategorizedOnly: false,
     search: document.getElementById('tx-search').value
   };
   const result = getFilteredTransactions(filters, store.transactions, store);
@@ -655,28 +684,35 @@ function renderTransactions() {
   document.getElementById('conflict-banner').innerHTML = getConflictBannerHtml(derived.conflicts);
   const summaryEl = document.getElementById('tx-summary');
   const visibleSuggestions = displayTxs.filter(tx => !tx.category && autoMatchMerchant(tx.merchant, tx.amount, store)?.category).length;
-  summaryEl.innerHTML = `${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}${visibleSuggestions > 0 ? ` <button class="btn btn-sm" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}`;
+  summaryEl.innerHTML = `${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}`;
   const tbody = document.getElementById('tx-body');
   tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
     const isDupe = !isSplitChild && result.duplicateFingerprints[txFingerprint(tx)] > 1;
-    const isRecurring = !!derived.recurring[tx.merchant.toUpperCase()];
+    const isRecurring = !!derived.recurring[normalizeMerchantName(tx.merchant)];
     const suggestion = !tx.category ? autoMatchMerchant(tx.merchant, tx.amount, store) : null;
     const certainty = suggestion && suggestion.category ? computeCategoryCertainty(tx, suggestion, derived.merchantStats, derived.recurring, store) : 0;
     const band = certaintyBand(certainty);
-    const bandClass = band === 'high' ? ' cat-suggest-high' : band === 'medium' ? ' cat-suggest-medium' : '';
-    const restoreAction = isSplitChild ? `<span class="split-icon" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction">&#8634;</span>` : '';
-    return `<tr${isSplitChild ? ' style="background:#f8f9ff"' : (isDupe ? ' style="background:#fef2f2"' : '')}>
-      <td class="mono">${tx.pending ? '<em>Pending</em>' : tx.date}${isSplitChild ? '<span class="badge-split">split</span>' : ''}${isDupe ? '<span class="badge-duplicate" title="Possible duplicate">dup?</span>' : ''}</td>
-      <td class="fw-500">${esc(tx.merchant)}${isRecurring ? '<span class="badge-recurring" title="Recurring subscription">&#8635;</span>' : ''}</td>
-      <td class="text-muted text-sm">${esc(tx.description)}</td>
-      <td class="amount ${tx.amount < 0 ? (tx.type === 'saving' ? 'saving' : 'expense') : 'income'} mono">${fmt(tx.amount)}</td>
-      <td><div class="cat-select-wrap">${tx.category
-        ? `<span class="cat-select-trigger" onclick="openCatDropdown(event, ${tx.id})">${esc(tx.category)}</span>`
+    const suggestBase = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors';
+    const bandClass = band === 'high'
+      ? `${suggestBase} bg-emerald-50 text-emerald-600 border border-emerald-400 hover:bg-emerald-100`
+      : band === 'medium'
+        ? `${suggestBase} bg-amber-50 text-amber-600 border border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`
+        : `${suggestBase} bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`;
+    const restoreAction = isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction">&#8634;</span>` : '';
+    const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-600';
+    const rowBg = isSplitChild ? 'bg-blue-50/30' : isDupe ? 'bg-red-50/30' : 'hover:bg-slate-50/50';
+    return `<tr class="${rowBg}">
+      <td class="py-3 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-400">Pending</em>' : tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
+      <td class="py-3 px-3 font-medium">${esc(tx.merchant)}${isRecurring ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-blue-600 bg-blue-50" title="Recurring subscription">&#8635;</span>' : ''}</td>
+      <td class="py-3 px-3 text-slate-500 max-w-[260px] truncate">${esc(tx.description)}</td>
+      <td class="py-3 px-3 text-right tabular-nums font-medium ${amountColor}">${fmt(tx.amount)}</td>
+      <td class="py-3 px-3"><div class="cat-select-wrap relative inline-block">${tx.category
+        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer border border-dashed border-slate-300 bg-slate-50 hover:border-blue-500 hover:bg-blue-50 transition-colors" onclick="openCatDropdown(event, ${tx.id})">${esc(tx.category)}</span>`
         : suggestion && suggestion.category
-          ? `<span class="cat-suggest${bandClass}" data-txid="${tx.id}" data-cat="${esc(suggestion.category)}" onclick="acceptSuggestion(this)" title="${Math.round(certainty * 100)}% certainty">${esc(suggestion.category)} &#x2713;</span><span class="cat-select-trigger badge-uncategorized" onclick="openCatDropdown(event, ${tx.id})" style="padding:2px 6px;margin-left:2px">&#x25BE;</span>`
-          : `<span class="cat-select-trigger badge-uncategorized" onclick="openCatDropdown(event, ${tx.id})">+ Category</span>`}</div></td>
-      <td><select class="type-select" onchange="setTxType(${tx.id}, this.value)">
+          ? `<span class="${bandClass}" data-txid="${tx.id}" data-cat="${esc(suggestion.category)}" onclick="acceptSuggestion(this)" title="${Math.round(certainty * 100)}% certainty">${esc(suggestion.category)} &#x2713;</span><span class="ml-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium cursor-pointer bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors" onclick="openCatDropdown(event, ${tx.id})">&#x25BE;</span>`
+          : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors" onclick="openCatDropdown(event, ${tx.id})">+ Category</span>`}</div></td>
+      <td class="py-3 px-3"><select class="px-1.5 py-0.5 rounded border border-slate-200 text-[11px] bg-white cursor-pointer" onchange="setTxType(${tx.id}, this.value)">
         ${tx.amount < 0 ? `
           <option value="spending" ${tx.type === 'spending' ? 'selected' : ''}>Spending</option>
           <option value="saving" ${tx.type === 'saving' ? 'selected' : ''}>Saving</option>
@@ -686,11 +722,13 @@ function renderTransactions() {
         `}
         <option value="ignore" ${tx.type === 'ignore' ? 'selected' : ''}>Ignore</option>
       </select></td>
-      <td style="text-align:center"><span class="covered-toggle ${tx.covered ? 'active' : ''}" onclick="toggleCovered(${tx.id})">${tx.covered ? '&#10003;' : '&#9675;'}</span></td>
-      <td class="tx-actions">
-        ${!isSplitChild ? `<span class="split-icon" onclick="openSplitModal(${tx.id})" title="Split transaction">&#x2702;</span>` : ''}
-        ${restoreAction}
-        <span class="split-icon" onclick="deleteTx(${tx.id})" title="Delete transaction" style="color:var(--red)">&#x2715;</span>
+      <td class="py-3 px-3 text-center"><span class="cursor-pointer text-sm ${tx.covered ? 'opacity-100' : 'opacity-30 hover:opacity-70'} transition-opacity" onclick="toggleCovered(${tx.id})">${tx.covered ? '&#10003;' : '&#9675;'}</span></td>
+      <td class="py-3 px-1">
+        <div class="flex items-center gap-1">
+          ${!isSplitChild ? `<span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-blue-600 transition-all" onclick="openSplitModal(${tx.id})" title="Split transaction">&#x2702;</span>` : ''}
+          ${restoreAction}
+          <span class="cursor-pointer text-sm text-slate-400 opacity-50 hover:opacity-100 hover:text-red-500 transition-all" onclick="deleteTx(${tx.id})" title="Delete transaction">&#x2715;</span>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -705,130 +743,175 @@ function renderDashboard() {
     excludeCovered,
     ensureYearBudget: year => ensureYearBudget(store, year)
   };
-  const data = getMonthlyScorecardData(month, {
-    ...dashboardOptions
-  });
+  const data = getMonthlyScorecardData(month, { ...dashboardOptions });
   const verdictAmount = data.budget.success ? fmt(data.budget.variance) : fmt(-data.budget.variance);
   const biggestMiss = data.budget.overBudgetCategories[0] || null;
-  document.getElementById('dash-surplus').innerHTML = `<div class="scorecard-card">
-    <div class="scorecard-topline">
-      <span class="scorecard-month">${data.monthLabel}</span>
-      <span class="scorecard-badge ${data.verdict.status === 'positive' ? 'good' : 'bad'}">${data.budget.success ? 'Under budget' : 'Over budget'}</span>
-      ${store.salaryShiftDay ? `<span class="text-sm text-muted">Salary shifted by day ${store.salaryShiftDay}</span>` : ''}
-    </div>
-    <div class="scorecard-main">
-      <div>
-        <div class="scorecard-eyebrow">How the month went</div>
-        <div class="scorecard-verdict">${data.budget.success ? `Under budget by ${verdictAmount}.` : `Over budget by ${verdictAmount}.`}</div>
-        <div class="scorecard-copy">${data.budget.overBudgetCategories.length > 0
-          ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview answers the month first, then gives you the top reasons before the lower drill-down cards.`
-          : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</div>
-        <div class="scorecard-breakdown">
-          <div class="scorecard-breakdown-item">
-            <div class="scorecard-breakdown-label">Fixed spending</div>
-            <div class="scorecard-breakdown-value">${fmt(data.spendingBreakdown.fixed.actual)}</div>
-            <div class="scorecard-breakdown-meta">Core monthly obligations</div>
+
+  const gradient = data.budget.success
+    ? 'bg-gradient-to-br from-emerald-50 via-emerald-50/50 to-teal-50 border-emerald-200/60'
+    : 'bg-gradient-to-br from-red-50 via-red-50/50 to-orange-50 border-red-200/60';
+  const badgeClass = data.budget.success
+    ? 'bg-emerald-100 text-emerald-700'
+    : 'bg-red-100 text-red-600';
+  const patternColor = data.budget.success ? 'text-emerald-800' : 'text-red-800';
+
+  document.getElementById('dash-surplus').innerHTML = `<div class="relative overflow-hidden rounded-2xl border ${gradient} p-6 sm:p-8">
+    <div class="relative z-10">
+      <div class="flex flex-wrap items-center gap-2.5 mb-5">
+        <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">${data.monthLabel}</span>
+        <span class="px-2.5 py-1 rounded-full text-xs font-bold ${badgeClass}">${data.budget.success ? 'Under budget' : 'Over budget'}</span>
+        ${store.salaryShiftDay ? `<span class="text-xs text-slate-400">Salary shifted by day ${store.salaryShiftDay}</span>` : ''}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6 items-start scorecard-main">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">How the month went</div>
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 max-w-[11ch]">${data.budget.success ? `Under budget by ${verdictAmount}.` : `Over budget by ${verdictAmount}.`}</h2>
+          <p class="text-sm text-slate-500 leading-relaxed max-w-[52ch]">${data.budget.overBudgetCategories.length > 0
+            ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview answers the month first, then gives you the top reasons before the lower drill-down cards.`
+            : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 pt-5 border-t border-slate-200/40 scorecard-breakdown">
+            <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
+              <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Fixed spending</div>
+              <div class="text-xl font-bold tabular-nums tracking-tight">${fmt(data.spendingBreakdown.fixed.actual)}</div>
+              <div class="text-xs text-slate-500 mt-1">Core monthly obligations</div>
+            </div>
+            <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
+              <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Flexible spending</div>
+              <div class="text-xl font-bold tabular-nums tracking-tight">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
+              <div class="text-xs text-slate-500 mt-1">Everything outside fixed costs</div>
+            </div>
+            <div class="p-3 rounded-xl bg-white/60 border border-slate-200/40">
+              <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Biggest miss</div>
+              <div class="text-xl font-bold tabular-nums tracking-tight">${biggestMiss ? esc(biggestMiss.category) : 'None'}</div>
+              <div class="text-xs text-slate-500 mt-1">${biggestMiss ? `${fmt(biggestMiss.variance)} over budget` : 'No overspent categories'}</div>
+            </div>
           </div>
-          <div class="scorecard-breakdown-item">
-            <div class="scorecard-breakdown-label">Flexible spending</div>
-            <div class="scorecard-breakdown-value">${fmt(data.spendingBreakdown.discretionary.actual)}</div>
-            <div class="scorecard-breakdown-meta">Everything outside fixed costs</div>
+        </div>
+        <div class="space-y-2.5">
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">True income</div>
+            <div class="text-2xl font-bold tabular-nums tracking-tight text-emerald-600">${fmt(data.totals.income)}</div>
+            <div class="text-xs text-slate-500 mt-1.5">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow does not count as income.'}</div>
           </div>
-          <div class="scorecard-breakdown-item">
-            <div class="scorecard-breakdown-label">Biggest miss</div>
-            <div class="scorecard-breakdown-value">${biggestMiss ? esc(biggestMiss.category) : 'None'}</div>
-            <div class="scorecard-breakdown-meta">${biggestMiss ? `${fmt(biggestMiss.variance)} over budget` : 'No overspent categories'}</div>
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Spent vs budget</div>
+            <div class="text-2xl font-bold tabular-nums tracking-tight text-red-500">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
+            <div class="text-xs text-slate-500 mt-1.5">${data.budget.overBudgetCategories.length} ${data.budget.overBudgetCategories.length === 1 ? 'category' : 'categories'} over budget.</div>
+          </div>
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Invested</div>
+            <div class="text-2xl font-bold tabular-nums tracking-tight text-violet-600">${fmt(data.totals.invested)}</div>
+            <div class="text-xs text-slate-500 mt-1.5">Shown separately from budget success.</div>
+          </div>
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/50">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
+            <div class="text-2xl font-bold tabular-nums tracking-tight ${data.totals.remainingCash >= 0 ? 'text-blue-600' : 'text-red-500'}">${fmt(data.totals.remainingCash)}</div>
+            <div class="text-xs text-slate-500 mt-1.5">${data.totals.remainingCash >= 0 ? 'Cash left after spending and investing.' : 'Spending and investing exceeded true income.'}</div>
           </div>
         </div>
       </div>
-      <div class="scorecard-facts">
-        <div class="scorecard-fact">
-          <div class="scorecard-fact-label">True income</div>
-          <div class="scorecard-fact-value" style="color:var(--green)">${fmt(data.totals.income)}</div>
-          <div class="scorecard-fact-meta">${data.totals.loanInflow > 0 ? `Loan inflow kept separate: ${fmt(data.totals.loanInflow)}` : 'Loan inflow does not count as income.'}</div>
-        </div>
-        <div class="scorecard-fact">
-          <div class="scorecard-fact-label">Spent vs budget</div>
-          <div class="scorecard-fact-value" style="color:var(--red)">${fmt(data.budget.spent)} / ${fmt(data.budget.total)}</div>
-          <div class="scorecard-fact-meta">${data.budget.overBudgetCategories.length} category${data.budget.overBudgetCategories.length === 1 ? '' : 'ies'} over budget.</div>
-        </div>
-        <div class="scorecard-fact">
-          <div class="scorecard-fact-label">Invested</div>
-          <div class="scorecard-fact-value" style="color:var(--purple)">${fmt(data.totals.invested)}</div>
-          <div class="scorecard-fact-meta">Shown separately from budget success.</div>
-        </div>
-        <div class="scorecard-fact">
-          <div class="scorecard-fact-label">${data.totals.remainingCash >= 0 ? 'Remaining cash' : 'Cash shortfall'}</div>
-          <div class="scorecard-fact-value" style="color:${data.totals.remainingCash >= 0 ? 'var(--accent)' : 'var(--red)'}">${fmt(data.totals.remainingCash)}</div>
-          <div class="scorecard-fact-meta">${data.totals.remainingCash >= 0 ? 'Cash left after spending and investing.' : 'Spending and investing exceeded true income.'}</div>
-        </div>
-      </div>
     </div>
+    <div class="absolute inset-0 opacity-[0.04] pointer-events-none ${patternColor} bg-[radial-gradient(circle,_currentColor_1px,_transparent_1px)] [background-size:20px_20px]"></div>
   </div>`;
+
   const savings = getSavingsProgressData(month, dashboardOptions);
   const savingsYtd = getYtdSavingsProgress(month, dashboardOptions);
-  document.getElementById('dash-savings-progress').innerHTML = `<div class="summary-list">
-    <div class="summary-row"><div><div>Invested (${data.monthShortLabel})</div><div class="meta">Monthly committed capital</div></div><strong style="color:var(--purple)">${fmt(savings.monthly.invested)}</strong></div>
-    <div class="summary-row"><div><div>Cash saved (YTD)</div><div class="meta">Non-investment savings transfers</div></div><strong style="color:var(--green)">${fmt(savingsYtd.ytd.cashSaved)}</strong></div>
-    <div class="summary-row"><div><div>Invested (YTD)</div><div class="meta">Keeps savings visible without counting against budget</div></div><strong style="color:var(--purple)">${fmt(savingsYtd.ytd.invested)}</strong></div>
-    <div class="summary-row"><div><div>Total progress (YTD)</div><div class="meta">${savingsYtd.ytd.monthCount} month${savingsYtd.ytd.monthCount === 1 ? '' : 's'} tracked</div></div><strong>${fmt(savingsYtd.ytd.total)}</strong></div>
+  document.getElementById('dash-savings-progress').innerHTML = `<div class="space-y-0">
+    <div class="flex justify-between items-start py-3 text-sm">
+      <div><div class="font-medium">Invested (${data.monthShortLabel})</div><div class="text-xs text-slate-500 mt-0.5">Monthly committed capital</div></div>
+      <strong class="tabular-nums text-violet-600">${fmt(savings.monthly.invested)}</strong>
+    </div>
+    <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
+      <div><div class="font-medium">Cash saved (YTD)</div><div class="text-xs text-slate-500 mt-0.5">Non-investment savings transfers</div></div>
+      <strong class="tabular-nums text-emerald-600">${fmt(savingsYtd.ytd.cashSaved)}</strong>
+    </div>
+    <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
+      <div><div class="font-medium">Invested (YTD)</div><div class="text-xs text-slate-500 mt-0.5">Keeps savings visible without counting against budget</div></div>
+      <strong class="tabular-nums text-violet-600">${fmt(savingsYtd.ytd.invested)}</strong>
+    </div>
+    <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
+      <div><div class="font-medium">Total progress (YTD)</div><div class="text-xs text-slate-500 mt-0.5">${savingsYtd.ytd.monthCount} month${savingsYtd.ytd.monthCount === 1 ? '' : 's'} tracked</div></div>
+      <strong class="tabular-nums">${fmt(savingsYtd.ytd.total)}</strong>
+    </div>
   </div>`;
+
   const obligations = detectRecurringObligations({
     store,
     asOfDate: getNextMonthDateString(month),
     excludeCovered
   });
   document.getElementById('dash-obligations').innerHTML = obligations.length === 0
-    ? '<div class="empty-card-state">No active recurring obligations were detected for the last full month.</div>'
-    : `<div class="summary-list">${obligations.slice(0, 3).map(item => `
-      <div class="summary-row">
+    ? '<p class="text-sm text-slate-500 py-2">No active recurring obligations detected for the last full month.</p>'
+    : obligations.slice(0, 3).map((item, i) => `
+      <div class="flex justify-between items-start py-3 ${i > 0 ? 'border-t border-slate-100' : ''} text-sm">
         <div>
-          <div>${esc(item.category)}</div>
-          <div class="meta">${item.fixed ? 'Fixed' : 'Recurring'} • ${item.cadence} • next ${item.nextExpectedDate}</div>
+          <div class="font-medium">${esc(item.category)}</div>
+          <div class="text-xs text-slate-500 mt-0.5">${item.fixed ? 'Fixed' : 'Recurring'} &bull; ${item.cadence} &bull; next ${item.nextExpectedDate}</div>
         </div>
-        <strong>${fmt(-item.typicalAmount)}</strong>
+        <strong class="tabular-nums">${fmt(-item.typicalAmount)}</strong>
       </div>
-    `).join('')}</div>`;
+    `).join('');
+
   const overspent = getOverspentCategories(month, dashboardOptions);
+  const diagnosisPatternClasses = {
+    'budget-issue': 'bg-blue-50 text-blue-600',
+    'one-off': 'bg-amber-50 text-amber-600',
+    'recurring-habit': 'bg-red-50 text-red-500',
+    'no-history': 'bg-slate-100 text-slate-500'
+  };
   document.getElementById('dash-diagnosis').innerHTML = overspent.length === 0
-    ? '<div class="empty-card-state">No overspent categories this month.</div>'
-    : `<div class="diagnosis-list">${overspent.slice(0, 3).map(status => {
+    ? '<p class="text-sm text-slate-500 py-2">No overspent categories this month.</p>'
+    : overspent.slice(0, 3).map((status, i) => {
       const comparisons = getCategoryComparisons(status.category, month, dashboardOptions);
       const pattern = classifyOverspendPattern(status.category, month, dashboardOptions);
-      return `<div class="diagnosis-item">
+      return `<div class="grid grid-cols-[1fr_auto] gap-4 py-4 ${i > 0 ? 'border-t border-slate-100' : ''}">
         <div>
-          <span class="diagnosis-type ${pattern.code}">${esc(pattern.label)}</span>
-          <div class="diagnosis-name">${esc(status.category)}</div>
-          <div class="diagnosis-copy">Budget ${fmt(-status.budget)} • Last month ${fmt(-comparisons.previousMonth.actual)} • 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} • 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
+          <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold tracking-wide ${diagnosisPatternClasses[pattern.code] || diagnosisPatternClasses['no-history']}">${esc(pattern.label)}</span>
+          <div class="text-lg font-semibold mt-2">${esc(status.category)}</div>
+          <div class="text-sm text-slate-500">Budget ${fmt(-status.budget)} &bull; Last month ${fmt(-comparisons.previousMonth.actual)} &bull; 3-mo avg ${fmt(-comparisons.threeMonthAverage.actual)} &bull; 1-year avg ${fmt(-comparisons.twelveMonthAverage.actual)}</div>
         </div>
-        <div class="diagnosis-over">${fmt(-status.variance)} over</div>
+        <div class="text-base font-bold text-red-500 tabular-nums whitespace-nowrap">${fmt(-status.variance)} over</div>
       </div>`;
-    }).join('')}</div>`;
+    }).join('');
+
   const sortedCats = Object.entries(data.categoryTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  document.getElementById('dash-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 12).map(([cat, val], i) => {
+  document.getElementById('dash-category-chart').innerHTML = `<div class="space-y-1.5">${sortedCats.slice(0, 12).map(([cat, val], i) => {
     const budgetAmt = getBudgetForMonth(store, cat, month, year => ensureYearBudget(store, year));
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
-    return `<div class="bar-row"><div class="bar-label" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"><span>${fmt(-val)}</span></div>
-      ${budgetAmt > 0 ? `<div class="bar-budget-line" style="left:${Math.min(budgetPct, 100)}%" title="Budget: ${fmt(-budgetAmt)}"></div>` : ''}</div>
-      <div class="bar-value">${fmt(-val)}</div></div>`;
+    return `<div class="flex items-center gap-2">
+      <div class="w-28 text-right text-xs text-slate-500 truncate" title="${esc(cat)}">${esc(cat)}</div>
+      <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
+        <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
+          <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
+        </div>
+        ${budgetAmt > 0 ? `<div class="absolute top-0 bottom-0 w-0.5 bg-slate-900/50 z-[1]" style="left:${Math.min(budgetPct, 100)}%" title="Budget: ${fmt(-budgetAmt)}"></div>` : ''}
+      </div>
+      <div class="w-20 text-right text-xs tabular-nums flex-shrink-0">${fmt(-val)}</div>
+    </div>`;
   }).join('')}</div>`;
+
   const sortedMerchants = Object.entries(data.merchantTotals).sort((a, b) => b[1] - a[1]).slice(0, 10);
   document.getElementById('dash-merchants').innerHTML = sortedMerchants.length === 0
-    ? '<div class="empty-card-state">No merchant outflows to show for this month.</div>'
-    : `<div class="summary-list">${sortedMerchants.map(([merchant, val]) =>
-      `<div class="summary-row"><div><div>${esc(merchant)}</div><div class="meta">Merchant outflow</div></div><strong>${fmt(-val)}</strong></div>`
-    ).join('')}</div>`;
+    ? '<p class="text-sm text-slate-500 py-2">No merchant outflows to show for this month.</p>'
+    : sortedMerchants.map((entry, i) =>
+      `<div class="flex justify-between items-start py-3 ${i > 0 ? 'border-t border-slate-100' : ''} text-sm">
+        <div><div class="font-medium">${esc(entry[0])}</div><div class="text-xs text-slate-500 mt-0.5">Merchant outflow</div></div>
+        <strong class="tabular-nums">${fmt(-entry[1])}</strong>
+      </div>`
+    ).join('');
+
   const maxTrend = Math.max(...data.trend.map(m => m.total), 1);
-  document.getElementById('dash-trend').innerHTML = `<div style="display:flex;align-items:flex-end;gap:10px;height:180px;padding-top:12px">${data.trend.map(m => {
+  document.getElementById('dash-trend').innerHTML = `<div class="flex items-end gap-2.5" style="height:180px;padding-top:12px">${data.trend.map(m => {
     const h = m.total / maxTrend * 120;
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div class="text-xs mono fw-500">${fmt(-m.total)}</div>
-      <div style="width:100%;height:${h}px;background:${m.month === month ? 'var(--accent)' : '#cbd5e1'};border-radius:10px 10px 4px 4px;min-height:4px;margin:6px 0"></div>
-      <div class="text-xs text-muted">${m.month.slice(5)}</div></div>`;
+    return `<div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="text-[10px] tabular-nums font-medium text-slate-600">${fmt(-m.total)}</div>
+      <div class="w-full rounded-t-lg" style="height:${h}px;background:${m.month === month ? 'rgb(37 99 235)' : 'rgb(203 213 225)'};min-height:4px;margin:6px 0"></div>
+      <div class="text-[10px] text-slate-500">${m.month.slice(5)}</div>
+    </div>`;
   }).join('')}</div>`;
+
   const budgetHTML = [];
   Object.entries(store.categories).forEach(([group, cats]) => {
     if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
@@ -837,15 +920,23 @@ function renderDashboard() {
       if (budget <= 0) return;
       const actual = data.categoryTotals[cat] || 0;
       const pct = Math.round(actual / budget * 100);
-      const cls = pct > 100 ? 'over' : pct > 80 ? 'warn' : 'ok';
-      budgetHTML.push(`<div class="budget-item">
-        <div class="budget-header"><span class="budget-cat">${esc(cat)}</span><span class="budget-amount">${fmt(-actual)} / ${fmt(-budget)}</span></div>
-        <div class="budget-progress"><div class="budget-progress-fill ${cls}" style="width:${Math.min(pct, 100)}%"></div></div>
-        <div class="budget-numbers"><span>${pct}%</span><span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span></div>
+      const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
+      budgetHTML.push(`<div class="border border-slate-200 rounded-lg p-3">
+        <div class="flex justify-between items-center text-sm mb-2">
+          <span class="font-medium">${esc(cat)}</span>
+          <span class="text-xs text-slate-500">${fmt(-actual)} / ${fmt(-budget)}</span>
+        </div>
+        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5">
+          <span>${pct}%</span>
+          <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
+        </div>
       </div>`);
     });
   });
-  document.getElementById('dash-budget').innerHTML = `<div class="budget-grid">${budgetHTML.join('') || '<p class="text-muted">No budgets set for this month.</p>'}</div>`;
+  document.getElementById('dash-budget').innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${budgetHTML.join('') || '<p class="text-sm text-slate-500">No budgets set for this month.</p>'}</div>`;
 }
 
 function renderYearlyDashboard() {
@@ -860,59 +951,90 @@ function renderYearlyDashboard() {
     loanBudget: store.loanBudget,
     salaryShiftDay: store.salaryShiftDay
   });
-  document.getElementById('year-summary').innerHTML = `<div class="surplus-card">
-    <h2>${year} Overview${data.ytd.monthCount < 12 ? ` (${data.ytd.monthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-muted">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(0,0,0,0.06)">
-      <span class="text-sm text-muted">Expected annual loan (SU-lån):</span>
-      <input type="number" id="loan-budget-input" value="${data.annualLoanBudget}" min="0" step="100" style="width:120px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px" onchange="saveLoanBudget('${year}', this.value)">
-      <span class="text-sm text-muted">kr/year</span>
+
+  document.getElementById('year-summary').innerHTML = `<div class="relative overflow-hidden rounded-2xl border border-blue-200/60 bg-gradient-to-br from-blue-50 via-indigo-50/30 to-slate-50 p-6 sm:p-8">
+    <div class="relative z-10">
+      <h2 class="text-lg font-bold mb-1">${year} Overview${data.ytd.monthCount < 12 ? ` (${data.ytd.monthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-slate-400 font-normal">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
+      <div class="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200/40">
+        <span class="text-sm text-slate-500">Expected annual loan (SU-lan):</span>
+        <input type="number" id="loan-budget-input" value="${data.annualLoanBudget}" min="0" step="100" class="w-28 px-2 py-1 border border-slate-200 rounded-lg text-sm tabular-nums focus:outline-none focus:border-blue-500" onchange="saveLoanBudget('${year}', this.value)">
+        <span class="text-sm text-slate-500">kr/year</span>
+      </div>
+      <div class="space-y-1.5 text-sm">
+        <div class="flex justify-between"><span class="text-slate-500">YTD Income</span><span class="font-medium tabular-nums text-emerald-600">${fmt(data.ytd.income)}</span></div>
+        ${data.ytd.loan > 0 || data.annualLoanBudget > 0 ? `<div class="flex justify-between"><span class="text-slate-500">YTD Loan inflow (SU-lan)</span><span class="font-medium tabular-nums text-slate-500">${fmt(data.ytd.loan)}${data.ytdLoanBudget > 0 ? ` / ${fmt(data.ytdLoanBudget)} expected` : ''}</span></div>` : ''}
+        <div class="flex justify-between"><span class="text-slate-500">YTD Spending</span><span class="font-medium tabular-nums text-red-500">${fmt(-data.ytd.spend)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">YTD Saved / invested</span><span class="font-medium tabular-nums text-violet-600">${fmt(-data.ytd.save)}</span></div>
+        <div class="flex justify-between pt-2 border-t border-slate-200/40"><span class="text-slate-500">YTD Budget (spending)</span><span class="font-medium tabular-nums text-slate-500">${fmt(-data.ytd.budget)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">${data.ytd.budget - data.ytd.spend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="font-medium tabular-nums ${data.ytd.budget - data.ytd.spend >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.ytd.budget - data.ytd.spend)}</span></div>
+        <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>${data.ytd.remaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="tabular-nums ${data.ytd.remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.ytd.remaining)}</span></div>
+      </div>
     </div>
-    <div class="surplus-row"><span class="surplus-label">YTD Income</span><span class="surplus-val" style="color:var(--green)">${fmt(data.ytd.income)}</span></div>
-    ${data.ytd.loan > 0 || data.annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">YTD Loan inflow (SU-lån)</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.ytd.loan)}${data.ytdLoanBudget > 0 ? ` / ${fmt(data.ytdLoanBudget)} expected` : ''}</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">YTD Spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.ytd.spend)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">YTD Saved / invested</span><span class="surplus-val" style="color:var(--purple)">${fmt(-data.ytd.save)}</span></div>
-    <div class="surplus-row" style="border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;margin-top:4px"><span class="surplus-label">YTD Budget (spending)</span><span class="surplus-val" style="color:var(--text2)">${fmt(-data.ytd.budget)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">${data.ytd.budget - data.ytd.spend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="surplus-val" style="color:${data.ytd.budget - data.ytd.spend >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.ytd.budget - data.ytd.spend)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${data.ytd.remaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="surplus-val" style="color:${data.ytd.remaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.ytd.remaining)}</span></div>
+    <div class="absolute inset-0 opacity-[0.03] pointer-events-none text-blue-800 bg-[radial-gradient(circle,_currentColor_1px,_transparent_1px)] [background-size:20px_20px]"></div>
   </div>`;
+
   document.getElementById('year-stats').innerHTML = `
-    <div class="stat-card"><div class="label">Annual Budget</div><div class="value">${fmt(-data.annual.budget)}</div><div class="sub">spending categories</div></div>
-    <div class="stat-card"><div class="label">Avg Monthly Spend</div><div class="value negative">${fmt(-data.annual.avgSpend)}</div><div class="sub">over ${data.ytd.monthCount} month${data.ytd.monthCount !== 1 ? 's' : ''}</div></div>
-    <div class="stat-card"><div class="label">Avg Monthly Income</div><div class="value positive">${fmt(data.annual.avgIncome)}</div></div>
-    <div class="stat-card"><div class="label">Budget Used</div><div class="value ${data.ytd.spend <= data.ytd.budget ? 'positive' : 'negative'}">${data.annual.budget > 0 ? `${Math.round(data.ytd.spend / data.annual.budget * 100)}%` : '0%'}</div><div class="sub">of annual budget</div></div>
-  `;
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Annual Budget</div>
+      <div class="text-xl font-bold tabular-nums">${fmt(-data.annual.budget)}</div>
+      <div class="text-xs text-slate-500 mt-1">spending categories</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Spend</div>
+      <div class="text-xl font-bold tabular-nums text-red-500">${fmt(-data.annual.avgSpend)}</div>
+      <div class="text-xs text-slate-500 mt-1">over ${data.ytd.monthCount} month${data.ytd.monthCount !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Income</div>
+      <div class="text-xl font-bold tabular-nums text-emerald-600">${fmt(data.annual.avgIncome)}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Budget Used</div>
+      <div class="text-xl font-bold tabular-nums ${data.ytd.spend <= data.ytd.budget ? 'text-emerald-600' : 'text-red-500'}">${data.annual.budget > 0 ? `${Math.round(data.ytd.spend / data.annual.budget * 100)}%` : '0%'}</div>
+      <div class="text-xs text-slate-500 mt-1">of annual budget</div>
+    </div>`;
+
   const maxBar = Math.max(...data.monthData.map(m => Math.max(m.spend, m.budget)), 1);
-  document.getElementById('year-monthly-bars').innerHTML = `<div style="display:flex;align-items:flex-end;gap:4px;height:180px;padding-top:10px">${data.monthData.map(m => {
+  document.getElementById('year-monthly-bars').innerHTML = `<div class="flex items-end gap-1" style="height:180px;padding-top:10px">${data.monthData.map(m => {
     const hSpend = m.spend / maxBar * 140;
     const hBudget = m.budget / maxBar * 140;
     const isFuture = !m.hasActuals && !m.isPast;
-    const barColor = isFuture ? '#e2e8f0' : (m.spend > m.budget && m.budget > 0 ? 'var(--red)' : 'var(--accent)');
+    const barColor = isFuture ? 'rgb(226 232 240)' : (m.spend > m.budget && m.budget > 0 ? 'rgb(239 68 68)' : 'rgb(37 99 235)');
     const displayAmt = isFuture ? m.budget : m.spend;
     const hDisplay = isFuture ? hBudget : hSpend;
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div class="text-xs mono fw-500" style="font-size:10px;${isFuture ? 'color:var(--text2);font-style:italic' : ''}">${displayAmt > 0 ? fmtShort(displayAmt) : ''}</div>
-      <div style="width:100%;position:relative">
-        <div style="width:100%;height:${Math.max(hDisplay, 2)}px;background:${barColor};border-radius:4px 4px 0 0;min-height:2px;margin:2px 0;${isFuture ? 'opacity:0.5' : ''}"></div>
-        ${!isFuture && m.budget > 0 ? `<div style="position:absolute;bottom:${hBudget}px;left:0;right:0;height:2px;background:var(--orange);border-radius:1px" title="Budget: ${fmtShort(m.budget)}"></div>` : ''}
+    return `<div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="text-[10px] tabular-nums font-medium ${isFuture ? 'text-slate-400 italic' : 'text-slate-600'}">${displayAmt > 0 ? fmtShort(displayAmt) : ''}</div>
+      <div class="w-full relative">
+        <div class="w-full rounded-t" style="height:${Math.max(hDisplay, 2)}px;background:${barColor};min-height:2px;margin:2px 0;${isFuture ? 'opacity:0.5' : ''}"></div>
+        ${!isFuture && m.budget > 0 ? `<div class="absolute left-0 right-0 h-0.5 bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>` : ''}
       </div>
-      <div class="text-xs text-muted">${m.month}</div></div>`;
+      <div class="text-[10px] text-slate-500">${m.month}</div>
+    </div>`;
   }).join('')}</div>
-  <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2)">
-    <span><span style="display:inline-block;width:12px;height:12px;background:var(--accent);border-radius:2px;vertical-align:middle;margin-right:4px"></span>Actual</span>
-    <span><span style="display:inline-block;width:12px;height:2px;background:var(--orange);border-radius:1px;vertical-align:middle;margin-right:4px"></span>Budget</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#e2e8f0;border-radius:2px;vertical-align:middle;margin-right:4px;opacity:0.5"></span>Forecast (budget)</span>
+  <div class="flex gap-4 mt-2 text-[11px] text-slate-500">
+    <span><span class="inline-block w-3 h-3 bg-blue-600 rounded-sm align-middle mr-1"></span>Actual</span>
+    <span><span class="inline-block w-3 h-0.5 bg-amber-500 rounded align-middle mr-1"></span>Budget</span>
+    <span><span class="inline-block w-3 h-3 bg-slate-200 rounded-sm align-middle mr-1 opacity-50"></span>Forecast</span>
   </div>`;
+
   const sortedCats = Object.entries(data.catTotals).sort((a, b) => b[1] - a[1]);
   const maxCat = sortedCats.length > 0 ? sortedCats[0][1] : 1;
-  document.getElementById('year-category-chart').innerHTML = `<div class="bar-chart">${sortedCats.slice(0, 15).map(([cat, val], i) => {
+  document.getElementById('year-category-chart').innerHTML = `<div class="space-y-1.5">${sortedCats.slice(0, 15).map(([cat, val], i) => {
     const budgetAmt = data.catBudgets[cat] || 0;
     const pct = val / Math.max(maxCat, budgetAmt) * 100;
     const budgetPct = budgetAmt > 0 ? budgetAmt / Math.max(maxCat, budgetAmt) * 100 : 0;
-    return `<div class="bar-row"><div class="bar-label" title="${esc(cat)}">${esc(cat)}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}"><span>${fmt(-val)}</span></div>
-      ${budgetAmt > 0 ? `<div class="bar-budget-line" style="left:${Math.min(budgetPct, 100)}%" title="Annual budget: ${fmt(-budgetAmt)}"></div>` : ''}</div>
-      <div class="bar-value">${fmt(-val)}</div></div>`;
+    return `<div class="flex items-center gap-2">
+      <div class="w-28 text-right text-xs text-slate-500 truncate" title="${esc(cat)}">${esc(cat)}</div>
+      <div class="flex-1 h-6 bg-slate-100 rounded-lg relative overflow-hidden">
+        <div class="h-full rounded-lg flex items-center pl-2" style="width:${Math.min(pct, 100)}%;background:${CHART_COLORS[i % CHART_COLORS.length]}">
+          <span class="text-[11px] font-medium text-white whitespace-nowrap">${fmt(-val)}</span>
+        </div>
+        ${budgetAmt > 0 ? `<div class="absolute top-0 bottom-0 w-0.5 bg-slate-900/50 z-[1]" style="left:${Math.min(budgetPct, 100)}%" title="Annual budget: ${fmt(-budgetAmt)}"></div>` : ''}
+      </div>
+      <div class="w-20 text-right text-xs tabular-nums flex-shrink-0">${fmt(-val)}</div>
+    </div>`;
   }).join('')}</div>`;
+
   const budgetVsActual = [];
   Object.entries(store.categories).forEach(([group, cats]) => {
     if (group === SAVINGS_GROUP || group === INCOME_GROUP) return;
@@ -921,24 +1043,38 @@ function renderYearlyDashboard() {
       if (budget <= 0 && !(data.catTotals[cat] > 0)) return;
       const actual = data.catTotals[cat] || 0;
       const pct = budget > 0 ? Math.round(actual / budget * 100) : (actual > 0 ? 999 : 0);
-      const cls = pct > 100 ? 'over' : pct > 80 ? 'warn' : 'ok';
-      budgetVsActual.push(`<div class="budget-item">
-        <div class="budget-header"><span class="budget-cat">${esc(cat)}</span><span class="budget-amount">${fmt(-actual)} / ${fmt(-budget)}</span></div>
-        <div class="budget-progress"><div class="budget-progress-fill ${cls}" style="width:${Math.min(pct, 100)}%"></div></div>
-        <div class="budget-numbers"><span>${pct}%</span><span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span></div>
+      const barColor = pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
+      budgetVsActual.push(`<div class="border border-slate-200 rounded-lg p-3">
+        <div class="flex justify-between items-center text-sm mb-2">
+          <span class="font-medium">${esc(cat)}</span>
+          <span class="text-xs text-slate-500">${fmt(-actual)} / ${fmt(-budget)}</span>
+        </div>
+        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-500 mt-1.5">
+          <span>${pct}%</span>
+          <span>${actual > budget ? `${fmt(-(actual - budget))} over` : `${fmt(-(budget - actual))} left`}</span>
+        </div>
       </div>`);
     });
   });
-  document.getElementById('year-budget-vs-actual').innerHTML = `<div class="budget-grid">${budgetVsActual.join('') || '<p class="text-muted">No budgets set.</p>'}</div>`;
-  document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="surplus-card" style="background:linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);border-color:#fbbf24">
-    <h2>Year-End Forecast (${data.forecast.futureMonthCount} months projected)</h2>
-    <p class="text-sm text-muted" style="margin-bottom:12px">Future spending uses budget. Future income and savings use the year-to-date average.${data.annualLoanBudget > 0 ? ' Loan uses the expected annual amount.' : ''}</p>
-    <div class="surplus-row"><span class="surplus-label">Projected income</span><span class="surplus-val" style="color:var(--green)">${fmt(data.forecast.income)}</span></div>
-    ${data.annualLoanBudget > 0 ? `<div class="surplus-row"><span class="surplus-label">Projected loan inflow</span><span class="surplus-val" style="color:var(--text2)">${fmt(data.forecast.loan)} / ${fmt(data.annualLoanBudget)} budgeted</span></div>` : ''}
-    <div class="surplus-row"><span class="surplus-label">Projected spending</span><span class="surplus-val" style="color:var(--red)">${fmt(-data.forecast.spend)}</span></div>
-    <div class="surplus-row"><span class="surplus-label">Projected savings</span><span class="surplus-val" style="color:var(--purple)">${fmt(-data.forecast.save)}</span></div>
-    <div class="surplus-row total"><span class="surplus-label">${data.forecast.remaining >= 0 ? 'Projected remaining' : 'Projected shortfall'}</span><span class="surplus-val" style="color:${data.forecast.remaining >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(data.forecast.remaining)}</span></div>
-  </div>` : '<p class="text-muted">Full year of data available, no forecast needed.</p>';
+  document.getElementById('year-budget-vs-actual').innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${budgetVsActual.join('') || '<p class="text-sm text-slate-500">No budgets set.</p>'}</div>`;
+
+  document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/30 to-orange-50/20 p-6 sm:p-8">
+    <div class="relative z-10">
+      <h2 class="text-lg font-bold mb-1">Year-End Forecast (${data.forecast.futureMonthCount} months projected)</h2>
+      <p class="text-sm text-slate-500 mb-4">Future spending uses budget. Future income and savings use the year-to-date average.${data.annualLoanBudget > 0 ? ' Loan uses the expected annual amount.' : ''}</p>
+      <div class="space-y-1.5 text-sm">
+        <div class="flex justify-between"><span class="text-slate-500">Projected income</span><span class="font-medium tabular-nums text-emerald-600">${fmt(data.forecast.income)}</span></div>
+        ${data.annualLoanBudget > 0 ? `<div class="flex justify-between"><span class="text-slate-500">Projected loan inflow</span><span class="font-medium tabular-nums text-slate-500">${fmt(data.forecast.loan)} / ${fmt(data.annualLoanBudget)} budgeted</span></div>` : ''}
+        <div class="flex justify-between"><span class="text-slate-500">Projected spending</span><span class="font-medium tabular-nums text-red-500">${fmt(-data.forecast.spend)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Projected savings</span><span class="font-medium tabular-nums text-violet-600">${fmt(-data.forecast.save)}</span></div>
+        <div class="flex justify-between pt-2 mt-1 border-t-2 border-amber-300 font-semibold text-base"><span>${data.forecast.remaining >= 0 ? 'Projected remaining' : 'Projected shortfall'}</span><span class="tabular-nums ${data.forecast.remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.forecast.remaining)}</span></div>
+      </div>
+    </div>
+    <div class="absolute inset-0 opacity-[0.03] pointer-events-none text-amber-800 bg-[radial-gradient(circle,_currentColor_1px,_transparent_1px)] [background-size:20px_20px]"></div>
+  </div>` : '<p class="text-sm text-slate-500">Full year of data available, no forecast needed.</p>';
 }
 
 function saveLoanBudget(year, value) {
@@ -1024,7 +1160,7 @@ function setBudgetCell(year, cat, month, value) {
     MONTH_KEYS.forEach(m => { store.budgets[year][cat][m] = 0; });
   }
   store.budgets[year][cat][month] = Number.parseFloat(value) || 0;
-  commit(null);
+  commit(null, 'budget');
 }
 
 function fillRight(event, year, cat, fromMonth, value) {
@@ -1047,24 +1183,24 @@ function renderCategoryManager() {
   container.innerHTML = '';
   Object.entries(store.categories).forEach(([group, cats]) => {
     const groupDiv = document.createElement('div');
-    groupDiv.className = 'cat-list-group';
-    groupDiv.innerHTML = `<h4>${esc(group)} (${cats.length})</h4>`;
+    groupDiv.className = 'bg-white rounded-xl shadow-sm border border-slate-200 p-5';
+    groupDiv.innerHTML = `<h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 pb-2 border-b border-slate-100">${esc(group)} (${cats.length})</h3>`;
     const listDiv = document.createElement('div');
-    listDiv.className = 'cat-list';
+    listDiv.className = 'space-y-0';
     cats.forEach(cat => {
       const count = store.transactions.filter(tx => tx.category === cat).length;
       const item = document.createElement('div');
-      item.className = 'cat-list-item';
-      item.innerHTML = `<span>${esc(cat)} <span class="text-xs text-muted">(${count} txns)</span></span><div class="flex gap-8"></div>`;
-      const btnWrap = item.querySelector('.flex');
+      item.className = 'flex items-center justify-between py-2 px-2 rounded-lg text-sm hover:bg-slate-50 transition-colors';
+      item.innerHTML = `<span>${esc(cat)} <span class="text-xs text-slate-500">(${count} txns)</span></span><div class="flex gap-2"></div>`;
+      const btnWrap = item.querySelector('.flex.gap-2');
       const renameBtn = document.createElement('button');
-      renameBtn.className = 'btn btn-sm';
+      renameBtn.className = 'px-2 py-0.5 rounded text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors';
       renameBtn.textContent = 'Rename';
       renameBtn.addEventListener('click', () => renameCat(group, cat));
       btnWrap.appendChild(renameBtn);
       if (count === 0) {
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-sm btn-danger';
+        deleteBtn.className = 'px-2 py-0.5 rounded text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors';
         deleteBtn.textContent = 'Delete';
         deleteBtn.addEventListener('click', () => deleteCat(group, cat));
         btnWrap.appendChild(deleteBtn);
@@ -1155,7 +1291,7 @@ function exportData() {
   a.href = URL.createObjectURL(blob);
   a.download = `spending-tracker-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
-  URL.revokeObjectURL(a.href);
+  window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   toast(`Exported backup (schema v${payload.version}).`);
 }
 
@@ -1245,23 +1381,35 @@ function switchDashView(view) {
   else renderDashboard();
 }
 
+function switchSection(section) {
+  document.querySelectorAll('.nav-item[data-section]').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === section);
+  });
+  document.querySelectorAll('.mobile-nav-item[data-section]').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === section);
+  });
+  document.querySelectorAll('.section-content').forEach(el => {
+    el.classList.toggle('hidden', el.id !== `tab-${section}`);
+  });
+  const titleEl = document.getElementById('nav-section-title');
+  if (titleEl) titleEl.textContent = SECTION_TITLES[section] || section;
+  if (section === 'dashboard') renderDashboard();
+  if (section === 'transactions') renderTransactions();
+  if (section === 'budgets') renderBudgetEditor();
+  if (section === 'categories') renderCategoryManager();
+}
+
 function acceptSuggestion(el) {
   const txId = Number.parseInt(el.getAttribute('data-txid'), 10);
   const cat = el.getAttribute('data-cat');
   selectCategory(txId, cat);
 }
 
-function bindTabEvents() {
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-      if (tab.dataset.tab === 'dashboard') renderDashboard();
-      if (tab.dataset.tab === 'transactions') renderTransactions();
-      if (tab.dataset.tab === 'budgets') renderBudgetEditor();
-      if (tab.dataset.tab === 'categories') renderCategoryManager();
+function bindNavEvents() {
+  document.querySelectorAll('[data-section]').forEach(el => {
+    el.addEventListener('click', ev => {
+      ev.preventDefault();
+      switchSection(el.dataset.section);
     });
   });
 }
@@ -1319,6 +1467,7 @@ function bindGlobalActions() {
     setBudgetCell,
     setTxType,
     switchDashView,
+    switchSection,
     toggleCovered,
     updateCatFilter
   });
@@ -1329,7 +1478,7 @@ export function initApp() {
   if (sanitized > 0) persistStore();
   renderAppVersion();
   bindGlobalActions();
-  bindTabEvents();
+  bindNavEvents();
   bindImportEvents();
   bindBudgetEditorEvents();
   document.addEventListener('click', closeCatDropdowns);
