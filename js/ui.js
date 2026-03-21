@@ -144,6 +144,14 @@ function commit(message, renderMode = 'all') {
     renderBudgetEditor();
   } else if (renderMode === 'budget') {
     renderDashboard();
+    const focused = document.activeElement;
+    const focusCat = focused?.getAttribute('data-cat');
+    const focusMonth = focused?.getAttribute('data-month');
+    renderBudgetEditor();
+    if (focusCat && focusMonth) {
+      const next = document.querySelector(`input[data-cat="${focusCat}"][data-month="${focusMonth}"]`);
+      if (next) { next.focus(); next.select(); }
+    }
   }
   if (message) toast(message);
 }
@@ -1290,6 +1298,8 @@ function renameCat(group, oldName) {
 function deleteCat(group, name) {
   if (!window.confirm(`Delete category "${name}"? This will uncategorize all transactions tagged with it.`)) return;
   store.categories[group] = store.categories[group].filter(cat => cat !== name);
+  if (!store.deletedCategories) store.deletedCategories = [];
+  if (!store.deletedCategories.includes(name)) store.deletedCategories.push(name);
   store.transactions.forEach(tx => {
     if (tx.category === name) {
       tx.category = '';

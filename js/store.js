@@ -69,6 +69,7 @@ export function createEmptyStore() {
     budgets: { [String(new Date().getFullYear())]: getDefaultYearBudget() },
     merchantMap: {},
     loanBudget: {},
+    deletedCategories: [],
     nextId: 1,
     salaryShiftDay: 0
   };
@@ -106,10 +107,13 @@ export function normalizeStore(rawStore) {
     : {};
   normalized.salaryShiftDay = Number.parseInt(normalized.salaryShiftDay, 10) || 0;
 
+  normalized.deletedCategories = Array.isArray(normalized.deletedCategories) ? normalized.deletedCategories : [];
   Object.entries(DEFAULT_CATEGORIES).forEach(([group, cats]) => {
     if (!Array.isArray(normalized.categories[group])) normalized.categories[group] = [];
     cats.forEach(cat => {
-      if (!normalized.categories[group].includes(cat)) normalized.categories[group].push(cat);
+      if (!normalized.categories[group].includes(cat) && !normalized.deletedCategories.includes(cat)) {
+        normalized.categories[group].push(cat);
+      }
     });
   });
 
