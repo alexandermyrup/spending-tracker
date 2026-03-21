@@ -748,8 +748,8 @@ function renderDashboard() {
   const biggestMiss = data.budget.overBudgetCategories[0] || null;
 
   const gradient = data.budget.success
-    ? 'bg-gradient-to-br from-emerald-50 via-emerald-50/50 to-teal-50 border-emerald-200/60'
-    : 'bg-gradient-to-br from-red-50 via-red-50/50 to-orange-50 border-red-200/60';
+    ? 'bg-gradient-to-br from-emerald-100 via-emerald-50 to-teal-50 border-emerald-300'
+    : 'bg-gradient-to-br from-red-100 via-red-50 to-orange-50 border-red-300';
   const badgeClass = data.budget.success
     ? 'bg-emerald-100 text-emerald-700'
     : 'bg-red-100 text-red-600';
@@ -765,7 +765,7 @@ function renderDashboard() {
       <div class="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6 items-start scorecard-main">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">How the month went</div>
-          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 max-w-[11ch]">${data.budget.success ? `Under budget by ${verdictAmount}.` : `Over budget by ${verdictAmount}.`}</h2>
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 max-w-[11ch]">${data.budget.success ? `Under budget by ${verdictAmount}` : `Over budget by ${verdictAmount}`}</h2>
           <p class="text-sm text-slate-500 leading-relaxed max-w-[52ch]">${data.budget.overBudgetCategories.length > 0
             ? `${esc(data.budget.overBudgetCategories[0].category)} drove the biggest miss. The overview answers the month first, then gives you the top reasons before the lower drill-down cards.`
             : 'The month stayed within budget. Use the lower detail section only if you want a deeper read on category and merchant movement.'}</p>
