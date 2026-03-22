@@ -1047,20 +1047,23 @@ function renderYearlyDashboard() {
     const incomeClass = isFuture ? 'bg-emerald-100' : 'bg-emerald-500';
     const spendClass = isFuture ? 'bg-slate-100' : (overBudget ? 'bg-red-500' : 'bg-blue-500');
     const labelClass = isFuture ? 'text-slate-300' : 'text-slate-400';
+    const hBudget = m.budget / maxCashflow * 170;
+    const budgetLine = !isFuture && m.budget > 0
+      ? `<div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>`
+      : '';
     const yoyDot = !isFuture && prevSpend > 0
       ? `<div class="absolute left-1/2 -translate-x-1/2 w-[7px] h-[7px] rounded-full border-[1.5px] border-slate-400 bg-white" style="bottom:${hPrevSpend}px" title="${prevYear}: ${fmtShort(prevSpend)}"></div>`
       : '';
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
       <div class="flex gap-[2px] items-end w-full justify-center relative" style="height:100%">
         <div class="w-[42%] rounded-t ${incomeClass}" style="height:${Math.max(hIncome, 2)}px"></div>
-        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(hSpend, 2)}px">${yoyDot}</div>
+        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(hSpend, 2)}px">${budgetLine}${yoyDot}</div>
       </div>
       <div class="text-[11px] ${labelClass} mt-2">${m.month}</div>
     </div>`;
   }).join('')}</div>`;
 
   const ytdNet = data.ytd.income - data.ytd.spend - data.ytd.save;
-  document.getElementById('year-net-inflow').innerHTML = '';
 
   // Summary line
   document.getElementById('year-cashflow-summary').innerHTML = `
