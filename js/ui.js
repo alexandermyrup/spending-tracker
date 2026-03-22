@@ -1128,9 +1128,11 @@ function renderBudgetEditor() {
   html += '<th>Total</th><th>Avg</th></tr></thead><tbody>';
   const grandTotals = {};
   const savingTotals = {};
+  const incomeTotals = {};
   MONTH_KEYS.forEach(m => {
     grandTotals[m] = 0;
     savingTotals[m] = 0;
+    incomeTotals[m] = 0;
   });
   Object.entries(store.categories).forEach(([group, cats]) => {
     html += `<tr class="group-row"><td colspan="${MONTHS.length + 3}">${esc(group)}</td></tr>`;
@@ -1145,12 +1147,20 @@ function renderBudgetEditor() {
         const val = Number(yb[cat][m]) || 0;
         rowTotal += val;
         if (group === SAVINGS_GROUP) savingTotals[m] += val;
-        else if (group !== INCOME_GROUP) grandTotals[m] += val;
+        else if (group === INCOME_GROUP) incomeTotals[m] += val;
+        else grandTotals[m] += val;
         html += `<td><input type="number" value="${val}" data-year="${year}" data-cat="${esc(cat)}" data-month="${m}"></td>`;
       });
       html += `<td class="col-total">${fmtShort(rowTotal)}</td><td class="col-avg">${fmtShort(Math.round(rowTotal / 12))}</td></tr>`;
     });
   });
+  html += '<tr class="total-row"><td>Total Income</td>';
+  let annualIncome = 0;
+  MONTH_KEYS.forEach(m => {
+    html += `<td class="col-total">${fmtShort(incomeTotals[m])}</td>`;
+    annualIncome += incomeTotals[m];
+  });
+  html += `<td class="col-total">${fmtShort(annualIncome)}</td><td class="col-avg">${fmtShort(Math.round(annualIncome / 12))}</td></tr>`;
   html += '<tr class="total-row"><td>Total Spending</td>';
   let annualTotal = 0;
   MONTH_KEYS.forEach(m => {

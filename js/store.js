@@ -127,13 +127,16 @@ export function normalizeStore(rawStore) {
     cats.forEach(cat => ensureCategoryBudgetEntry(normalized.budgets, cat));
   });
 
-  // Sanitize budget values: coerce strings to numbers
+  // Sanitize budget values: coerce strings to numbers and strip invalid month keys
+  const validMonths = new Set(MONTH_KEYS);
   Object.values(normalized.budgets).forEach(yearBudget => {
     Object.keys(yearBudget).forEach(cat => {
       if (typeof yearBudget[cat] === 'object' && yearBudget[cat] !== null) {
-        Object.keys(yearBudget[cat]).forEach(m => {
-          yearBudget[cat][m] = Number(yearBudget[cat][m]) || 0;
+        const cleaned = {};
+        MONTH_KEYS.forEach(m => {
+          cleaned[m] = Number(yearBudget[cat][m]) || 0;
         });
+        yearBudget[cat] = cleaned;
       }
     });
   });
