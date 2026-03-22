@@ -1118,12 +1118,58 @@ function renderYearlyDashboard() {
         <div class="text-xs text-slate-500 mt-0.5">income - spending</div>
       </div>
     </div>
+    <div id="year-savings-chart" class="mt-5 mb-4"></div>
     <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
       <div class="flex justify-between"><span class="text-slate-500">Projected income (EOY)</span><span class="font-medium tabular-nums text-emerald-600">${fmtShort(data.forecast.income)}</span></div>
       <div class="flex justify-between"><span class="text-slate-500">Projected spending (EOY)</span><span class="font-medium tabular-nums text-red-500">${fmtShort(-data.forecast.spend)}</span></div>
       <div class="flex justify-between"><span class="text-slate-500">Projected savings (EOY)</span><span class="font-medium tabular-nums text-violet-600">${fmtShort(-projectedSave)}</span></div>
       <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>Projected remaining</span><span class="tabular-nums ${projectedRemaining - projectedSave >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(projectedRemaining - projectedSave)}</span></div>
     </div>`;
+
+  // Savings line chart
+  const svgW = 720, svgH = 140, padL = 40, padR = 10, padT = 15, padB = 25;
+  const chartW = svgW - padL - padR, chartH = svgH - padT - padB;
+  let cumSave = 0;
+  const savePoints = data.monthData.map((m, i) => {
+    const isFuture = !m.hasActuals && !m.isPast;
+    cumSave += isFuture ? avgMonthlySave : m.save;
+    return { x: padL + (i * chartW / 11), cum: cumSave, isFuture };
+  });
+  const maxSave = Math.max(projectedSave, savingsBudget, 1);
+  const savePts = savePoints.map(p => ({ ...p, y: padT + chartH - (p.cum / maxSave * chartH) }));
+  const saveActual = savePts.filter(p => !p.isFuture);
+  const saveForecast = savePts.filter(p => p.isFuture);
+  const saveLastActual = saveActual[saveActual.length - 1];
+  const saveActualLine = saveActual.map(p => p.x + ',' + p.y).join(' ');
+  const saveForecastLine = saveLastActual
+    ? [saveLastActual, ...saveForecast].map(p => p.x + ',' + p.y).join(' ')
+    : saveForecast.map(p => p.x + ',' + p.y).join(' ');
+  const budgetY = padT + chartH - (savingsBudget / maxSave * chartH);
+  const saveGridLines = [0, 0.25, 0.5, 0.75, 1].map(pct => ({
+    y: padT + chartH - (pct * chartH),
+    label: fmtShort(Math.round(maxSave * pct))
+  }));
+  let svgContent = saveGridLines.map(g =>
+    '<line x1="' + padL + '" y1="' + g.y + '" x2="' + (svgW - padR) + '" y2="' + g.y + '" stroke="#f1f5f9" stroke-width="1"/>'
+  ).join('');
+  svgContent += '<line x1="' + padL + '" y1="' + budgetY + '" x2="' + (svgW - padR) + '" y2="' + budgetY + '" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>';
+  if (saveActualLine) svgContent += '<polyline points="' + saveActualLine + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  if (saveForecastLine) svgContent += '<polyline points="' + saveForecastLine + '" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" opacity="0.4"/>';
+  svgContent += saveActual.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#7c3aed"/>').join('');
+  if (saveLastActual) svgContent += '<circle cx="' + saveLastActual.x + '" cy="' + saveLastActual.y + '" r="6" fill="#7c3aed" opacity="0.15"/>';
+  svgContent += data.monthData.map((m, i) =>
+    '<text x="' + (padL + (i * chartW / 11)) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + m.month + '</text>'
+  ).join('');
+  svgContent += saveGridLines.map(g =>
+    '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#cbd5e1" font-size="9">' + g.label + '</text>'
+  ).join('');
+  let chartHTML = '<div class="relative" style="height:' + svgH + 'px">';
+  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="none">' + svgContent + '</svg>';
+  if (saveLastActual) chartHTML += '<div class="absolute text-[10px] font-semibold text-violet-600" style="left:' + (saveLastActual.x / svgW * 100) + '%;top:' + ((saveLastActual.y / svgH * 100) - 10) + '%">' + fmtShort(data.ytd.save) + '</div>';
+  if (saveForecast.length > 0) chartHTML += '<div class="absolute text-[10px] font-medium text-violet-400" style="right:4px;top:' + ((savePts[savePts.length - 1].y / svgH * 100) - 10) + '%">EOY ' + fmtShort(projectedSave) + '</div>';
+  chartHTML += '<div class="absolute text-[9px] text-violet-300" style="right:4px;top:' + (budgetY / svgH * 100) + '%">Target ' + fmtShort(savingsBudget) + '</div>';
+  chartHTML += '</div>';
+  document.getElementById('year-savings-chart').innerHTML = chartHTML;
 
   document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/30 to-orange-50/20 p-6 sm:p-8">
     <div class="relative z-10">
