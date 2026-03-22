@@ -1127,7 +1127,7 @@ function renderYearlyDashboard() {
     </div>`;
 
   // Savings line chart
-  const svgW = 720, svgH = 140, padL = 40, padR = 10, padT = 15, padB = 25;
+  const svgW = 720, svgH = 220, padL = 40, padR = 10, padT = 15, padB = 25;
   const chartW = svgW - padL - padR, chartH = svgH - padT - padB;
   let cumSave = 0;
   const savePoints = data.monthData.map((m, i) => {
@@ -1171,20 +1171,7 @@ function renderYearlyDashboard() {
   chartHTML += '</div>';
   document.getElementById('year-savings-chart').innerHTML = chartHTML;
 
-  document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/30 to-orange-50/20 p-6 sm:p-8">
-    <div class="relative z-10">
-      <h2 class="text-lg font-bold mb-1">Year-End Forecast (${data.forecast.futureMonthCount} months projected)</h2>
-      <p class="text-sm text-slate-500 mb-4">Future spending uses budget. Future income and savings use the year-to-date average.${data.annualLoanBudget > 0 ? ' Loan uses the expected annual amount.' : ''}</p>
-      <div class="space-y-1.5 text-sm">
-        <div class="flex justify-between"><span class="text-slate-500">Projected income</span><span class="font-medium tabular-nums text-emerald-600">${fmt(data.forecast.income)}</span></div>
-        ${data.annualLoanBudget > 0 ? `<div class="flex justify-between"><span class="text-slate-500">Projected loan inflow</span><span class="font-medium tabular-nums text-slate-500">${fmt(data.forecast.loan)} / ${fmt(data.annualLoanBudget)} budgeted</span></div>` : ''}
-        <div class="flex justify-between"><span class="text-slate-500">Projected spending</span><span class="font-medium tabular-nums text-red-500">${fmt(-data.forecast.spend)}</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">Projected savings</span><span class="font-medium tabular-nums text-violet-600">${fmt(-data.forecast.save)}</span></div>
-        <div class="flex justify-between pt-2 mt-1 border-t-2 border-amber-300 font-semibold text-base"><span>${data.forecast.remaining >= 0 ? 'Projected remaining' : 'Projected shortfall'}</span><span class="tabular-nums ${data.forecast.remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.forecast.remaining)}</span></div>
-      </div>
-    </div>
-    <div class="absolute inset-0 opacity-[0.03] pointer-events-none text-amber-800 bg-[radial-gradient(circle,_currentColor_1px,_transparent_1px)] [background-size:20px_20px]"></div>
-  </div>` : '<p class="text-sm text-slate-500">Full year of data available, no forecast needed.</p>';
+  document.getElementById('year-forecast').innerHTML = '';
 }
 
 function saveLoanBudget(year, value) {
@@ -1220,55 +1207,59 @@ function renderBudgetEditor() {
   let html = '<table class="budget-table"><thead><tr><th>Category</th>';
   MONTHS.forEach(m => { html += `<th>${m}</th>`; });
   html += '<th>Total</th><th>Avg</th></tr></thead><tbody>';
-  const grandTotals = {};
-  const savingTotals = {};
-  const incomeTotals = {};
-  MONTH_KEYS.forEach(m => {
-    grandTotals[m] = 0;
-    savingTotals[m] = 0;
-    incomeTotals[m] = 0;
-  });
+  // Pre-calculate group totals for banners
+  const groupTotals = {};
   Object.entries(store.categories).forEach(([group, cats]) => {
-    html += `<tr class="group-row"><td colspan="${MONTHS.length + 3}">${esc(group)}</td></tr>`;
+    const totals = {};
+    MONTH_KEYS.forEach(m => { totals[m] = 0; });
+    let annual = 0;
     cats.forEach(cat => {
-      if (!yb[cat]) {
-        yb[cat] = {};
-        MONTH_KEYS.forEach(m => { yb[cat][m] = 0; });
-      }
+      if (!yb[cat]) { yb[cat] = {}; MONTH_KEYS.forEach(m => { yb[cat][m] = 0; }); }
+      MONTH_KEYS.forEach(m => {
+        const val = Number(yb[cat][m]) || 0;
+        totals[m] += val;
+        annual += val;
+      });
+    });
+    groupTotals[group] = { monthly: totals, annual };
+  });
+
+  // Render groups in order: Income, Savings, then spending groups
+  const spendingGroups = Object.keys(store.categories).filter(g => g !== INCOME_GROUP && g !== SAVINGS_GROUP);
+  const groupOrder = [INCOME_GROUP, SAVINGS_GROUP, ...spendingGroups];
+
+  function renderGroup(group) {
+    const cats = store.categories[group] || [];
+    const gt = groupTotals[group] || { monthly: {}, annual: 0 };
+    html += `<tr class="group-row"><td>${esc(group)}</td>`;
+    MONTH_KEYS.forEach(m => {
+      html += `<td class="col-total" style="font-size:11px;color:#64748b">${fmtShort(gt.monthly[m] || 0)}</td>`;
+    });
+    html += `<td class="col-total">${fmtShort(gt.annual)}</td><td class="col-avg">${fmtShort(Math.round(gt.annual / 12))}</td></tr>`;
+    cats.forEach(cat => {
+      if (!yb[cat]) { yb[cat] = {}; MONTH_KEYS.forEach(m => { yb[cat][m] = 0; }); }
       let rowTotal = 0;
       html += `<tr><td>${esc(cat)}</td>`;
       MONTH_KEYS.forEach(m => {
         const val = Number(yb[cat][m]) || 0;
         rowTotal += val;
-        if (group === SAVINGS_GROUP) savingTotals[m] += val;
-        else if (group === INCOME_GROUP) incomeTotals[m] += val;
-        else grandTotals[m] += val;
         html += `<td><input type="number" value="${val}" data-year="${year}" data-cat="${esc(cat)}" data-month="${m}"></td>`;
       });
       html += `<td class="col-total">${fmtShort(rowTotal)}</td><td class="col-avg">${fmtShort(Math.round(rowTotal / 12))}</td></tr>`;
     });
-  });
-  html += '<tr class="total-row"><td>Total Income</td>';
-  let annualIncome = 0;
+  }
+
+  groupOrder.forEach(renderGroup);
+
+  // Grand totals
+  const totalSpending = spendingGroups.reduce((sum, g) => sum + (groupTotals[g]?.annual || 0), 0);
+  const totalSpendingMonthly = {};
   MONTH_KEYS.forEach(m => {
-    html += `<td class="col-total">${fmtShort(incomeTotals[m])}</td>`;
-    annualIncome += incomeTotals[m];
+    totalSpendingMonthly[m] = spendingGroups.reduce((sum, g) => sum + (groupTotals[g]?.monthly[m] || 0), 0);
   });
-  html += `<td class="col-total">${fmtShort(annualIncome)}</td><td class="col-avg">${fmtShort(Math.round(annualIncome / 12))}</td></tr>`;
   html += '<tr class="total-row"><td>Total Spending</td>';
-  let annualTotal = 0;
-  MONTH_KEYS.forEach(m => {
-    html += `<td class="col-total">${fmtShort(grandTotals[m])}</td>`;
-    annualTotal += grandTotals[m];
-  });
-  html += `<td class="col-total">${fmtShort(annualTotal)}</td><td class="col-avg">${fmtShort(Math.round(annualTotal / 12))}</td></tr>`;
-  html += '<tr class="total-row"><td>Total Savings</td>';
-  let annualSave = 0;
-  MONTH_KEYS.forEach(m => {
-    html += `<td class="col-total">${fmtShort(savingTotals[m])}</td>`;
-    annualSave += savingTotals[m];
-  });
-  html += `<td class="col-total">${fmtShort(annualSave)}</td><td class="col-avg">${fmtShort(Math.round(annualSave / 12))}</td></tr>`;
+  MONTH_KEYS.forEach(m => { html += `<td class="col-total">${fmtShort(totalSpendingMonthly[m])}</td>`; });
+  html += `<td class="col-total">${fmtShort(totalSpending)}</td><td class="col-avg">${fmtShort(Math.round(totalSpending / 12))}</td></tr>`;
   html += '</tbody></table>';
   document.getElementById('budget-editor').innerHTML = html;
 }
