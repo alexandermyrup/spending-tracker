@@ -1059,44 +1059,8 @@ function renderYearlyDashboard() {
     </div>`;
   }).join('')}</div>`;
 
-  // Net inflow area chart
-  const netData = data.monthData.map(m => {
-    const isFuture = !m.hasActuals && !m.isPast;
-    const net = isFuture ? (data.annual.avgIncome - m.budget) : (m.inc - m.spend - m.save);
-    return { net, isFuture, month: m.month };
-  });
-  const maxNet = Math.max(Math.abs(Math.min(...netData.map(n => n.net))), Math.max(...netData.map(n => n.net)), 1);
-  const svgW = 720;
-  const svgH = 64;
-  const mid = svgH / 2;
-  const points = netData.map((n, i) => {
-    const x = 30 + (i * (svgW - 60) / 11);
-    const y = mid - (n.net / maxNet * (mid - 6));
-    return { x, y, isFuture: n.isFuture };
-  });
-  const actualPts = points.filter(p => !p.isFuture);
-  const forecastPts = points.filter(p => p.isFuture);
-  const lastActual = actualPts[actualPts.length - 1];
-  const actualLine = actualPts.map(p => `${p.x},${p.y}`).join(' ');
-  const forecastLine = lastActual
-    ? [lastActual, ...forecastPts].map(p => `${p.x},${p.y}`).join(' ')
-    : forecastPts.map(p => `${p.x},${p.y}`).join(' ');
   const ytdNet = data.ytd.income - data.ytd.spend - data.ytd.save;
-  const eoyNet = data.forecast.remaining;
-  document.getElementById('year-net-inflow').innerHTML = `
-    <div class="relative" style="height:${svgH}px">
-      <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-full" preserveAspectRatio="none">
-        <line x1="0" y1="${mid}" x2="${svgW}" y2="${mid}" stroke="#f1f5f9" stroke-width="1"/>
-        ${actualLine ? `<polyline points="${actualLine}" fill="none" stroke="#10b981" stroke-width="2" stroke-linejoin="round"/>` : ''}
-        ${forecastLine ? `<polyline points="${forecastLine}" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
-        ${lastActual ? `<circle cx="${lastActual.x}" cy="${lastActual.y}" r="3.5" fill="${ytdNet >= 0 ? '#10b981' : '#ef4444'}"/>` : ''}
-      </svg>
-      <div class="absolute left-0 text-[9px] text-slate-300" style="top:0">+${fmtShort(maxNet)}</div>
-      <div class="absolute left-0 text-[9px] text-slate-300" style="top:${mid - 4}px">0</div>
-      <div class="absolute left-0 text-[9px] text-slate-300" style="bottom:0">-${fmtShort(maxNet)}</div>
-      ${lastActual ? `<div class="absolute text-[10px] font-medium ${ytdNet >= 0 ? 'text-emerald-400' : 'text-red-400'}" style="left:${lastActual.x + 8}px;top:${lastActual.y - 6}px">${fmtShort(ytdNet)}</div>` : ''}
-      ${forecastPts.length > 0 ? `<div class="absolute text-[10px] font-medium ${eoyNet >= 0 ? 'text-emerald-400' : 'text-red-400'}" style="right:4px;top:${points[points.length - 1].y - 12}px">EOY ${fmtShort(eoyNet)}</div>` : ''}
-    </div>`;
+  document.getElementById('year-net-inflow').innerHTML = '';
 
   // Summary line
   document.getElementById('year-cashflow-summary').innerHTML = `
