@@ -1080,6 +1080,51 @@ function renderYearlyDashboard() {
       </span>
     </div>`;
 
+  // Savings tracker
+  const savingsBudget = Object.entries(store.categories).reduce((total, [group, cats]) => {
+    if (group !== SAVINGS_GROUP) return total;
+    return total + cats.reduce((sum, cat) => {
+      return sum + MONTH_KEYS.reduce((mSum, m) => mSum + (Number(store.budgets[year]?.[cat]?.[m]) || 0), 0);
+    }, 0);
+  }, 0);
+  const avgMonthlySave = data.ytd.monthCount > 0 ? data.ytd.save / data.ytd.monthCount : 0;
+  const projectedSave = data.ytd.save + (data.forecast.futureMonthCount * avgMonthlySave);
+  const projectedRemaining = data.forecast.income - data.forecast.spend;
+  const savingsPct = savingsBudget > 0 ? Math.round(data.ytd.save / savingsBudget * 100) : 0;
+  document.getElementById('year-savings-tracker').innerHTML = `
+    <div class="flex justify-between items-baseline mb-5">
+      <h2 class="text-base font-semibold text-slate-800">Savings & Forecast</h2>
+      <span class="text-[11px] text-slate-400">Based on YTD averages</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+      <div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">YTD Saved</div>
+        <div class="text-xl font-bold tabular-nums text-violet-600">${fmtShort(data.ytd.save)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${fmtShort(avgMonthlySave)}/mo avg</div>
+      </div>
+      <div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Savings Budget</div>
+        <div class="text-xl font-bold tabular-nums">${fmtShort(savingsBudget)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${savingsPct}% achieved</div>
+      </div>
+      <div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Projected Savings</div>
+        <div class="text-xl font-bold tabular-nums text-violet-600">${fmtShort(projectedSave)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">at current pace</div>
+      </div>
+      <div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Projected Surplus</div>
+        <div class="text-xl font-bold tabular-nums ${projectedRemaining >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(projectedRemaining)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">income - spending</div>
+      </div>
+    </div>
+    <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
+      <div class="flex justify-between"><span class="text-slate-500">Projected income (EOY)</span><span class="font-medium tabular-nums text-emerald-600">${fmtShort(data.forecast.income)}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Projected spending (EOY)</span><span class="font-medium tabular-nums text-red-500">${fmtShort(-data.forecast.spend)}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Projected savings (EOY)</span><span class="font-medium tabular-nums text-violet-600">${fmtShort(-projectedSave)}</span></div>
+      <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>Projected remaining</span><span class="tabular-nums ${projectedRemaining - projectedSave >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(projectedRemaining - projectedSave)}</span></div>
+    </div>`;
+
   document.getElementById('year-forecast').innerHTML = data.forecast.futureMonthCount > 0 ? `<div class="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/30 to-orange-50/20 p-6 sm:p-8">
     <div class="relative z-10">
       <h2 class="text-lg font-bold mb-1">Year-End Forecast (${data.forecast.futureMonthCount} months projected)</h2>
