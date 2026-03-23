@@ -23,32 +23,11 @@ export function deepClone(value) {
 
 export function getDefaultYearBudget() {
   const b = {};
-  const defaults = {
-    'Rent + utilities': 4800, 'Transport': 710, 'Mobile': 149, 'Internet': 300,
-    'Contacts': 368, 'Macbook payment': 910, 'Gym': 165, 'KAB venteliste': 0,
-    'OpenAI': 173, 'iCloud': 89, 'F1TV': 135, 'EA Play Pro': 135, 'M365': 80, 'Google': 17,
-    'WHOOP': 228,
-    'Hövding forsikring': 27, 'Accident insurance': 117, 'Sygesikring Danmark': 0,
-    'Groceries': 3200, 'Eating out': 300, 'Nightlife': 800, 'Travel': 0,
-    'Skincare': 200, 'Vitamins': 0, 'Pharmacy': 0, 'Toiletries': 200, 'Clothes': 0, 'Laundry': 100,
-    'Haircut': 0, 'Tandlæge': 0, 'Gift cost': 0, 'Transfer out': 0, 'Home': 0, 'Fun': 200, 'Other': 0,
-    'Pension': 6000, 'Investments': 3000
-  };
-  const overrides = {
-    'Sygesikring Danmark': {'01': 671, '07': 671},
-    'Tandlæge': {'04': 700, '10': 700},
-    'Travel': {'02': 1500, '04': 1500, '06': 1500, '08': 1500, '10': 1500, '12': 1500},
-    'Haircut': {'02': 400, '04': 400, '06': 400, '08': 400, '10': 400, '12': 400},
-    'Gift cost': {'06': 500}
-  };
   const allCats = [];
   Object.values(DEFAULT_CATEGORIES).forEach(cats => allCats.push(...cats));
   allCats.forEach(cat => {
     b[cat] = {};
-    MONTH_KEYS.forEach(m => {
-      if (overrides[cat] && overrides[cat][m] !== undefined) b[cat][m] = overrides[cat][m];
-      else b[cat][m] = defaults[cat] || 0;
-    });
+    MONTH_KEYS.forEach(m => { b[cat][m] = 0; });
   });
   return b;
 }
