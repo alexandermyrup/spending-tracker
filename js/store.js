@@ -5,12 +5,12 @@ export const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11
 export const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
 
 export const DEFAULT_CATEGORIES = {
-  'Fixed costs': ['Rent + utilities','Transport','Mobile','Internet','Contacts','Macbook payment','Gym','KAB venteliste'],
-  'Subscriptions': ['OpenAI','iCloud','F1TV','EA Play Pro','M365','Google','WHOOP'],
-  'Insurance': ['Hövding forsikring','Accident insurance','Sygesikring Danmark'],
-  'Variable': ['Groceries','Eating out','Nightlife','Travel','Skincare','Vitamins','Pharmacy','Toiletries','Clothes','Laundry','Haircut','Tandlæge','Gift cost','Transfer out','Home','Fun','Other'],
-  'Savings': ['Pension','Investments'],
-  'Income': ['SU','Part-time job','Feriepenge','Reimbursement','Interest','Other income']
+  'Fixed costs': ['Rent','Utilities','Transport','Phone','Internet','Gym'],
+  'Subscriptions': ['Streaming','Music','Cloud storage','Software'],
+  'Insurance': ['Health insurance','Home insurance','Car insurance'],
+  'Variable': ['Groceries','Eating out','Nightlife','Travel','Clothing','Haircut','Healthcare','Gifts','Home','Entertainment','Other'],
+  'Savings': ['Savings','Investments'],
+  'Income': ['Salary','Side income','Reimbursement','Interest','Other income']
 };
 
 export const SPENDING_GROUPS = ['Fixed costs','Subscriptions','Insurance','Variable'];

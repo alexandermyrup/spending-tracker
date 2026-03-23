@@ -144,7 +144,7 @@ runner.suite('Store normalization', test => {
   test('normalizeStore recomputes sparse nextId', () => {
     const store = normalizeStore({
       transactions: [{ id: 2 }, { id: 7 }, { id: 3 }],
-      categories: { Variable: ['Groceries'], Income: ['SU'] },
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
       budgets: {},
       merchantMap: {}
     });
@@ -158,7 +158,7 @@ runner.suite('Store normalization', test => {
       budgets: { '2026': { Groceries: { '01': 100 } } },
       merchantMap: { 'Foo-tex ': { category: 'Groceries', type: 'spending' } }
     });
-    assert(store.categories['Income'].includes('SU'), 'Default income categories should be restored');
+    assert(store.categories['Income'].includes('Salary'), 'Default income categories should be restored');
     assert(store.budgets['2026']['Transport'], 'Missing budget rows should be added');
     assert(store.merchantMap['FOOTEX'], 'Merchant map key should be normalized');
   });
