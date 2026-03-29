@@ -1171,8 +1171,7 @@ function renderYearlyDashboard() {
   // Actual line (purple solid) + projected extension (purple dashed)
   if (actualLine) svg += '<polyline points="' + actualLine + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
   if (projLine) svg += '<polyline points="' + projLine + '" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" opacity="0.5" stroke-linejoin="round"/>';
-  svg += actualPts.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#7c3aed"/>').join('');
-  if (lastActual) svg += '<circle cx="' + lastActual.x + '" cy="' + lastActual.y + '" r="6" fill="#7c3aed" opacity="0.15"/>';
+  svg += actualPts.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#7c3aed"/>').join('');
   // Month labels
   svg += data.monthData.map((m, i) =>
     '<text x="' + toX(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + m.month + '</text>'
@@ -1181,10 +1180,27 @@ function renderYearlyDashboard() {
   svg += gridLines.map(g =>
     '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#94a3b8" font-size="9">' + g.label + '</text>'
   ).join('');
-  // Annotations
-  if (lastActual) svg += '<text x="' + lastActual.x + '" y="' + (lastActual.y - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="10" font-weight="600">' + fmtShort(lastActual.cum) + '</text>';
-  if (projFuturePts.length > 0) svg += '<text x="' + (svgW - padR) + '" y="' + (toY(projectedEOY) - 8) + '" text-anchor="end" fill="#7c3aed" font-size="10" font-weight="500" opacity="0.6">EOY ' + fmtShort(projectedEOY) + '</text>';
-  svg += '<text x="' + (svgW - padR) + '" y="' + (toY(plannedEOY) + 12) + '" text-anchor="end" fill="#94a3b8" font-size="9">Plan ' + fmtShort(plannedEOY) + '</text>';
+  // Interactive hover zones per month (invisible rects with visible children on hover)
+  const colW = chartW / 11;
+  svg += '<style>.hover-zone .hover-content{opacity:0}.hover-zone:hover .hover-content{opacity:1}</style>';
+  svg += data.monthData.map((m, i) => {
+    const x = toX(i);
+    const planned = plannedCumulative[i] || 0;
+    const actual = projectedCumulative[i]?.cum || 0;
+    const isActual = actualCumulative[i]?.hasActuals;
+    const label = isActual ? 'Actual' : 'Projected';
+    const plannedY = toY(planned);
+    const actualY = toY(actual);
+    return '<g class="hover-zone">'
+      + '<rect x="' + (x - colW / 2) + '" y="' + padT + '" width="' + colW + '" height="' + chartH + '" fill="transparent" style="cursor:crosshair"/>'
+      + '<g class="hover-content">'
+      + '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (padT + chartH) + '" stroke="#e2e8f0" stroke-width="1"/>'
+      + '<circle cx="' + x + '" cy="' + actualY + '" r="4" fill="#7c3aed" stroke="white" stroke-width="1.5"/>'
+      + '<circle cx="' + x + '" cy="' + plannedY + '" r="3.5" fill="#cbd5e1" stroke="white" stroke-width="1.5"/>'
+      + '<text x="' + x + '" y="' + (actualY - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="9.5" font-weight="600">' + label + ' ' + fmtShort(actual) + '</text>'
+      + '<text x="' + x + '" y="' + (plannedY + 14) + '" text-anchor="middle" fill="#94a3b8" font-size="9">Plan ' + fmtShort(planned) + '</text>'
+      + '</g></g>';
+  }).join('');
 
   document.getElementById('year-savings-chart').innerHTML = '<div style="aspect-ratio:' + svgW + '/' + svgH + '"><svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="xMidYMid meet">' + svg + '</svg></div>';
 
