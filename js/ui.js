@@ -1125,11 +1125,10 @@ function renderYearlyDashboard() {
   const svgW = 720, svgH = 220, padL = 50, padR = 10, padT = 20, padB = 25;
   const chartW = svgW - padL - padR, chartH = svgH - padT - padB;
   // Projected actual line: extend actual savings into future using avg income - budget
-  const avgMonthlyIncome = data.annual.avgIncome;
   let cumProjected = actualCumulative.reduce((last, a) => a.hasActuals ? a.cum : last, 0);
   const projectedCumulative = data.monthData.map((m, i) => {
     if (actualCumulative[i].hasActuals) return { cum: actualCumulative[i].cum, isFuture: false };
-    if (!m.isPast || !m.hasActuals) { cumProjected += Math.max(avgMonthlyIncome - m.budget, 0); }
+    cumProjected += plannedMonthly[i];
     return { cum: cumProjected, isFuture: true };
   });
   const projectedEOY = projectedCumulative[11]?.cum || 0;
