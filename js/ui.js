@@ -1096,8 +1096,9 @@ function renderYearlyDashboard() {
     <div class="flex justify-between items-baseline mb-5">
       <h2 class="text-base font-semibold text-slate-800">Savings & Forecast</h2>
       <div class="flex items-center gap-4 text-[11px] text-slate-500">
-        <span class="flex items-center gap-1.5"><span class="w-4 h-[2px] bg-violet-600 inline-block rounded-full"></span> Actual savings</span>
-        <span class="flex items-center gap-1.5"><span class="w-4 h-[2px] bg-slate-300 inline-block rounded-full" style="border-top:2px dashed #cbd5e1;height:0"></span> Planned surplus</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-[2px] bg-violet-600 inline-block rounded-full"></span> Actual</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 inline-block" style="border-top:2px dashed #7c3aed;height:0;opacity:0.5"></span> Projected</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 inline-block" style="border-top:2px dashed #cbd5e1;height:0"></span> Plan</span>
       </div>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
@@ -1127,7 +1128,16 @@ function renderYearlyDashboard() {
   // Two-line savings chart
   const svgW = 720, svgH = 220, padL = 50, padR = 10, padT = 20, padB = 25;
   const chartW = svgW - padL - padR, chartH = svgH - padT - padB;
-  const maxVal = Math.max(plannedEOY, actualCumulative[actualCumulative.length - 1]?.cum || 0, 1);
+  // Projected actual line: extend actual savings into future using avg income - budget
+  const avgMonthlyIncome = data.annual.avgIncome;
+  let cumProjected = actualCumulative.reduce((last, a) => a.hasActuals ? a.cum : last, 0);
+  const projectedCumulative = data.monthData.map((m, i) => {
+    if (actualCumulative[i].hasActuals) return { cum: actualCumulative[i].cum, isFuture: false };
+    if (!m.isPast || !m.hasActuals) { cumProjected += Math.max(avgMonthlyIncome - m.budget, 0); }
+    return { cum: cumProjected, isFuture: true };
+  });
+  const projectedEOY = projectedCumulative[11]?.cum || 0;
+  const maxVal = Math.max(plannedEOY, projectedEOY, 1);
 
   const toX = i => padL + (i * chartW / 11);
   const toY = v => padT + chartH - (v / maxVal * chartH);
@@ -1139,6 +1149,11 @@ function renderYearlyDashboard() {
   actualCumulative.forEach((a, i) => { if (a.hasActuals) actualPts.push({ x: toX(i), y: toY(a.cum), cum: a.cum }); });
   const actualLine = actualPts.map(p => p.x + ',' + p.y).join(' ');
   const lastActual = actualPts[actualPts.length - 1];
+  // Projected line points (future months, starts from last actual)
+  const projFuturePts = projectedCumulative.map((p, i) => ({ x: toX(i), y: toY(p.cum), cum: p.cum, isFuture: p.isFuture })).filter(p => p.isFuture);
+  const projLine = lastActual
+    ? [lastActual, ...projFuturePts].map(p => p.x + ',' + p.y).join(' ')
+    : projFuturePts.map(p => p.x + ',' + p.y).join(' ');
 
   // Nice round grid lines
   const niceStep = (() => {
@@ -1158,8 +1173,9 @@ function renderYearlyDashboard() {
   ).join('');
   // Planned line (grey dashed, full year)
   svg += '<polyline points="' + plannedPts + '" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>';
-  // Actual line (purple solid)
+  // Actual line (purple solid) + projected extension (purple dashed)
   if (actualLine) svg += '<polyline points="' + actualLine + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  if (projLine) svg += '<polyline points="' + projLine + '" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" opacity="0.5" stroke-linejoin="round"/>';
   svg += actualPts.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#7c3aed"/>').join('');
   if (lastActual) svg += '<circle cx="' + lastActual.x + '" cy="' + lastActual.y + '" r="6" fill="#7c3aed" opacity="0.15"/>';
   // Month labels
@@ -1172,7 +1188,8 @@ function renderYearlyDashboard() {
   ).join('');
   // Annotations
   if (lastActual) svg += '<text x="' + lastActual.x + '" y="' + (lastActual.y - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="10" font-weight="600">' + fmtShort(lastActual.cum) + '</text>';
-  svg += '<text x="' + (svgW - padR) + '" y="' + (toY(plannedEOY) - 5) + '" text-anchor="end" fill="#94a3b8" font-size="9">' + fmtShort(plannedEOY) + '</text>';
+  if (projFuturePts.length > 0) svg += '<text x="' + (svgW - padR) + '" y="' + (toY(projectedEOY) - 8) + '" text-anchor="end" fill="#7c3aed" font-size="10" font-weight="500" opacity="0.6">EOY ' + fmtShort(projectedEOY) + '</text>';
+  svg += '<text x="' + (svgW - padR) + '" y="' + (toY(plannedEOY) + 12) + '" text-anchor="end" fill="#94a3b8" font-size="9">Plan ' + fmtShort(plannedEOY) + '</text>';
 
   document.getElementById('year-savings-chart').innerHTML = '<div style="aspect-ratio:' + svgW + '/' + svgH + '"><svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="xMidYMid meet">' + svg + '</svg></div>';
 
