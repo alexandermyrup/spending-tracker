@@ -1124,10 +1124,17 @@ function renderYearlyDashboard() {
     ? [saveLastActual, ...saveForecast].map(p => p.x + ',' + p.y).join(' ')
     : saveForecast.map(p => p.x + ',' + p.y).join(' ');
   const budgetY = padT + chartH - (savingsBudget / maxSave * chartH);
-  const saveGridLines = [0, 0.25, 0.5, 0.75, 1].map(pct => ({
-    y: padT + chartH - (pct * chartH),
-    label: fmtShort(Math.round(maxSave * pct))
-  }));
+  // Nice round grid lines for y-axis
+  const niceStep = (() => {
+    const rough = maxSave / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const candidates = [1, 2, 2.5, 5, 10];
+    return mag * candidates.find(c => c * mag >= rough);
+  })();
+  const saveGridLines = [];
+  for (let v = 0; v <= maxSave; v += niceStep) {
+    saveGridLines.push({ y: padT + chartH - (v / maxSave * chartH), label: fmtShort(v) });
+  }
   let svgContent = saveGridLines.map(g =>
     '<line x1="' + padL + '" y1="' + g.y + '" x2="' + (svgW - padR) + '" y2="' + g.y + '" stroke="#f1f5f9" stroke-width="1"/>'
   ).join('');
@@ -1143,7 +1150,7 @@ function renderYearlyDashboard() {
     '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#cbd5e1" font-size="9">' + g.label + '</text>'
   ).join('');
   let chartHTML = '<div class="relative" style="height:' + svgH + 'px">';
-  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="none">' + svgContent + '</svg>';
+  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full" style="height:auto" preserveAspectRatio="xMidYMid meet">' + svgContent + '</svg>';
   if (saveLastActual) chartHTML += '<div class="absolute text-[10px] font-semibold text-violet-600" style="left:' + (saveLastActual.x / svgW * 100) + '%;top:' + ((saveLastActual.y / svgH * 100) - 10) + '%">' + fmtShort(data.ytd.save) + '</div>';
   if (saveForecast.length > 0) chartHTML += '<div class="absolute text-[10px] font-medium text-violet-400" style="right:4px;top:' + ((savePts[savePts.length - 1].y / svgH * 100) - 10) + '%">EOY ' + fmtShort(projectedSave) + '</div>';
   chartHTML += '<div class="absolute text-[9px] text-violet-300" style="right:4px;top:' + (budgetY / svgH * 100) + '%">Target ' + fmtShort(savingsBudget) + '</div>';
