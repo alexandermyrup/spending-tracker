@@ -1060,16 +1060,12 @@ function renderYearlyDashboard() {
     </div>`;
   }).join('')}</div>`;
 
-  const ytdNet = data.ytd.income - data.ytd.spend - data.ytd.save;
-
   // Summary line
   document.getElementById('year-cashflow-summary').innerHTML = `
     <div class="flex items-center gap-6 text-sm tabular-nums text-slate-500">
       <span>In: <strong class="text-emerald-600">${fmtShort(data.ytd.income)}</strong></span>
-      <span>Out: <strong class="text-blue-600">${fmtShort(data.ytd.spend)}</strong></span>
+      <span>Out: <strong class="text-red-500">${fmtShort(data.ytd.spend)}</strong></span>
       <span>Saved: <strong class="text-violet-600">${fmtShort(data.ytd.save)}</strong></span>
-      <span class="text-slate-300">|</span>
-      <span>Net: <strong class="${ytdNet >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdNet)}</strong></span>
     </div>`;
 
   // Savings & Forecast: planned budget surplus vs actual savings
