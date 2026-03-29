@@ -1162,11 +1162,12 @@ function renderYearlyDashboard() {
   svgContent += saveGridLines.map(g =>
     '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#cbd5e1" font-size="9">' + g.label + '</text>'
   ).join('');
-  let chartHTML = '<div class="relative" style="height:' + svgH + 'px">';
-  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full" style="height:auto" preserveAspectRatio="xMidYMid meet">' + svgContent + '</svg>';
-  if (saveLastActual) chartHTML += '<div class="absolute text-[10px] font-semibold text-violet-600" style="left:' + (saveLastActual.x / svgW * 100) + '%;top:' + ((saveLastActual.y / svgH * 100) - 10) + '%">' + fmtShort(data.ytd.save) + '</div>';
-  if (saveForecast.length > 0) chartHTML += '<div class="absolute text-[10px] font-medium text-violet-400" style="right:4px;top:' + ((savePts[savePts.length - 1].y / svgH * 100) - 10) + '%">EOY ' + fmtShort(projectedSave) + '</div>';
-  chartHTML += '<div class="absolute text-[9px] text-violet-300" style="right:4px;top:' + (budgetY / svgH * 100) + '%">Target ' + fmtShort(savingsBudget) + '</div>';
+  // Annotations as SVG text (avoids container/positioning mismatch)
+  if (saveLastActual) svgContent += '<text x="' + saveLastActual.x + '" y="' + (saveLastActual.y - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="10" font-weight="600">' + fmtShort(data.ytd.save) + '</text>';
+  if (saveForecast.length > 0) svgContent += '<text x="' + (svgW - padR) + '" y="' + (savePts[savePts.length - 1].y - 8) + '" text-anchor="end" fill="#a78bfa" font-size="10" font-weight="500">EOY ' + fmtShort(projectedSave) + '</text>';
+  svgContent += '<text x="' + (svgW - padR) + '" y="' + (budgetY - 5) + '" text-anchor="end" fill="#c4b5fd" font-size="9">Target ' + fmtShort(savingsBudget) + '</text>';
+  let chartHTML = '<div style="aspect-ratio:' + svgW + '/' + svgH + '">';
+  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="xMidYMid meet">' + svgContent + '</svg>';
   chartHTML += '</div>';
   document.getElementById('year-savings-chart').innerHTML = chartHTML;
 
