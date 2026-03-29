@@ -1023,20 +1023,33 @@ function renderYearlyDashboard() {
 
   // Cash flow bars: income vs spending paired
   const maxCashflow = Math.max(...data.monthData.map(m => Math.max(m.inc, m.spend, m.budget)), data.annual.avgIncome, 1);
-  document.getElementById('year-cashflow-bars').innerHTML = `<div class="flex items-end gap-2" style="height:200px">${data.monthData.map((m) => {
+  // Y-axis with nice round gridlines
+  const cfStep = (() => {
+    const rough = maxCashflow / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const candidates = [1, 2, 2.5, 5, 10];
+    return mag * candidates.find(c => c * mag >= rough);
+  })();
+  const cfGridLines = [];
+  for (let v = cfStep; v <= maxCashflow; v += cfStep) {
+    cfGridLines.push({ bottom: v / maxCashflow * 170, label: fmtShort(v) });
+  }
+  const yAxisHTML = cfGridLines.map(g =>
+    `<div class="absolute left-0 right-0 h-px bg-slate-100" style="bottom:${g.bottom + 28}px"></div><div class="absolute text-[9px] text-slate-400 tabular-nums" style="bottom:${g.bottom + 24}px;left:-4px;transform:translateX(-100%)">${g.label}</div>`
+  ).join('');
+  document.getElementById('year-cashflow-bars').innerHTML = `<div class="relative flex items-end gap-2 ml-10" style="height:200px">${yAxisHTML}${data.monthData.map((m) => {
     const isFuture = !m.hasActuals && !m.isPast;
     const avgIncome = data.annual.avgIncome;
     const displayIncome = isFuture ? avgIncome : m.inc;
     const displaySpend = isFuture ? m.budget : m.spend;
     const hIncome = displayIncome / maxCashflow * 170;
     const hSpend = displaySpend / maxCashflow * 170;
-    const overBudget = m.hasActuals && m.spend > m.budget && m.budget > 0;
     const incomeClass = isFuture ? 'bg-emerald-100' : 'bg-emerald-500';
-    const spendClass = isFuture ? 'bg-blue-100' : (overBudget ? 'bg-red-400' : 'bg-blue-500');
+    const spendClass = isFuture ? 'bg-red-100' : 'bg-red-400';
     const labelClass = isFuture ? 'text-slate-300' : 'text-slate-500';
     const hBudget = m.budget / maxCashflow * 170;
-    const budgetLine = !isFuture && m.budget > 0
-      ? `<div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>`
+    const budgetLine = m.budget > 0
+      ? `<div class="absolute left-[-3px] right-[-3px] h-[2.5px] bg-white rounded-full shadow-[0_0_0_1px_rgba(0,0,0,0.15)]" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>`
       : '';
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
       <div class="flex gap-[2px] items-end w-full justify-center relative" style="height:100%">
@@ -1542,6 +1555,7 @@ function bindNavEvents() {
 
 function bindImportEvents() {
   const importArea = document.getElementById('import-area');
+  if (!importArea) return;
   importArea.addEventListener('dragover', e => {
     e.preventDefault();
     importArea.classList.add('dragover');
