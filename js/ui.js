@@ -1021,43 +1021,27 @@ function renderYearlyDashboard() {
       <div class="text-xs text-slate-600 mt-1">of annual budget</div>
     </div>`;
 
-  // Get previous year data for YoY comparison
-  const prevYear = String(Number.parseInt(year, 10) - 1);
-  const prevData = getYearlyDashboardData(prevYear, {
-    excludeCovered,
-    transactions: store.transactions,
-    budgets: store.budgets,
-    categories: store.categories,
-    loanBudget: store.loanBudget,
-    salaryShiftDay: store.salaryShiftDay
-  });
-
-  // Cash flow bars: income vs spending paired, YoY dot on spending
+  // Cash flow bars: income vs spending paired
   const maxCashflow = Math.max(...data.monthData.map(m => Math.max(m.inc, m.spend, m.budget)), data.annual.avgIncome, 1);
-  document.getElementById('year-cashflow-bars').innerHTML = `<div class="flex items-end gap-2" style="height:200px">${data.monthData.map((m, i) => {
+  document.getElementById('year-cashflow-bars').innerHTML = `<div class="flex items-end gap-2" style="height:200px">${data.monthData.map((m) => {
     const isFuture = !m.hasActuals && !m.isPast;
     const avgIncome = data.annual.avgIncome;
     const displayIncome = isFuture ? avgIncome : m.inc;
     const displaySpend = isFuture ? m.budget : m.spend;
     const hIncome = displayIncome / maxCashflow * 170;
     const hSpend = displaySpend / maxCashflow * 170;
-    const prevSpend = prevData.monthData[i]?.spend || 0;
-    const hPrevSpend = prevSpend / maxCashflow * 170;
     const overBudget = m.hasActuals && m.spend > m.budget && m.budget > 0;
     const incomeClass = isFuture ? 'bg-emerald-100' : 'bg-emerald-500';
-    const spendClass = isFuture ? 'bg-slate-100' : (overBudget ? 'bg-red-500' : 'bg-blue-500');
-    const labelClass = isFuture ? 'text-slate-300' : 'text-slate-400';
+    const spendClass = isFuture ? 'bg-blue-100' : (overBudget ? 'bg-red-400' : 'bg-blue-500');
+    const labelClass = isFuture ? 'text-slate-300' : 'text-slate-500';
     const hBudget = m.budget / maxCashflow * 170;
     const budgetLine = !isFuture && m.budget > 0
       ? `<div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom:${hBudget}px" title="Budget: ${fmtShort(m.budget)}"></div>`
       : '';
-    const yoyDot = !isFuture && prevSpend > 0
-      ? `<div class="absolute left-1/2 -translate-x-1/2 w-[7px] h-[7px] rounded-full border-[1.5px] border-slate-400 bg-white" style="bottom:${hPrevSpend}px" title="${prevYear}: ${fmtShort(prevSpend)}"></div>`
-      : '';
     return `<div class="flex-1 flex flex-col items-center justify-end h-full">
       <div class="flex gap-[2px] items-end w-full justify-center relative" style="height:100%">
         <div class="w-[42%] rounded-t ${incomeClass}" style="height:${Math.max(hIncome, 2)}px"></div>
-        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(hSpend, 2)}px">${budgetLine}${yoyDot}</div>
+        <div class="w-[42%] rounded-t ${spendClass} relative" style="height:${Math.max(hSpend, 2)}px">${budgetLine}</div>
       </div>
       <div class="text-[11px] ${labelClass} mt-2">${m.month}</div>
     </div>`;
@@ -1067,17 +1051,12 @@ function renderYearlyDashboard() {
 
   // Summary line
   document.getElementById('year-cashflow-summary').innerHTML = `
-    <div class="flex justify-between items-center text-sm text-slate-500">
-      <div class="flex gap-4 tabular-nums">
-        <span>In: <strong class="text-emerald-600">${fmtShort(data.ytd.income)}</strong></span>
-        <span>Out: <strong class="text-slate-700">${fmtShort(data.ytd.spend)}</strong></span>
-        <span>Net: <strong class="${ytdNet >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdNet)}</strong></span>
-      </div>
-      <span class="text-[11px] ${data.ytd.income > data.ytd.spend ? 'text-emerald-600' : 'text-red-500'}">
-        ${data.ytd.income > data.ytd.spend
-          ? `Income exceeds spending by ${fmtShort(data.ytd.income - data.ytd.spend)}`
-          : `Spending exceeds income by ${fmtShort(data.ytd.spend - data.ytd.income)}`}
-      </span>
+    <div class="flex items-center gap-6 text-sm tabular-nums text-slate-500">
+      <span>In: <strong class="text-emerald-600">${fmtShort(data.ytd.income)}</strong></span>
+      <span>Out: <strong class="text-blue-600">${fmtShort(data.ytd.spend)}</strong></span>
+      <span>Saved: <strong class="text-violet-600">${fmtShort(data.ytd.save)}</strong></span>
+      <span class="text-slate-300">|</span>
+      <span>Net: <strong class="${ytdNet >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdNet)}</strong></span>
     </div>`;
 
   // Savings tracker
@@ -1233,9 +1212,9 @@ function renderBudgetEditor() {
     const gt = groupTotals[group] || { monthly: {}, annual: 0 };
     html += `<tr class="group-row"><td>${esc(group)}</td>`;
     MONTH_KEYS.forEach(m => {
-      html += `<td class="col-total" style="font-size:11px;color:#64748b">${fmtShort(gt.monthly[m] || 0)}</td>`;
+      html += `<td style="text-align:right;font-variant-numeric:tabular-nums;font-size:11px;font-weight:500">${fmtShort(gt.monthly[m] || 0)}</td>`;
     });
-    html += `<td class="col-total">${fmtShort(gt.annual)}</td><td class="col-avg">${fmtShort(Math.round(gt.annual / 12))}</td></tr>`;
+    html += `<td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmtShort(gt.annual)}</td><td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;color:#64748b">${fmtShort(Math.round(gt.annual / 12))}</td></tr>`;
     cats.forEach(cat => {
       if (!yb[cat]) { yb[cat] = {}; MONTH_KEYS.forEach(m => { yb[cat][m] = 0; }); }
       let rowTotal = 0;
@@ -1271,6 +1250,14 @@ function setBudgetCell(year, cat, month, value) {
     MONTH_KEYS.forEach(m => { store.budgets[year][cat][m] = 0; });
   }
   store.budgets[year][cat][month] = Number.parseFloat(value) || 0;
+  // Auto-calculate Feriepenge as 12.5% of Part-time job
+  if (cat === 'Part-time job') {
+    if (!store.budgets[year]['Feriepenge']) {
+      store.budgets[year]['Feriepenge'] = {};
+      MONTH_KEYS.forEach(m => { store.budgets[year]['Feriepenge'][m] = 0; });
+    }
+    store.budgets[year]['Feriepenge'][month] = Math.round((Number.parseFloat(value) || 0) * 0.125);
+  }
   commit(null, 'budget');
 }
 
@@ -1285,6 +1272,14 @@ function fillRight(event, year, cat, fromMonth, value) {
   const numericValue = Number.parseFloat(value) || 0;
   for (let i = startIdx; i < 12; i++) {
     store.budgets[year][cat][MONTH_KEYS[i]] = numericValue;
+    // Auto-calculate Feriepenge as 12.5% of Part-time job
+    if (cat === 'Part-time job') {
+      if (!store.budgets[year]['Feriepenge']) {
+        store.budgets[year]['Feriepenge'] = {};
+        MONTH_KEYS.forEach(m => { store.budgets[year]['Feriepenge'][m] = 0; });
+      }
+      store.budgets[year]['Feriepenge'][MONTH_KEYS[i]] = Math.round(numericValue * 0.125);
+    }
   }
   commit(`Filled ${cat} from ${MONTHS[startIdx]} onward with ${fmtShort(numericValue)}`);
 }

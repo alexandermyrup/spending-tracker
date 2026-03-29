@@ -62,7 +62,7 @@ tailwind.config = {
   .budget-table td:first-child { font-weight: 500; position: sticky; left: 0; background: white; z-index: 1; min-width: 140px; }
   .budget-table .group-row td { background: rgb(241 245 249); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; color: rgb(71 85 105); }
   .budget-table .total-row td { background: rgb(248 250 252); font-weight: 600; border-top: 2px solid rgb(203 213 225); }
-  .budget-table input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid rgba(15,23,42,0.08); border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; min-height: 36px; }
+  .budget-table input[type="number"] { width: 72px; padding: 4px 6px; border: 1px solid rgba(15,23,42,0.08); border-radius: 4px; font-size: 12px; text-align: right; background: transparent; font-variant-numeric: tabular-nums; min-height: 36px; }
   .budget-table input[type="number"]:hover { border-color: rgba(15,23,42,0.18); }
   .budget-table input[type="number"]:focus { outline: none; border-color: rgb(37 99 235); background: rgb(239 246 255); }
   .budget-table .col-total { background: rgb(248 250 252); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
@@ -111,11 +111,8 @@ tailwind.config = {
     <a href="#" data-section="transactions" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Transactions
     </a>
-    <a href="#" data-section="import" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined" aria-hidden="true">upload_file</span> Import CSV
-    </a>
     <a href="#" data-section="budgets" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
-      <span class="material-symbols-outlined" aria-hidden="true">calculate</span> Budgets
+      <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Budgets
     </a>
     <a href="#" data-section="categories" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">category</span> Categories
@@ -189,11 +186,11 @@ tailwind.config = {
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div class="flex justify-between items-baseline mb-5">
             <h2 class="text-base font-semibold text-slate-800">Cash Flow</h2>
-            <div class="flex items-center gap-5 text-[11px] text-slate-400">
+            <div class="flex items-center gap-4 text-[11px] text-slate-500">
               <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Income</span>
               <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block"></span> Spending</span>
+              <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block"></span> Over budget</span>
               <span class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-amber-500 inline-block"></span> Budget</span>
-              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full border-[1.5px] border-slate-400 inline-block"></span> Prev year</span>
             </div>
           </div>
           <div id="year-cashflow-bars"></div>
@@ -222,37 +219,14 @@ tailwind.config = {
           <option value="recent-imports">Review: Recent imports</option>
         </select>
         <input type="text" id="tx-search" placeholder="Search merchant..." class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white ml-auto focus:outline-none focus:border-blue-500" oninput="renderTransactions()">
+        <label class="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-blue-600 border border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer">
+          <span class="material-symbols-outlined" style="font-size:16px">upload_file</span> Import CSV
+          <input type="file" id="csv-input" class="hidden" accept=".csv" onchange="handleCSV(event)">
+        </label>
         <button class="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors" onclick="clearAllTransactions()">Clear All</button>
       </div>
-      <div id="conflict-banner"></div>
-      <div id="tx-summary" class="text-sm text-slate-500 mb-4"></div>
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-sm">
-            <thead class="border-b-2 border-slate-200 bg-slate-50/50">
-              <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
-                <th scope="col" class="py-3 px-3">Date</th><th scope="col" class="py-3 px-3">Merchant</th><th scope="col" class="py-3 px-3 tx-col-desc">Description</th>
-                <th scope="col" class="py-3 px-3 text-right">Amount</th><th scope="col" class="py-3 px-3">Category</th><th scope="col" class="py-3 px-3">Type</th>
-                <th scope="col" class="py-3 px-3 text-center tx-col-covered">Covered</th><th scope="col" class="py-3 px-1"></th>
-              </tr>
-            </thead>
-            <tbody id="tx-body" class="divide-y divide-slate-100"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- IMPORT -->
-    <section id="tab-import" class="section-content hidden">
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 sm:p-6">
-        <h2 class="text-base font-semibold mb-1">Import Nordea CSV</h2>
-        <p class="text-sm text-slate-500 mb-5">Export from Nordea Netbank and drop the CSV file below. Duplicates are skipped automatically.</p>
-        <div class="import-area border-2 border-dashed border-slate-300 rounded-2xl p-10 sm:p-16 text-center cursor-pointer transition-all hover:border-blue-500 hover:bg-blue-50/30" id="import-area" onclick="document.getElementById('csv-input').click()">
-          <span class="material-symbols-outlined text-slate-500 mb-3 block mx-auto" style="font-size:40px">cloud_upload</span>
-          <p class="text-sm text-slate-500">Drop CSV file here or click to browse</p>
-          <input type="file" id="csv-input" class="hidden" accept=".csv" onchange="handleCSV(event)">
-        </div>
-        <div id="import-preview" class="hidden mt-6">
+      <div id="import-preview" class="hidden mb-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <span id="import-count" class="text-sm font-medium"></span>
             <div class="flex gap-2">
@@ -272,6 +246,22 @@ tailwind.config = {
               <tbody id="import-body" class="divide-y divide-slate-100"></tbody>
             </table>
           </div>
+        </div>
+      </div>
+      <div id="conflict-banner"></div>
+      <div id="tx-summary" class="text-sm text-slate-500 mb-4"></div>
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="border-b-2 border-slate-200 bg-slate-50/50">
+              <tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                <th scope="col" class="py-3 px-3">Date</th><th scope="col" class="py-3 px-3">Merchant</th><th scope="col" class="py-3 px-3 tx-col-desc">Description</th>
+                <th scope="col" class="py-3 px-3 text-right">Amount</th><th scope="col" class="py-3 px-3">Category</th><th scope="col" class="py-3 px-3">Type</th>
+                <th scope="col" class="py-3 px-3 text-center tx-col-covered">Covered</th><th scope="col" class="py-3 px-1"></th>
+              </tr>
+            </thead>
+            <tbody id="tx-body" class="divide-y divide-slate-100"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -305,21 +295,18 @@ tailwind.config = {
 </main>
 
 <!-- Mobile Bottom Nav -->
-<nav class="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 grid grid-cols-5 gap-1 z-50 lg:hidden">
+<nav class="fixed bottom-0 left-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 grid grid-cols-4 gap-1 z-50 lg:hidden">
   <button data-section="dashboard" class="mobile-nav-item active flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">dashboard</span> Dash
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">dashboard</span> Dashboard
   </button>
   <button data-section="transactions" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">receipt_long</span> Trans
-  </button>
-  <button data-section="import" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">upload_file</span> Import
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">receipt_long</span> Transactions
   </button>
   <button data-section="budgets" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">calculate</span> Budget
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">account_balance_wallet</span> Budgets
   </button>
   <button data-section="categories" class="mobile-nav-item flex flex-col items-center justify-center py-1.5 rounded-lg text-[11px] font-medium transition-all">
-    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">category</span> Cats
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">category</span> Categories
   </button>
 </nav>
 
