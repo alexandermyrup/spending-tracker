@@ -1072,15 +1072,33 @@ function renderYearlyDashboard() {
       <span>Net: <strong class="${ytdNet >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdNet)}</strong></span>
     </div>`;
 
-  // Savings & Forecast: actual savings for past months, projected surplus (income - budget) for future
-  const avgMonthlyIncome = data.annual.avgIncome;
-  const futureSurplus = data.monthData.filter(m => !m.hasActuals && !m.isPast).reduce((sum, m) => sum + Math.max(avgMonthlyIncome - m.budget, 0), 0);
-  const projectedSave = data.ytd.save + futureSurplus;
+  // Savings & Forecast: planned budget surplus vs actual savings
+  // Planned line: cumulative (income budget - spending budget) per month, all 12 months
+  // Actual line: cumulative real savings from transactions, only past months
+  const yb = store.budgets[year] || {};
+  const plannedMonthly = data.monthData.map(m => {
+    let incomeBudget = 0;
+    let spendBudget = m.budget; // already calculated (excludes savings & income groups)
+    Object.entries(store.categories).forEach(([group, cats]) => {
+      if (group !== INCOME_GROUP) return;
+      cats.forEach(cat => { incomeBudget += (yb[cat] && yb[cat][m.mk]) || 0; });
+    });
+    return Math.max(incomeBudget - spendBudget, 0);
+  });
+  let cumPlanned = 0;
+  const plannedCumulative = plannedMonthly.map(v => { cumPlanned += v; return cumPlanned; });
+  let cumActual = 0;
+  const actualCumulative = data.monthData.map(m => { if (m.hasActuals) cumActual += m.save; return { cum: cumActual, hasActuals: m.hasActuals }; });
+  const plannedEOY = plannedCumulative[11] || 0;
   const ytdSurplus = data.ytd.income - data.ytd.spend;
+
   document.getElementById('year-savings-tracker').innerHTML = `
     <div class="flex justify-between items-baseline mb-5">
       <h2 class="text-base font-semibold text-slate-800">Savings & Forecast</h2>
-      <span class="text-[11px] text-slate-400">Projected from income trend vs budget</span>
+      <div class="flex items-center gap-4 text-[11px] text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-4 h-[2px] bg-violet-600 inline-block rounded-full"></span> Actual savings</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-[2px] bg-slate-300 inline-block rounded-full" style="border-top:2px dashed #cbd5e1;height:0"></span> Planned surplus</span>
+      </div>
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
       <div>
@@ -1089,77 +1107,74 @@ function renderYearlyDashboard() {
         <div class="text-xs text-slate-500 mt-0.5">${data.ytd.monthCount > 0 ? fmtShort(data.ytd.save / data.ytd.monthCount) : '0'}/mo avg</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">YTD Surplus</div>
-        <div class="text-xl font-bold tabular-nums ${ytdSurplus >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(ytdSurplus)}</div>
-        <div class="text-xs text-slate-500 mt-0.5">income - spending</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned YTD</div>
+        <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedCumulative[data.ytd.monthCount - 1] || 0)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">from budget</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Projected Savings</div>
-        <div class="text-xl font-bold tabular-nums text-violet-600">${fmtShort(projectedSave)}</div>
-        <div class="text-xs text-slate-500 mt-0.5">actual + future surplus</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">vs Plan</div>
+        <div class="text-xl font-bold tabular-nums ${data.ytd.save >= (plannedCumulative[data.ytd.monthCount - 1] || 0) ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(data.ytd.save - (plannedCumulative[data.ytd.monthCount - 1] || 0))}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${data.ytd.save >= (plannedCumulative[data.ytd.monthCount - 1] || 0) ? 'ahead' : 'behind'}</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Projected Income</div>
-        <div class="text-xl font-bold tabular-nums text-emerald-600">${fmtShort(data.forecast.income)}</div>
-        <div class="text-xs text-slate-500 mt-0.5">EOY at current pace</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned EOY</div>
+        <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedEOY)}</div>
+        <div class="text-xs text-slate-500 mt-0.5">income - spending budget</div>
       </div>
     </div>
-    <div id="year-savings-chart" class="mt-5 mb-4"></div>
-    <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
-      <div class="flex justify-between"><span class="text-slate-500">Projected income (EOY)</span><span class="font-medium tabular-nums text-emerald-600">${fmtShort(data.forecast.income)}</span></div>
-      <div class="flex justify-between"><span class="text-slate-500">Projected spending (EOY)</span><span class="font-medium tabular-nums text-red-500">${fmtShort(data.forecast.spend)}</span></div>
-      <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>Projected savings (EOY)</span><span class="tabular-nums text-violet-600">${fmtShort(projectedSave)}</span></div>
-    </div>`;
+    <div id="year-savings-chart" class="mt-5 mb-4"></div>`;
 
-  // Cumulative savings chart: actual savings for past, surplus (income - budget) for future
+  // Two-line savings chart
   const svgW = 720, svgH = 220, padL = 50, padR = 10, padT = 20, padB = 25;
   const chartW = svgW - padL - padR, chartH = svgH - padT - padB;
-  let cumSave = 0;
-  const savePoints = data.monthData.map((m, i) => {
-    const isFuture = !m.hasActuals && !m.isPast;
-    cumSave += isFuture ? Math.max(avgMonthlyIncome - m.budget, 0) : m.save;
-    return { x: padL + (i * chartW / 11), cum: cumSave, isFuture };
-  });
-  const maxSave = Math.max(projectedSave, 1);
-  const savePts = savePoints.map(p => ({ ...p, y: padT + chartH - (p.cum / maxSave * chartH) }));
-  const saveActual = savePts.filter(p => !p.isFuture);
-  const saveForecast = savePts.filter(p => p.isFuture);
-  const saveLastActual = saveActual[saveActual.length - 1];
-  const saveActualLine = saveActual.map(p => p.x + ',' + p.y).join(' ');
-  const saveForecastLine = saveLastActual
-    ? [saveLastActual, ...saveForecast].map(p => p.x + ',' + p.y).join(' ')
-    : saveForecast.map(p => p.x + ',' + p.y).join(' ');
-  // Nice round grid lines for y-axis
+  const maxVal = Math.max(plannedEOY, actualCumulative[actualCumulative.length - 1]?.cum || 0, 1);
+
+  const toX = i => padL + (i * chartW / 11);
+  const toY = v => padT + chartH - (v / maxVal * chartH);
+
+  // Planned line points (all 12 months)
+  const plannedPts = plannedCumulative.map((v, i) => toX(i) + ',' + toY(v)).join(' ');
+  // Actual line points (only months with data)
+  const actualPts = [];
+  actualCumulative.forEach((a, i) => { if (a.hasActuals) actualPts.push({ x: toX(i), y: toY(a.cum), cum: a.cum }); });
+  const actualLine = actualPts.map(p => p.x + ',' + p.y).join(' ');
+  const lastActual = actualPts[actualPts.length - 1];
+
+  // Nice round grid lines
   const niceStep = (() => {
-    const rough = maxSave / 4;
+    const rough = maxVal / 4;
     if (rough <= 0) return 1;
     const mag = Math.pow(10, Math.floor(Math.log10(rough)));
     const candidates = [1, 2, 2.5, 5, 10];
     return mag * candidates.find(c => c * mag >= rough);
   })();
-  const saveGridLines = [];
-  for (let v = 0; v <= maxSave && niceStep > 0; v += niceStep) {
-    saveGridLines.push({ y: padT + chartH - (v / maxSave * chartH), label: fmtShort(v) });
+  const gridLines = [];
+  for (let v = 0; v <= maxVal && niceStep > 0; v += niceStep) {
+    gridLines.push({ y: toY(v), label: fmtShort(v) });
   }
-  let svgContent = saveGridLines.map(g =>
+
+  let svg = gridLines.map(g =>
     '<line x1="' + padL + '" y1="' + g.y + '" x2="' + (svgW - padR) + '" y2="' + g.y + '" stroke="#f1f5f9" stroke-width="1"/>'
   ).join('');
-  if (saveActualLine) svgContent += '<polyline points="' + saveActualLine + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
-  if (saveForecastLine) svgContent += '<polyline points="' + saveForecastLine + '" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="5 4" opacity="0.4"/>';
-  svgContent += saveActual.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#7c3aed"/>').join('');
-  if (saveLastActual) svgContent += '<circle cx="' + saveLastActual.x + '" cy="' + saveLastActual.y + '" r="6" fill="#7c3aed" opacity="0.15"/>';
-  svgContent += data.monthData.map((m, i) =>
-    '<text x="' + (padL + (i * chartW / 11)) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + m.month + '</text>'
+  // Planned line (grey dashed, full year)
+  svg += '<polyline points="' + plannedPts + '" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>';
+  // Actual line (purple solid)
+  if (actualLine) svg += '<polyline points="' + actualLine + '" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+  svg += actualPts.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#7c3aed"/>').join('');
+  if (lastActual) svg += '<circle cx="' + lastActual.x + '" cy="' + lastActual.y + '" r="6" fill="#7c3aed" opacity="0.15"/>';
+  // Month labels
+  svg += data.monthData.map((m, i) =>
+    '<text x="' + toX(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + m.month + '</text>'
   ).join('');
-  svgContent += saveGridLines.map(g =>
+  // Y-axis labels
+  svg += gridLines.map(g =>
     '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#94a3b8" font-size="9">' + g.label + '</text>'
   ).join('');
-  if (saveLastActual) svgContent += '<text x="' + saveLastActual.x + '" y="' + (saveLastActual.y - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="10" font-weight="600">' + fmtShort(data.ytd.save) + '</text>';
-  if (saveForecast.length > 0) svgContent += '<text x="' + (svgW - padR) + '" y="' + (savePts[savePts.length - 1].y - 8) + '" text-anchor="end" fill="#a78bfa" font-size="10" font-weight="500">EOY ' + fmtShort(projectedSave) + '</text>';
-  let chartHTML = '<div style="aspect-ratio:' + svgW + '/' + svgH + '">';
-  chartHTML += '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="xMidYMid meet">' + svgContent + '</svg>';
-  chartHTML += '</div>';
-  document.getElementById('year-savings-chart').innerHTML = chartHTML;
+  // Annotations
+  if (lastActual) svg += '<text x="' + lastActual.x + '" y="' + (lastActual.y - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="10" font-weight="600">' + fmtShort(lastActual.cum) + '</text>';
+  svg += '<text x="' + (svgW - padR) + '" y="' + (toY(plannedEOY) - 5) + '" text-anchor="end" fill="#94a3b8" font-size="9">' + fmtShort(plannedEOY) + '</text>';
+
+  document.getElementById('year-savings-chart').innerHTML = '<div style="aspect-ratio:' + svgW + '/' + svgH + '"><svg viewBox="0 0 ' + svgW + ' ' + svgH + '" class="w-full h-full" preserveAspectRatio="xMidYMid meet">' + svg + '</svg></div>';
 
   document.getElementById('year-forecast').innerHTML = '';
 }
