@@ -5,6 +5,7 @@ import {
   MONTH_KEYS,
   MONTHS,
   SAVINGS_GROUP,
+  applyBudgetSideEffect,
   ensureYearBudget,
   exportPayload,
   loadStore,
@@ -13,11 +14,12 @@ import {
   saveStore
 } from './store.js';
 import {
-  MERCHANT_PATTERNS,
   autoMatchMerchant,
   certaintyBand,
+  collapseSplitParent,
   computeCategoryCertainty,
   computeMerchantStats,
+  deduplicateImport,
   detectConflicts,
   detectRecurringMerchants,
   getFilteredTransactions,
@@ -171,9 +173,7 @@ function getDerivedClassification() {
 }
 
 function getImportPreviewMeta(rows) {
-  const existing = new Set(store.transactions.map(txFingerprint));
-  const duplicates = rows.filter(row => existing.has(txFingerprint(row)));
-  const fresh = rows.filter(row => !existing.has(txFingerprint(row)));
+  const { fresh, duplicates } = deduplicateImport(store.transactions, rows);
   const ignored = fresh.filter(row => {
     const suggestion = autoMatchMerchant(row.merchant, row.amount, store);
     return suggestion && suggestion.type === 'ignore';
@@ -366,9 +366,12 @@ function deleteTx(id) {
       } else if (parent.splitInto.length === 1) {
         const remaining = store.transactions.find(t => parent.splitInto.includes(t.id));
         if (remaining) {
-          parent.category = remaining.category || '';
-          parent.type = remaining.type || (parent.amount > 0 ? 'income' : 'spending');
-          parent.manualCategory = remaining.manualCategory || false;
+          const collapsed = collapseSplitParent(parent, remaining);
+          parent.amount = collapsed.amount;
+          parent.category = collapsed.category;
+          parent.type = collapsed.type;
+          parent.manualCategory = collapsed.manualCategory;
+          parent.covered = collapsed.covered;
           store.transactions = store.transactions.filter(t => t.id !== remaining.id);
         }
         delete parent.splitInto;
@@ -981,7 +984,7 @@ function renderYearlyDashboard() {
 
   document.getElementById('year-summary').innerHTML = `<div class="relative overflow-hidden rounded-2xl border border-blue-200/60 bg-gradient-to-br from-blue-50 via-indigo-50/30 to-slate-50 p-6 sm:p-8">
     <div class="relative z-10">
-      <h2 class="text-lg font-bold mb-1">${year} Overview${data.ytd.monthCount < 12 ? ` (${data.ytd.monthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-slate-600 font-normal">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
+      <h2 class="text-lg font-bold mb-1">${year} Overview${data.ytd.dataMonthCount < 12 ? ` (${data.ytd.dataMonthCount} months of data)` : ''}${store.salaryShiftDay ? ` <span class="text-xs text-slate-600 font-normal">(salary-shifted day ${store.salaryShiftDay})</span>` : ''}</h2>
       <div class="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200/40">
         <span class="text-sm text-slate-500">Expected annual loan (SU-lan):</span>
         <input type="number" id="loan-budget-input" value="${data.annualLoanBudget}" min="0" step="100" class="w-28 px-2 py-1 border border-slate-200 rounded-lg text-sm tabular-nums focus:outline-none focus:border-blue-500" onchange="saveLoanBudget('${year}', this.value)">
@@ -1009,7 +1012,7 @@ function renderYearlyDashboard() {
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Spend</div>
       <div class="text-xl font-bold tabular-nums text-red-500">${fmt(-data.annual.avgSpend)}</div>
-      <div class="text-xs text-slate-600 mt-1">over ${data.ytd.monthCount} month${data.ytd.monthCount !== 1 ? 's' : ''}</div>
+      <div class="text-xs text-slate-600 mt-1">over ${data.ytd.elapsedMonthCount} month${data.ytd.elapsedMonthCount !== 1 ? 's' : ''}</div>
     </div>
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Avg Monthly Income</div>
@@ -1101,17 +1104,17 @@ function renderYearlyDashboard() {
       <div>
         <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">YTD Saved</div>
         <div class="text-xl font-bold tabular-nums text-violet-600">${fmtShort(data.ytd.save)}</div>
-        <div class="text-xs text-slate-500 mt-0.5">${data.ytd.monthCount > 0 ? fmtShort(data.ytd.save / data.ytd.monthCount) : '0'}/mo avg</div>
+        <div class="text-xs text-slate-500 mt-0.5">${data.ytd.elapsedMonthCount > 0 ? fmtShort(data.ytd.save / data.ytd.elapsedMonthCount) : '0'}/mo avg</div>
       </div>
       <div>
         <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned YTD</div>
-        <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedCumulative[data.ytd.monthCount - 1] || 0)}</div>
+        <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0)}</div>
         <div class="text-xs text-slate-500 mt-0.5">from budget</div>
       </div>
       <div>
         <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">vs Plan</div>
-        <div class="text-xl font-bold tabular-nums ${data.ytd.save >= (plannedCumulative[data.ytd.monthCount - 1] || 0) ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(data.ytd.save - (plannedCumulative[data.ytd.monthCount - 1] || 0))}</div>
-        <div class="text-xs text-slate-500 mt-0.5">${data.ytd.save >= (plannedCumulative[data.ytd.monthCount - 1] || 0) ? 'ahead' : 'behind'}</div>
+        <div class="text-xl font-bold tabular-nums ${data.ytd.save >= (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0) ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(data.ytd.save - (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0))}</div>
+        <div class="text-xs text-slate-500 mt-0.5">${data.ytd.save >= (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0) ? 'ahead' : 'behind'}</div>
       </div>
       <div>
         <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned EOY</div>
@@ -1304,14 +1307,7 @@ function setBudgetCell(year, cat, month, value) {
     MONTH_KEYS.forEach(m => { store.budgets[year][cat][m] = 0; });
   }
   store.budgets[year][cat][month] = Number.parseFloat(value) || 0;
-  // Auto-calculate Feriepenge as 12.5% of Part-time job
-  if (cat === 'Part-time job') {
-    if (!store.budgets[year]['Feriepenge']) {
-      store.budgets[year]['Feriepenge'] = {};
-      MONTH_KEYS.forEach(m => { store.budgets[year]['Feriepenge'][m] = 0; });
-    }
-    store.budgets[year]['Feriepenge'][month] = Math.round((Number.parseFloat(value) || 0) * 0.125);
-  }
+  applyBudgetSideEffect(store.budgets, year, cat, month, value);
   commit(null, 'budget');
 }
 
@@ -1326,14 +1322,7 @@ function fillRight(event, year, cat, fromMonth, value) {
   const numericValue = Number.parseFloat(value) || 0;
   for (let i = startIdx; i < 12; i++) {
     store.budgets[year][cat][MONTH_KEYS[i]] = numericValue;
-    // Auto-calculate Feriepenge as 12.5% of Part-time job
-    if (cat === 'Part-time job') {
-      if (!store.budgets[year]['Feriepenge']) {
-        store.budgets[year]['Feriepenge'] = {};
-        MONTH_KEYS.forEach(m => { store.budgets[year]['Feriepenge'][m] = 0; });
-      }
-      store.budgets[year]['Feriepenge'][MONTH_KEYS[i]] = Math.round(numericValue * 0.125);
-    }
+    applyBudgetSideEffect(store.budgets, year, cat, MONTH_KEYS[i], value);
   }
   commit(`Filled ${cat} from ${MONTHS[startIdx]} onward with ${fmtShort(numericValue)}`);
 }
@@ -1422,9 +1411,18 @@ function renameCat(group, oldName) {
   Object.keys(store.merchantMap).forEach(key => {
     if (store.merchantMap[key].category === oldName) store.merchantMap[key].category = newName;
   });
-  MERCHANT_PATTERNS.forEach(rule => {
-    if (rule.c === oldName) rule.c = newName;
+  if (!store.categoryAliases) store.categoryAliases = {};
+  store.categoryAliases[oldName] = newName;
+  Object.keys(store.categoryAliases).forEach(key => {
+    if (key !== oldName && store.categoryAliases[key] === oldName) {
+      store.categoryAliases[key] = newName;
+    }
   });
+  const isDefault = Object.values(DEFAULT_CATEGORIES).some(cats => cats.includes(oldName));
+  if (isDefault) {
+    if (!store.deletedCategories) store.deletedCategories = [];
+    if (!store.deletedCategories.includes(oldName)) store.deletedCategories.push(oldName);
+  }
   commit(`Renamed to "${newName}".`);
 }
 
@@ -1442,9 +1440,11 @@ function deleteCat(group, name) {
   Object.keys(store.merchantMap).forEach(key => {
     if (store.merchantMap[key].category === name) delete store.merchantMap[key];
   });
-  MERCHANT_PATTERNS.forEach(rule => {
-    if (rule.c === name) rule.c = '';
-  });
+  if (store.categoryAliases) {
+    Object.keys(store.categoryAliases).forEach(key => {
+      if (store.categoryAliases[key] === name) delete store.categoryAliases[key];
+    });
+  }
   Object.keys(store.budgets).forEach(year => {
     delete store.budgets[year][name];
   });

@@ -1,5 +1,5 @@
 export const STORAGE_KEY = 'spending-tracker-v2';
-export const STORE_VERSION = 3;
+export const STORE_VERSION = 4;
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 export const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
 export const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
@@ -49,9 +49,56 @@ export function createEmptyStore() {
     merchantMap: {},
     loanBudget: {},
     deletedCategories: [],
+    categoryAliases: {},
     nextId: 1,
     salaryShiftDay: 0
   };
+}
+
+export function getEffectiveMonth(tx, shiftDay) {
+  const raw = tx.date.slice(0, 7);
+  if (!shiftDay) return raw;
+  const isIncome = tx.type === 'income' || (tx.amount > 0 && tx.type !== 'ignore' && tx.type !== 'loan');
+  const shouldShift = isIncome || tx.type === 'saving';
+  if (!shouldShift) return raw;
+  const day = Number.parseInt(tx.date.slice(8, 10), 10);
+  if (day <= shiftDay) return raw;
+  const year = Number.parseInt(tx.date.slice(0, 4), 10);
+  const month = Number.parseInt(tx.date.slice(5, 7), 10);
+  if (month === 12) return `${year + 1}-01`;
+  return `${year}-${String(month + 1).padStart(2, '0')}`;
+}
+
+export function resolveCategory(name, store) {
+  if (!name) return '';
+  if (store.categoryAliases && store.categoryAliases[name]) {
+    const resolved = store.categoryAliases[name];
+    if (store.deletedCategories && store.deletedCategories.includes(resolved)) return '';
+    return resolved;
+  }
+  if (store.deletedCategories && store.deletedCategories.includes(name)) return '';
+  return name;
+}
+
+export function registerCategory(name, type, store) {
+  if (!name) return;
+  for (const cats of Object.values(store.categories)) {
+    if (cats.includes(name)) return;
+  }
+  const group = type === 'income' ? INCOME_GROUP : type === 'saving' ? SAVINGS_GROUP : 'Variable';
+  if (!store.categories[group]) store.categories[group] = [];
+  store.categories[group].push(name);
+  ensureCategoryBudgetEntry(store.budgets, name);
+}
+
+export function applyBudgetSideEffect(budgets, year, cat, month, value) {
+  if (cat === 'Part-time job') {
+    if (!budgets[year]['Feriepenge']) {
+      budgets[year]['Feriepenge'] = {};
+      MONTH_KEYS.forEach(m => { budgets[year]['Feriepenge'][m] = 0; });
+    }
+    budgets[year]['Feriepenge'][month] = Math.round((Number.parseFloat(value) || 0) * 0.125);
+  }
 }
 
 export function ensureCategoryBudgetEntry(budgets, cat) {
@@ -87,6 +134,9 @@ export function normalizeStore(rawStore) {
   normalized.salaryShiftDay = Number.parseInt(normalized.salaryShiftDay, 10) || 0;
 
   normalized.deletedCategories = Array.isArray(normalized.deletedCategories) ? normalized.deletedCategories : [];
+  normalized.categoryAliases = normalized.categoryAliases && typeof normalized.categoryAliases === 'object'
+    ? normalized.categoryAliases
+    : {};
   Object.entries(DEFAULT_CATEGORIES).forEach(([group, cats]) => {
     if (!Array.isArray(normalized.categories[group])) normalized.categories[group] = [];
     cats.forEach(cat => {

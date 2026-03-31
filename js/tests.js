@@ -1,13 +1,19 @@
 import {
   CHART_COLORS,
   DEFAULT_CATEGORIES,
+  MONTH_KEYS,
+  applyBudgetSideEffect,
   ensureYearBudget,
   normalizeStore,
   getDefaultYearBudget,
-  exportPayload
+  exportPayload,
+  resolveCategory,
+  registerCategory
 } from './store.js';
 import {
   autoMatchMerchant,
+  collapseSplitParent,
+  deduplicateImport,
   getFilteredTransactions,
   parseNordeaCSV,
   resolveMerchant,
@@ -165,7 +171,7 @@ runner.suite('Store normalization', test => {
 
   test('exportPayload includes current schema version', () => {
     const payload = exportPayload(createStore());
-    assertEquals(payload.version, 3, 'Export should include schema version');
+    assertEquals(payload.version, 4, 'Export should include schema version');
   });
 });
 
@@ -221,7 +227,7 @@ runner.suite('Transaction logic', test => {
     assert(result.filtered.every(tx => tx.id !== 1), 'Split parent should be excluded');
   });
 
-  test('getFilteredTransactions sorts uncategorized suggestions first', () => {
+  test('getFilteredTransactions returns uncategorized in date-descending order', () => {
     const store = createStore({
       transactions: [
         { id: 1, date: '2026-02-10', amount: -50, merchant: 'Unknown', description: '', type: 'spending', category: '' },
@@ -230,9 +236,9 @@ runner.suite('Transaction logic', test => {
       ]
     });
     const result = getFilteredTransactions({ month: 'all', category: 'all', type: 'all', uncategorizedOnly: true, search: '' }, store.transactions, store);
-    assertEquals(result.filtered[0].merchant, 'DSB');
-    assertEquals(result.filtered[1].merchant, 'FOETEX');
-    assertEquals(result.filtered[2].merchant, 'Unknown');
+    assertEquals(result.filtered[0].merchant, 'Unknown');
+    assertEquals(result.filtered[1].merchant, 'DSB');
+    assertEquals(result.filtered[2].merchant, 'FOETEX');
   });
 });
 
@@ -309,6 +315,13 @@ runner.suite('Monthly scorecard', test => {
         { id: 8, date: '2026-02-20', amount: -900, merchant: 'Nordnet', description: '', type: 'saving', category: 'Investments', covered: false },
         { id: 9, date: '2026-02-22', amount: -700, merchant: 'Friend repayment', description: '', type: 'spending', category: 'Travel', covered: true }
       ]
+    });
+
+    store.categories['Fixed costs'].push('Rent + utilities');
+    store.categories['Subscriptions'].push('OpenAI');
+    ['Rent + utilities', 'OpenAI'].forEach(cat => {
+      store.budgets['2026'][cat] = {};
+      MONTH_KEYS.forEach(m => { store.budgets['2026'][cat][m] = 0; });
     });
 
     Object.keys(store.budgets['2026']).forEach(cat => {
@@ -603,6 +616,9 @@ runner.suite('Savings and obligations', test => {
         { id: 12, date: '2026-04-25', amount: -180, merchant: 'Corner shop', description: '', type: 'spending', category: 'Other', covered: false }
       ]
     });
+    store.categories['Fixed costs'].push('Rent + utilities');
+    store.categories['Subscriptions'].push('iCloud');
+    store.categories['Insurance'].push('Sygesikring Danmark');
     return store;
   }
 
@@ -769,6 +785,349 @@ runner.suite('Shared constants', test => {
 
   test('CHART_COLORS are valid hex colors', () => {
     assert(CHART_COLORS.every(color => /^#[0-9a-fA-F]{6}$/.test(color)), 'All colors should be hex');
+  });
+});
+
+// ── Phase 1: Category resolution and alias system ──
+
+runner.suite('Category resolution', test => {
+  test('resolveCategory returns name unchanged when no alias exists', () => {
+    const store = createStore();
+    assertEquals(resolveCategory('Groceries', store), 'Groceries');
+  });
+
+  test('resolveCategory resolves through aliases', () => {
+    const store = createStore({ categoryAliases: { 'Transport': 'Commute' } });
+    assertEquals(resolveCategory('Transport', store), 'Commute');
+  });
+
+  test('resolveCategory returns empty for deleted categories', () => {
+    const store = createStore({ deletedCategories: ['Fun'] });
+    assertEquals(resolveCategory('Fun', store), '');
+  });
+
+  test('resolveCategory returns empty when alias points to deleted category', () => {
+    const store = createStore({
+      categoryAliases: { 'OldName': 'NewName' },
+      deletedCategories: ['NewName']
+    });
+    assertEquals(resolveCategory('OldName', store), '');
+  });
+
+  test('resolveCategory handles empty and null input', () => {
+    const store = createStore();
+    assertEquals(resolveCategory('', store), '');
+    assertEquals(resolveCategory(null, store), '');
+    assertEquals(resolveCategory(undefined, store), '');
+  });
+
+  test('registerCategory auto-registers unknown spending category as Variable', () => {
+    const store = createStore();
+    registerCategory('Rent + utilities', 'spending', store);
+    assert(store.categories['Variable'].includes('Rent + utilities'), 'Should appear in Variable group');
+  });
+
+  test('registerCategory creates budget rows for newly registered categories', () => {
+    const store = createStore();
+    registerCategory('OpenAI', 'spending', store);
+    assert(store.budgets['2026']['OpenAI'], 'Budget row should exist');
+    assertEquals(store.budgets['2026']['OpenAI']['01'], 0);
+  });
+
+  test('registerCategory does not duplicate existing categories', () => {
+    const store = createStore();
+    const before = store.categories['Variable'].length;
+    registerCategory('Groceries', 'spending', store);
+    assertEquals(store.categories['Variable'].length, before);
+  });
+
+  test('registerCategory places income categories in Income group', () => {
+    const store = createStore();
+    registerCategory('SU', 'income', store);
+    assert(store.categories['Income'].includes('SU'));
+  });
+
+  test('registerCategory places saving categories in Savings group', () => {
+    const store = createStore();
+    registerCategory('Pension', 'saving', store);
+    assert(store.categories['Savings'].includes('Pension'));
+  });
+
+  test('resolveCategory resolves renamed default categories that are also tombstoned', () => {
+    const store = createStore({
+      categoryAliases: { 'Transport': 'Commute' },
+      deletedCategories: ['Transport']
+    });
+    assertEquals(resolveCategory('Transport', store), 'Commute', 'Alias should take priority over tombstone');
+  });
+
+  test('normalizeStore adds categoryAliases to v3 stores', () => {
+    const store = normalizeStore({
+      transactions: [],
+      categories: { Variable: ['Groceries'] },
+      budgets: {},
+      merchantMap: {}
+    });
+    assertDeepEqual(store.categoryAliases, {});
+  });
+
+  test('normalizeStore preserves existing categoryAliases', () => {
+    const store = normalizeStore({
+      transactions: [],
+      categories: { Variable: ['Groceries'] },
+      budgets: {},
+      merchantMap: {},
+      categoryAliases: { 'Transport': 'Commute' }
+    });
+    assertEquals(store.categoryAliases['Transport'], 'Commute');
+  });
+});
+
+runner.suite('Budget side effects', test => {
+  test('applyBudgetSideEffect calculates Feriepenge as 12.5% of Part-time job', () => {
+    const store = createStore();
+    ensureYearBudget(store, '2026');
+    store.budgets['2026']['Feriepenge'] = {};
+    MONTH_KEYS.forEach(m => { store.budgets['2026']['Feriepenge'][m] = 0; });
+    applyBudgetSideEffect(store.budgets, '2026', 'Part-time job', '01', 10000);
+    assertEquals(store.budgets['2026']['Feriepenge']['01'], 1250);
+  });
+
+  test('applyBudgetSideEffect creates Feriepenge row if missing', () => {
+    const store = createStore();
+    ensureYearBudget(store, '2026');
+    delete store.budgets['2026']['Feriepenge'];
+    applyBudgetSideEffect(store.budgets, '2026', 'Part-time job', '03', 8000);
+    assert(store.budgets['2026']['Feriepenge'], 'Feriepenge row should be created');
+    assertEquals(store.budgets['2026']['Feriepenge']['03'], 1000);
+  });
+
+  test('applyBudgetSideEffect does nothing for non-Part-time-job categories', () => {
+    const store = createStore();
+    ensureYearBudget(store, '2026');
+    const ferieVal = store.budgets['2026']['Feriepenge']?.['01'] || 0;
+    applyBudgetSideEffect(store.budgets, '2026', 'Groceries', '01', 2000);
+    assertEquals(store.budgets['2026']['Feriepenge']?.['01'] || 0, ferieVal);
+  });
+});
+
+runner.suite('autoMatchMerchant with aliases', test => {
+  test('autoMatchMerchant resolves pattern categories through aliases', () => {
+    const store = createStore({ categoryAliases: { 'Transport': 'Commute' } });
+    const match = autoMatchMerchant('DSB', -100, store);
+    assertEquals(match.category, 'Commute');
+  });
+
+  test('autoMatchMerchant skips patterns for deleted categories', () => {
+    const store = createStore({ deletedCategories: ['Fun'] });
+    const match = autoMatchMerchant('EVENTIM', -50, store);
+    assertEquals(match, null);
+  });
+
+  test('autoMatchMerchant resolves merchantMap categories through aliases', () => {
+    const store = createStore({
+      merchantMap: { 'FOOTEX': { category: 'OldName', type: 'spending' } },
+      categoryAliases: { 'OldName': 'NewName' }
+    });
+    const match = autoMatchMerchant('Foo-tex', -100, store);
+    assertEquals(match.category, 'NewName');
+  });
+
+  test('autoMatchMerchant skips merchantMap entries for deleted categories', () => {
+    const store = createStore({
+      merchantMap: { 'FOOTEX': { category: 'Deleted', type: 'spending' } },
+      deletedCategories: ['Deleted']
+    });
+    const match = autoMatchMerchant('Foo-tex', -100, store);
+    assertEquals(match, null);
+  });
+});
+
+// ── Phase 2: Month semantics and yearly math ──
+
+runner.suite('Transaction filtering with salary shift', test => {
+  test('getFilteredTransactions respects salary shift for month filtering', () => {
+    const store = createStore({
+      salaryShiftDay: 25,
+      transactions: [
+        { id: 1, date: '2026-01-28', amount: 22000, merchant: 'Employer', description: '', type: 'income', category: 'Salary', covered: false }
+      ]
+    });
+    const resultFeb = getFilteredTransactions(
+      { month: '2026-02', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions, store
+    );
+    assertEquals(resultFeb.filtered.length, 1, 'Salary-shifted income should appear in February');
+
+    const resultJan = getFilteredTransactions(
+      { month: '2026-01', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions, store
+    );
+    assertEquals(resultJan.filtered.length, 0, 'Salary-shifted income should not appear in January');
+  });
+
+  test('getFilteredTransactions does not shift spending transactions', () => {
+    const store = createStore({
+      salaryShiftDay: 25,
+      transactions: [
+        { id: 1, date: '2026-01-28', amount: -100, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const resultJan = getFilteredTransactions(
+      { month: '2026-01', category: 'all', type: 'all', uncategorizedOnly: false, search: '' },
+      store.transactions, store
+    );
+    assertEquals(resultJan.filtered.length, 1, 'Spending should stay in January');
+  });
+});
+
+runner.suite('Yearly dashboard sparse month handling', test => {
+  test('sparse year with Jan+Mar data includes Feb budget in YTD', () => {
+    const transactions = [
+      { id: 1, date: '2026-01-05', amount: -1000, merchant: 'A', description: '', type: 'spending', category: 'Groceries', covered: false },
+      { id: 2, date: '2026-01-10', amount: 20000, merchant: 'SU', description: '', type: 'income', category: 'Salary', covered: false },
+      { id: 3, date: '2026-03-05', amount: -1200, merchant: 'B', description: '', type: 'spending', category: 'Groceries', covered: false },
+      { id: 4, date: '2026-03-10', amount: 20000, merchant: 'SU', description: '', type: 'income', category: 'Salary', covered: false }
+    ];
+    const store = createStore({ transactions });
+    ['01', '02', '03'].forEach(m => { store.budgets['2026']['Groceries'][m] = 2000; });
+
+    const result = getYearlyDashboardData('2026', {
+      transactions: store.transactions,
+      budgets: store.budgets,
+      categories: store.categories,
+      loanBudget: {},
+      currentDate: new Date('2026-03-15'),
+      salaryShiftDay: 0,
+      excludeCovered: false
+    });
+
+    assertEquals(result.ytd.elapsedMonthCount, 3, 'Elapsed months should be 3 (Jan, Feb, Mar)');
+    assertEquals(result.ytd.dataMonthCount, 2, 'Data months should be 2 (Jan, Mar)');
+    assert(result.ytd.budget >= 6000, 'YTD budget should include all 3 elapsed months');
+  });
+
+  test('forecast averages use elapsed month count for conservative estimates', () => {
+    const transactions = [
+      { id: 1, date: '2026-01-05', amount: 30000, merchant: 'SU', description: '', type: 'income', category: 'Salary', covered: false },
+      { id: 2, date: '2026-03-05', amount: 30000, merchant: 'SU', description: '', type: 'income', category: 'Salary', covered: false }
+    ];
+    const store = createStore({ transactions });
+
+    const result = getYearlyDashboardData('2026', {
+      transactions: store.transactions,
+      budgets: store.budgets,
+      categories: store.categories,
+      loanBudget: {},
+      currentDate: new Date('2026-03-15'),
+      salaryShiftDay: 0,
+      excludeCovered: false
+    });
+
+    assertEquals(result.annual.avgIncome, 20000, 'Average income should be 60000/3 elapsed months');
+  });
+
+  test('past year treats all 12 months as elapsed', () => {
+    const transactions = [
+      { id: 1, date: '2025-06-15', amount: -500, merchant: 'Test', description: '', type: 'spending', category: 'Groceries', covered: false }
+    ];
+    const store = createStore({ transactions });
+    ensureYearBudget(store, '2025');
+
+    const result = getYearlyDashboardData('2025', {
+      transactions: store.transactions,
+      budgets: store.budgets,
+      categories: store.categories,
+      loanBudget: {},
+      currentDate: new Date('2026-03-15'),
+      salaryShiftDay: 0,
+      excludeCovered: false
+    });
+
+    assertEquals(result.ytd.elapsedMonthCount, 12, 'Past year should have 12 elapsed months');
+    assertEquals(result.ytd.dataMonthCount, 1, 'Only one month has data');
+  });
+});
+
+// ── Phase 3: Import dedup and split mutation safety ──
+
+runner.suite('Import deduplication', test => {
+  test('count-aware dedupe allows legitimate identical transactions', () => {
+    const existing = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
+    ];
+    const newRows = [
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+    ];
+    const result = deduplicateImport(existing, newRows);
+    assertEquals(result.duplicates.length, 1, 'First occurrence is a duplicate of existing');
+    assertEquals(result.fresh.length, 1, 'Second occurrence is fresh');
+  });
+
+  test('all-new transactions pass through as fresh', () => {
+    const existing = [];
+    const newRows = [
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+    ];
+    const result = deduplicateImport(existing, newRows);
+    assertEquals(result.fresh.length, 2);
+    assertEquals(result.duplicates.length, 0);
+  });
+
+  test('exact match count blocks all duplicates', () => {
+    const existing = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' },
+      { id: 2, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
+    ];
+    const newRows = [
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+    ];
+    const result = deduplicateImport(existing, newRows);
+    assertEquals(result.duplicates.length, 2, 'Both should be duplicates');
+    assertEquals(result.fresh.length, 0);
+  });
+
+  test('split transactions are excluded from existing fingerprint counts', () => {
+    const existing = [
+      { id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', splitInto: [2, 3] },
+      { id: 4, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
+    ];
+    const newRows = [
+      { date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries' }
+    ];
+    const result = deduplicateImport(existing, newRows);
+    assertEquals(result.duplicates.length, 1, 'Should match the non-split existing tx');
+  });
+});
+
+runner.suite('Split mutation safety', test => {
+  test('collapseSplitParent uses child amount, not parent amount', () => {
+    const parent = { id: 1, amount: -300, category: 'Groceries', type: 'spending' };
+    const child = { id: 3, amount: -100, category: 'Transport', type: 'spending', manualCategory: true, covered: false };
+    const result = collapseSplitParent(parent, child);
+    assertEquals(result.amount, -100, 'Should use child amount');
+    assertEquals(result.category, 'Transport', 'Should use child category');
+    assertEquals(result.type, 'spending');
+    assertEquals(result.manualCategory, true);
+  });
+
+  test('collapseSplitParent preserves total after collapse', () => {
+    const parent = { id: 1, amount: -300 };
+    const childA = { id: 2, amount: -200, category: 'Groceries', type: 'spending', manualCategory: false, covered: false };
+    const childB = { id: 3, amount: -100, category: 'Transport', type: 'spending', manualCategory: false, covered: false };
+    const collapsed = collapseSplitParent(parent, childB);
+    assertEquals(collapsed.amount, -100, 'Collapsed parent should have surviving child amount, not original -300');
+  });
+
+  test('collapseSplitParent handles income child', () => {
+    const parent = { id: 1, amount: 500 };
+    const child = { id: 2, amount: 200, category: 'Reimbursement', type: 'income', manualCategory: false, covered: false };
+    const result = collapseSplitParent(parent, child);
+    assertEquals(result.amount, 200);
+    assertEquals(result.type, 'income');
   });
 });
 

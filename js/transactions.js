@@ -1,7 +1,9 @@
 import {
   DEFAULT_CATEGORIES,
   INCOME_GROUP,
-  normalizeMerchantName
+  getEffectiveMonth,
+  normalizeMerchantName,
+  resolveCategory
 } from './store.js';
 
 export const MERCHANT_PATTERNS = [
@@ -145,31 +147,41 @@ export function getIncomeCategories(store) {
   ]);
 }
 
+function resolvedMatch(category, type, store) {
+  if (type === 'ignore') return { category: '', type: 'ignore' };
+  const resolved = resolveCategory(category, store);
+  if (!resolved) return null;
+  return { category: resolved, type };
+}
+
 export function autoMatchMerchant(merchantName, amount, store) {
   const upper = String(merchantName || '').toUpperCase();
   const normalizedKey = normalizeMerchantName(merchantName);
   if (store.merchantMap[normalizedKey]) {
     const mapped = store.merchantMap[normalizedKey];
-    const isIncomeCategory = getIncomeCategories(store).has(mapped.category) || mapped.type === 'income';
-    const isPositive = amount && amount > 0;
-    if (isIncomeCategory && !isPositive) {
-      // fall through
-    } else if (!isIncomeCategory && isPositive && mapped.type === 'spending') {
-      // fall through
-    } else {
-      return mapped;
+    const resolved = resolveCategory(mapped.category, store);
+    if (resolved) {
+      const isIncomeCategory = getIncomeCategories(store).has(resolved) || mapped.type === 'income';
+      const isPositive = amount && amount > 0;
+      if (isIncomeCategory && !isPositive) {
+        // fall through
+      } else if (!isIncomeCategory && isPositive && mapped.type === 'spending') {
+        // fall through
+      } else {
+        return { category: resolved, type: mapped.type };
+      }
     }
   }
-  if (upper === 'LARS MYRUP' && amount && Math.abs(amount) === 910) return { category: 'Macbook payment', type: 'spending' };
-  if (upper.includes('LØNOVERFØRSEL')) return { category: 'Part-time job', type: 'income' };
+  if (upper === 'LARS MYRUP' && amount && Math.abs(amount) === 910) return resolvedMatch('Macbook payment', 'spending', store);
+  if (upper.includes('LØNOVERFØRSEL')) return resolvedMatch('Part-time job', 'income', store);
   if (upper === 'SAVINGS ACCOUNT' || upper === 'FROM SAVINGS ACCOUNT' || upper.includes('SAVINGS SU LÅN')) return { category: '', type: 'ignore' };
-  if (upper.includes('IVAN BARBER')) return { category: 'Haircut', type: 'spending' };
+  if (upper.includes('IVAN BARBER')) return resolvedMatch('Haircut', 'spending', store);
   const knownInstitutions = ['UDBETALING DANMARK', 'SYGESIKRING DANMARK', 'TOPDANMARK'];
   const looksLikePerson = !knownInstitutions.some(inst => upper.includes(inst)) &&
     (upper.includes('MOBILEPAY') || String(merchantName || '').match(/^[A-ZÆØÅ][a-zæøå]+ [A-ZÆØÅ]/));
   if (looksLikePerson && amount) {
-    if (amount > 0) return { category: 'Reimbursement', type: 'income' };
-    if (amount < 0) return { category: 'Transfer out', type: 'spending' };
+    if (amount > 0) return resolvedMatch('Reimbursement', 'income', store);
+    if (amount < 0) return resolvedMatch('Transfer out', 'spending', store);
   }
   for (const rule of MERCHANT_PATTERNS) {
     const matched = rule.x ? upper === rule.p.toUpperCase() : upper.includes(rule.p.toUpperCase());
@@ -178,7 +190,7 @@ export function autoMatchMerchant(merchantName, amount, store) {
       if (rule.t === 'income' && amount < 0) continue;
       if (rule.t === 'spending' && amount > 0) continue;
     }
-    return { category: rule.c, type: rule.t };
+    return resolvedMatch(rule.c, rule.t, store);
   }
   return null;
 }
@@ -348,8 +360,9 @@ export function resolveMerchant(name, desc) {
 
 export function getFilteredTransactions(filters, transactions, store) {
   const search = (filters.search || '').toLowerCase();
+  const shiftDay = store.salaryShiftDay || 0;
   const txs = transactions.filter(tx => {
-    if (filters.month !== 'all' && !tx.date.startsWith(filters.month)) return false;
+    if (filters.month !== 'all' && getEffectiveMonth(tx, shiftDay) !== filters.month) return false;
     if (filters.category !== 'all' && tx.category !== filters.category) return false;
     if (filters.type !== 'all' && tx.type !== filters.type) return false;
     if (filters.uncategorizedOnly && (tx.category || tx.type === 'ignore')) return false;
@@ -368,6 +381,38 @@ export function getFilteredTransactions(filters, transactions, store) {
     return b.date.localeCompare(a.date) || b.id - a.id;
   });
   return { filtered, totalSpending, totalIncome, duplicateFingerprints };
+}
+
+export function deduplicateImport(existingTransactions, newRows) {
+  const existingCounts = {};
+  existingTransactions.forEach(tx => {
+    if (tx.splitInto || tx.splitFrom) return;
+    const fp = txFingerprint(tx);
+    existingCounts[fp] = (existingCounts[fp] || 0) + 1;
+  });
+  const seenCounts = {};
+  const fresh = [];
+  const duplicates = [];
+  newRows.forEach(row => {
+    const fp = txFingerprint(row);
+    seenCounts[fp] = (seenCounts[fp] || 0) + 1;
+    if (seenCounts[fp] <= (existingCounts[fp] || 0)) {
+      duplicates.push(row);
+    } else {
+      fresh.push(row);
+    }
+  });
+  return { fresh, duplicates };
+}
+
+export function collapseSplitParent(parent, remainingChild) {
+  return {
+    amount: remainingChild.amount,
+    category: remainingChild.category || '',
+    type: remainingChild.type || (remainingChild.amount > 0 ? 'income' : 'spending'),
+    manualCategory: remainingChild.manualCategory || false,
+    covered: remainingChild.covered || false
+  };
 }
 
 export function sanitizeTransactions(store) {

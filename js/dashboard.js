@@ -3,10 +3,11 @@ import {
   INCOME_GROUP,
   MONTH_KEYS,
   MONTHS,
-  SAVINGS_GROUP
+  SAVINGS_GROUP,
+  getEffectiveMonth
 } from './store.js';
 
-export { CHART_COLORS };
+export { CHART_COLORS, getEffectiveMonth };
 export const MAX_VISIBLE_MONTHS = 12;
 const FIXED_SCORECARD_GROUPS = new Set(['Fixed costs', 'Subscriptions', 'Insurance']);
 
@@ -15,20 +16,6 @@ export function getLastCompletedMonth(currentDate = new Date()) {
   const monthIndex = currentDate.getMonth();
   if (monthIndex === 0) return `${year - 1}-12`;
   return `${year}-${String(monthIndex).padStart(2, '0')}`;
-}
-
-export function getEffectiveMonth(tx, shiftDay) {
-  const raw = tx.date.slice(0, 7);
-  if (!shiftDay) return raw;
-  const isIncome = tx.type === 'income' || (tx.amount > 0 && tx.type !== 'ignore' && tx.type !== 'loan');
-  const shouldShift = isIncome || tx.type === 'saving';
-  if (!shouldShift) return raw;
-  const day = Number.parseInt(tx.date.slice(8, 10), 10);
-  if (day <= shiftDay) return raw;
-  const year = Number.parseInt(tx.date.slice(0, 4), 10);
-  const month = Number.parseInt(tx.date.slice(5, 7), 10);
-  if (month === 12) return `${year + 1}-01`;
-  return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
 export function getUniqueMonths(transactions, shiftDay) {
@@ -588,19 +575,20 @@ export function getYearlyDashboardData(year, options) {
     const isPast = i <= currentMonthIdx || Number.parseInt(year, 10) < currentYear;
     return { mk, ym, month: MONTHS[i], spend, save, inc, loan, budget, hasActuals, isPast };
   });
-  const ytdMonths = monthData.filter(m => m.hasActuals);
-  const ytdSpend = ytdMonths.reduce((sum, m) => sum + m.spend, 0);
-  const ytdSave = ytdMonths.reduce((sum, m) => sum + m.save, 0);
-  const ytdIncome = ytdMonths.reduce((sum, m) => sum + m.inc, 0);
-  const ytdLoan = ytdMonths.reduce((sum, m) => sum + m.loan, 0);
+  const elapsedMonths = monthData.filter(m => m.isPast);
+  const dataMonths = monthData.filter(m => m.isPast && m.hasActuals);
+  const futureMonths = monthData.filter(m => !m.isPast);
+  const ytdSpend = dataMonths.reduce((sum, m) => sum + m.spend, 0);
+  const ytdSave = dataMonths.reduce((sum, m) => sum + m.save, 0);
+  const ytdIncome = dataMonths.reduce((sum, m) => sum + m.inc, 0);
+  const ytdLoan = dataMonths.reduce((sum, m) => sum + m.loan, 0);
   const ytdRemaining = ytdIncome - ytdSpend - ytdSave;
   const annualBudget = monthData.reduce((sum, m) => sum + m.budget, 0);
-  const ytdBudget = ytdMonths.reduce((sum, m) => sum + m.budget, 0);
-  const futureMonths = monthData.filter(m => !m.hasActuals && m.isPast === false);
+  const ytdBudget = elapsedMonths.reduce((sum, m) => sum + m.budget, 0);
   const forecastSpend = ytdSpend + futureMonths.reduce((sum, m) => sum + m.budget, 0);
-  const avgMonthlyIncome = ytdMonths.length > 0 ? ytdIncome / ytdMonths.length : 0;
+  const avgMonthlyIncome = elapsedMonths.length > 0 ? ytdIncome / elapsedMonths.length : 0;
   const forecastIncome = ytdIncome + (futureMonths.length * avgMonthlyIncome);
-  const avgMonthlySave = ytdMonths.length > 0 ? ytdSave / ytdMonths.length : 0;
+  const avgMonthlySave = elapsedMonths.length > 0 ? ytdSave / elapsedMonths.length : 0;
   const forecastSave = ytdSave + (futureMonths.length * avgMonthlySave);
   const monthlyLoanBudget = annualLoanBudget / 12;
   const forecastLoan = ytdLoan + (futureMonths.length * monthlyLoanBudget);
@@ -616,12 +604,12 @@ export function getYearlyDashboardData(year, options) {
   });
   return {
     monthData,
-    ytd: { spend: ytdSpend, save: ytdSave, income: ytdIncome, loan: ytdLoan, remaining: ytdRemaining, budget: ytdBudget, monthCount: ytdMonths.length },
-    annual: { budget: annualBudget, avgSpend: ytdMonths.length > 0 ? ytdSpend / ytdMonths.length : 0, avgIncome: avgMonthlyIncome },
+    ytd: { spend: ytdSpend, save: ytdSave, income: ytdIncome, loan: ytdLoan, remaining: ytdRemaining, budget: ytdBudget, elapsedMonthCount: elapsedMonths.length, dataMonthCount: dataMonths.length },
+    annual: { budget: annualBudget, avgSpend: elapsedMonths.length > 0 ? ytdSpend / elapsedMonths.length : 0, avgIncome: avgMonthlyIncome },
     forecast: { spend: forecastSpend, income: forecastIncome, save: forecastSave, loan: forecastLoan, remaining: forecastRemaining, futureMonthCount: futureMonths.length },
     catTotals,
     catBudgets,
     annualLoanBudget,
-    ytdLoanBudget: monthlyLoanBudget * ytdMonths.length
+    ytdLoanBudget: monthlyLoanBudget * elapsedMonths.length
   };
 }
