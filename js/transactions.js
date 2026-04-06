@@ -319,15 +319,16 @@ export function parseNordeaCSV(text, todayIso = new Date().toISOString().slice(0
     const name = cols[4].trim();
     const desc = cols[5].trim();
     const saldo = cols[6] ? cols[6].trim() : '';
-    const date = dateRaw === 'Reserveret' ? todayIso : dateRaw.replace(/\//g, '-');
+    if (dateRaw === 'Reserveret') continue;
+    const date = dateRaw.replace(/\//g, '-');
     const merchant = resolveMerchant(name, desc);
-    rows.push({ date, amount, merchant, description: desc, originalName: name, balance: saldo, pending: dateRaw === 'Reserveret' });
+    rows.push({ date, amount, merchant, description: desc, originalName: name, balance: saldo });
   }
   return rows;
 }
 
 export function txFingerprint(tx) {
-  return `${tx.date}|${tx.amount}|${tx.merchant}|${tx.description}`;
+  return `${tx.date}|${tx.amount}|${tx.merchant}|${tx.description}|${tx.balance || ''}`;
 }
 
 export function resolveMerchant(name, desc) {
@@ -383,26 +384,16 @@ export function getFilteredTransactions(filters, transactions, store) {
   return { filtered, totalSpending, totalIncome, duplicateFingerprints };
 }
 
-export function deduplicateImport(existingTransactions, newRows) {
-  const existingCounts = {};
+export function flagDuplicates(existingTransactions, newRows) {
+  const existingFps = new Set();
   existingTransactions.forEach(tx => {
     if (tx.splitInto || tx.splitFrom) return;
-    const fp = txFingerprint(tx);
-    existingCounts[fp] = (existingCounts[fp] || 0) + 1;
+    existingFps.add(txFingerprint(tx));
   });
-  const seenCounts = {};
-  const fresh = [];
-  const duplicates = [];
-  newRows.forEach(row => {
-    const fp = txFingerprint(row);
-    seenCounts[fp] = (seenCounts[fp] || 0) + 1;
-    if (seenCounts[fp] <= (existingCounts[fp] || 0)) {
-      duplicates.push(row);
-    } else {
-      fresh.push(row);
-    }
-  });
-  return { fresh, duplicates };
+  return newRows.map(row => ({
+    ...row,
+    possibleDuplicate: existingFps.has(txFingerprint(row))
+  }));
 }
 
 export function collapseSplitParent(parent, remainingChild) {

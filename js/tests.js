@@ -13,7 +13,7 @@ import {
 import {
   autoMatchMerchant,
   collapseSplitParent,
-  deduplicateImport,
+  flagDuplicates,
   getFilteredTransactions,
   parseNordeaCSV,
   resolveMerchant,
@@ -184,15 +184,20 @@ runner.suite('Import and parsing', test => {
     assertEquals(resolveMerchant('', 'Nordea pay køb, . DELI Den 12.02'), 'DELI', 'Should extract merchant');
   });
 
-  test('parseNordeaCSV handles reserved rows', () => {
-    const rows = parseNordeaCSV('Dato;Beløb;X;X;Navn;Tekst\nReserveret;-123,00;;;FOETEX;Groceries', '2026-03-07');
-    assertEquals(rows[0].date, '2026-03-07', 'Reserved rows should use provided today date');
-    assertEquals(rows[0].pending, true, 'Reserved rows should be marked pending');
+  test('parseNordeaCSV skips reserved rows', () => {
+    const rows = parseNordeaCSV('Dato;Beløb;X;X;Navn;Tekst\nReserveret;-123,00;;;FOETEX;Groceries\n2026-03-06;-50,00;;;NETTO;Food', '2026-03-07');
+    assertEquals(rows.length, 1, 'Reserved rows should be skipped');
+    assertEquals(rows[0].merchant, 'NETTO');
   });
 
-  test('txFingerprint identifies exact duplicates', () => {
+  test('txFingerprint includes balance', () => {
+    const tx = { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '5000' };
+    assertEquals(txFingerprint(tx), '2026-02-15|-100|FOETEX|Groceries|5000');
+  });
+
+  test('txFingerprint without balance falls back to empty string', () => {
     const tx = { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' };
-    assertEquals(txFingerprint(tx), '2026-02-15|-100|FOETEX|Groceries');
+    assertEquals(txFingerprint(tx), '2026-02-15|-100|FOETEX|Groceries|');
   });
 });
 
@@ -1051,55 +1056,43 @@ runner.suite('Yearly dashboard sparse month handling', test => {
 
 // ── Phase 3: Import dedup and split mutation safety ──
 
-runner.suite('Import deduplication', test => {
-  test('count-aware dedupe allows legitimate identical transactions', () => {
+runner.suite('Import duplicate flagging', test => {
+  test('flags rows matching existing transactions', () => {
     const existing = [
-      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '5000', type: 'spending' }
     ];
     const newRows = [
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '5000' },
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '4900' }
     ];
-    const result = deduplicateImport(existing, newRows);
-    assertEquals(result.duplicates.length, 1, 'First occurrence is a duplicate of existing');
-    assertEquals(result.fresh.length, 1, 'Second occurrence is fresh');
+    const result = flagDuplicates(existing, newRows);
+    assertEquals(result.length, 2, 'All rows returned');
+    assertEquals(result[0].possibleDuplicate, true, 'Matching balance flagged');
+    assertEquals(result[1].possibleDuplicate, false, 'Different balance not flagged');
   });
 
-  test('all-new transactions pass through as fresh', () => {
+  test('all-new transactions are not flagged', () => {
     const existing = [];
     const newRows = [
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '5000' },
+      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', balance: '4900' }
     ];
-    const result = deduplicateImport(existing, newRows);
-    assertEquals(result.fresh.length, 2);
-    assertEquals(result.duplicates.length, 0);
+    const result = flagDuplicates(existing, newRows);
+    assertEquals(result.length, 2);
+    assertEquals(result[0].possibleDuplicate, false);
+    assertEquals(result[1].possibleDuplicate, false);
   });
 
-  test('exact match count blocks all duplicates', () => {
+  test('split transactions are excluded from existing fingerprints', () => {
     const existing = [
-      { id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' },
-      { id: 2, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
+      { id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', balance: '5000', splitInto: [2, 3] },
+      { id: 4, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', balance: '5000', type: 'spending' }
     ];
     const newRows = [
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' },
-      { date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: 'Groceries' }
+      { date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', balance: '5000' }
     ];
-    const result = deduplicateImport(existing, newRows);
-    assertEquals(result.duplicates.length, 2, 'Both should be duplicates');
-    assertEquals(result.fresh.length, 0);
-  });
-
-  test('split transactions are excluded from existing fingerprint counts', () => {
-    const existing = [
-      { id: 1, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', splitInto: [2, 3] },
-      { id: 4, date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries', type: 'spending' }
-    ];
-    const newRows = [
-      { date: '2026-02-15', amount: -300, merchant: 'FOETEX', description: 'Groceries' }
-    ];
-    const result = deduplicateImport(existing, newRows);
-    assertEquals(result.duplicates.length, 1, 'Should match the non-split existing tx');
+    const result = flagDuplicates(existing, newRows);
+    assertEquals(result[0].possibleDuplicate, true, 'Matches non-split existing tx');
   });
 });
 

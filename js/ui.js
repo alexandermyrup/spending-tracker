@@ -19,7 +19,7 @@ import {
   collapseSplitParent,
   computeCategoryCertainty,
   computeMerchantStats,
-  deduplicateImport,
+  flagDuplicates,
   detectConflicts,
   detectRecurringMerchants,
   getFilteredTransactions,
@@ -173,17 +173,18 @@ function getDerivedClassification() {
 }
 
 function getImportPreviewMeta(rows) {
-  const { fresh, duplicates } = deduplicateImport(store.transactions, rows);
-  const ignored = fresh.filter(row => {
+  const flagged = flagDuplicates(store.transactions, rows);
+  const possibleDupes = flagged.filter(r => r.possibleDuplicate).length;
+  const ignored = flagged.filter(row => {
     const suggestion = autoMatchMerchant(row.merchant, row.amount, store);
     return suggestion && suggestion.type === 'ignore';
   });
-  const suggested = fresh.filter(row => {
+  const suggested = flagged.filter(row => {
     const suggestion = autoMatchMerchant(row.merchant, row.amount, store);
     return suggestion && suggestion.category;
   });
-  const uncategorized = fresh.length - suggested.length - ignored.length;
-  return { fresh, duplicates, ignored, suggested, uncategorized };
+  const uncategorized = flagged.length - suggested.length - ignored.length;
+  return { fresh: flagged, possibleDupes, ignored, suggested, uncategorized };
 }
 
 function getReviewMode() {
@@ -238,15 +239,15 @@ function renderImportPreview() {
   const stats = getImportPreviewMeta(pendingImport);
   countEl.textContent = `${stats.fresh.length} new transaction${stats.fresh.length !== 1 ? 's' : ''}`;
   metaEl.innerHTML = `
-    <span>${stats.duplicates.length} duplicates skipped</span>
+    ${stats.possibleDupes > 0 ? `<span class="text-amber-600">${stats.possibleDupes} possible duplicate${stats.possibleDupes !== 1 ? 's' : ''}</span>` : ''}
     <span>${stats.ignored.length} auto-ignored</span>
     <span>${stats.suggested.length} suggested</span>
     <span>${stats.uncategorized} uncategorized</span>
   `;
   tbody.innerHTML = stats.fresh.map(tx => {
     const autocat = autoMatchMerchant(tx.merchant, tx.amount, store);
-    return `<tr class="hover:bg-slate-50/50">
-      <td class="py-2.5 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-500">Pending</em>' : tx.date}</td>
+    return `<tr class="${tx.possibleDuplicate ? 'bg-amber-50/50' : 'hover:bg-slate-50/50'}">
+      <td class="py-2.5 px-3 tabular-nums">${tx.date}${tx.possibleDuplicate ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 border border-dashed border-amber-300" title="Possible duplicate of existing transaction">dup?</span>' : ''}</td>
       <td class="py-2.5 px-3 font-medium">${esc(tx.merchant)}</td>
       <td class="py-2.5 px-3 text-slate-500">${esc(tx.description)}</td>
       <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-600'}">${fmt(tx.amount)}</td>
@@ -299,7 +300,6 @@ function confirmImport() {
       merchant: tx.merchant,
       description: tx.description,
       balance: tx.balance,
-      pending: tx.pending,
       category: assignedCategory,
       manualCategory: wasAutoAssigned,
       type: autocat ? autocat.type : (tx.amount > 0 ? 'income' : 'spending'),
@@ -380,6 +380,66 @@ function deleteTx(id) {
   }
   store.transactions = store.transactions.filter(t => t.id !== id);
   commit('Transaction deleted.');
+}
+
+function deleteFiltered() {
+  const filters = {
+    month: document.getElementById('tx-month-filter').value,
+    category: document.getElementById('tx-cat-filter').value,
+    type: document.getElementById('tx-type-filter').value,
+    search: document.getElementById('tx-search').value
+  };
+  const result = getFilteredTransactions(filters, store.transactions, store);
+  const derived = getDerivedClassification();
+  const displayTxs = getVisibleTransactions(result.filtered, derived);
+  if (displayTxs.length === 0) return;
+
+  const reviewMode = getReviewMode();
+  const parts = [];
+  if (filters.month !== 'all') parts.push(filters.month);
+  if (filters.category !== 'all') parts.push(filters.category);
+  if (filters.type !== 'all') parts.push(filters.type);
+  if (filters.search) parts.push(`"${filters.search}"`);
+  if (reviewMode !== 'all') parts.push(reviewMode);
+  const filterDesc = parts.length > 0 ? ` matching: ${parts.join(', ')}` : '';
+  if (!window.confirm(`Delete ${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}?`)) return;
+
+  const idsToDelete = new Set(displayTxs.map(tx => tx.id));
+
+  // Collect split parents affected by deleting their children
+  const parentsToCheck = new Set();
+  displayTxs.forEach(tx => {
+    if (tx.splitFrom) parentsToCheck.add(tx.splitFrom);
+  });
+
+  // Delete the transactions
+  store.transactions = store.transactions.filter(t => !idsToDelete.has(t.id));
+
+  // Clean up split parents
+  parentsToCheck.forEach(parentId => {
+    const parent = store.transactions.find(t => t.id === parentId);
+    if (!parent || !parent.splitInto) return;
+    parent.splitInto = parent.splitInto.filter(cid => !idsToDelete.has(cid));
+    if (parent.splitInto.length === 0) {
+      delete parent.splitInto;
+      parent.type = parent.amount > 0 ? 'income' : 'spending';
+      parent.category = '';
+    } else if (parent.splitInto.length === 1) {
+      const remaining = store.transactions.find(t => parent.splitInto.includes(t.id));
+      if (remaining) {
+        const collapsed = collapseSplitParent(parent, remaining);
+        parent.amount = collapsed.amount;
+        parent.category = collapsed.category;
+        parent.type = collapsed.type;
+        parent.manualCategory = collapsed.manualCategory;
+        parent.covered = collapsed.covered;
+        store.transactions = store.transactions.filter(t => t.id !== remaining.id);
+      }
+      delete parent.splitInto;
+    }
+  });
+
+  commit(`Deleted ${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}.`);
 }
 
 function clearAllTransactions() {
@@ -661,7 +721,6 @@ function confirmSplit() {
       merchant: tx.merchant,
       description: tx.description,
       balance: tx.balance,
-      pending: tx.pending,
       category: cat,
       type,
       covered: tx.covered,
@@ -727,7 +786,10 @@ function renderTransactions() {
   document.getElementById('conflict-banner').innerHTML = getConflictBannerHtml(derived.conflicts);
   const summaryEl = document.getElementById('tx-summary');
   const visibleSuggestions = displayTxs.filter(tx => !tx.category && autoMatchMerchant(tx.merchant, tx.amount, store)?.category).length;
-  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}`;
+  const reviewMode = getReviewMode();
+  const hasFilter = filters.month !== 'all' || filters.category !== 'all' || filters.type !== 'all' || filters.search || reviewMode !== 'all';
+  const deleteBtn = hasFilter && displayTxs.length > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors ml-2" onclick="deleteFiltered()">Delete ${displayTxs.length} shown</button>` : '';
+  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}${deleteBtn}`;
   const tbody = document.getElementById('tx-body');
   tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
@@ -746,7 +808,7 @@ function renderTransactions() {
     const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-600';
     const rowBg = isSplitChild ? 'bg-blue-50/30' : isDupe ? 'bg-red-50/30' : 'hover:bg-slate-50/50';
     return `<tr class="${rowBg}">
-      <td class="py-3 px-3 tabular-nums">${tx.pending ? '<em class="text-slate-500">Pending</em>' : tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
+      <td class="py-3 px-3 tabular-nums">${tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
       <td class="py-3 px-3 font-medium">${esc(tx.merchant)}${isRecurring ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] text-blue-600 bg-blue-50" title="Recurring subscription">&#8635;</span>' : ''}</td>
       <td class="py-3 px-3 text-slate-500 max-w-[260px] truncate tx-col-desc">${esc(tx.description)}</td>
       <td class="py-3 px-3 text-right tabular-nums font-medium ${amountColor}">${fmt(tx.amount)}</td>
@@ -1633,6 +1695,7 @@ function bindGlobalActions() {
     confirmImport,
     confirmSplit,
     deleteCat,
+    deleteFiltered,
     deleteTx,
     exportData,
     fillRight,
