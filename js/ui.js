@@ -401,8 +401,10 @@ function deleteFiltered() {
   if (filters.type !== 'all') parts.push(filters.type);
   if (filters.search) parts.push(`"${filters.search}"`);
   if (reviewMode !== 'all') parts.push(reviewMode);
-  const filterDesc = parts.length > 0 ? ` matching: ${parts.join(', ')}` : '';
-  if (!window.confirm(`Delete ${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}?`)) return;
+  const hasFilter = parts.length > 0;
+  const filterDesc = hasFilter ? ` matching: ${parts.join(', ')}` : '';
+  if (!window.confirm(`Delete ${hasFilter ? '' : 'ALL '}${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}?`)) return;
+  if (!hasFilter && !window.confirm('Are you really sure? Export a JSON backup first if needed.')) return;
 
   const idsToDelete = new Set(displayTxs.map(tx => tx.id));
 
@@ -439,18 +441,10 @@ function deleteFiltered() {
     }
   });
 
+  if (!hasFilter) lastImportedIds = [];
   commit(`Deleted ${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}.`);
 }
 
-function clearAllTransactions() {
-  if (!window.confirm(`Delete ALL ${store.transactions.length} transactions? This cannot be undone.`)) return;
-  if (!window.confirm('Are you really sure? Export a JSON backup first if needed.')) return;
-  store.transactions = [];
-  store.merchantMap = {};
-  store.nextId = 1;
-  lastImportedIds = [];
-  commit('All transactions cleared.');
-}
 
 function closeCatDropdowns() {
   document.querySelectorAll('.cat-dropdown').forEach(el => el.remove());
@@ -786,9 +780,7 @@ function renderTransactions() {
   document.getElementById('conflict-banner').innerHTML = getConflictBannerHtml(derived.conflicts);
   const summaryEl = document.getElementById('tx-summary');
   const visibleSuggestions = displayTxs.filter(tx => !tx.category && autoMatchMerchant(tx.merchant, tx.amount, store)?.category).length;
-  const reviewMode = getReviewMode();
-  const hasFilter = filters.month !== 'all' || filters.category !== 'all' || filters.type !== 'all' || filters.search || reviewMode !== 'all';
-  const deleteBtn = hasFilter && displayTxs.length > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors ml-2" onclick="deleteFiltered()">Delete ${displayTxs.length} shown</button>` : '';
+  const deleteBtn = displayTxs.length > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors ml-2" onclick="deleteFiltered()">Delete ${displayTxs.length} shown</button>` : '';
   summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}${deleteBtn}`;
   const tbody = document.getElementById('tx-body');
   tbody.innerHTML = displayTxs.map(tx => {
@@ -1690,7 +1682,6 @@ function bindGlobalActions() {
     acceptSuggestion,
     applyVisibleSuggestions,
     cancelImport,
-    clearAllTransactions,
     closeModal,
     confirmImport,
     confirmSplit,
