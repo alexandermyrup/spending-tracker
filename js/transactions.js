@@ -376,7 +376,9 @@ export function getFilteredTransactions(filters, transactions, store) {
   transactions.forEach(tx => {
     if (tx.splitInto || tx.splitFrom) return;
     const fp = txFingerprint(tx);
-    duplicateFingerprints[fp] = (duplicateFingerprints[fp] || 0) + 1;
+    if (!duplicateFingerprints[fp]) duplicateFingerprints[fp] = { count: 0, minId: tx.id };
+    duplicateFingerprints[fp].count++;
+    if (tx.id < duplicateFingerprints[fp].minId) duplicateFingerprints[fp].minId = tx.id;
   });
   const filtered = txs.filter(tx => !tx.splitInto).sort((a, b) => {
     return b.date.localeCompare(a.date) || b.id - a.id;

@@ -174,17 +174,18 @@ function getDerivedClassification() {
 
 function getImportPreviewMeta(rows) {
   const flagged = flagDuplicates(store.transactions, rows);
-  const possibleDupes = flagged.filter(r => r.possibleDuplicate).length;
-  const ignored = flagged.filter(row => {
+  let possibleDupes = 0;
+  let ignoredCount = 0;
+  let suggestedCount = 0;
+  flagged.forEach(row => {
     const suggestion = autoMatchMerchant(row.merchant, row.amount, store);
-    return suggestion && suggestion.type === 'ignore';
+    const isIgnored = suggestion && suggestion.type === 'ignore';
+    if (isIgnored) ignoredCount++;
+    else if (suggestion && suggestion.category) suggestedCount++;
+    if (row.possibleDuplicate && !isIgnored) possibleDupes++;
   });
-  const suggested = flagged.filter(row => {
-    const suggestion = autoMatchMerchant(row.merchant, row.amount, store);
-    return suggestion && suggestion.category;
-  });
-  const uncategorized = flagged.length - suggested.length - ignored.length;
-  return { fresh: flagged, possibleDupes, ignored, suggested, uncategorized };
+  const uncategorized = flagged.length - suggestedCount - ignoredCount;
+  return { fresh: flagged, possibleDupes, ignoredCount, suggestedCount, uncategorized };
 }
 
 function getReviewMode() {
@@ -240,14 +241,16 @@ function renderImportPreview() {
   countEl.textContent = `${stats.fresh.length} new transaction${stats.fresh.length !== 1 ? 's' : ''}`;
   metaEl.innerHTML = `
     ${stats.possibleDupes > 0 ? `<span class="text-amber-600">${stats.possibleDupes} possible duplicate${stats.possibleDupes !== 1 ? 's' : ''}</span>` : ''}
-    <span>${stats.ignored.length} auto-ignored</span>
-    <span>${stats.suggested.length} suggested</span>
+    <span>${stats.ignoredCount} auto-ignored</span>
+    <span>${stats.suggestedCount} suggested</span>
     <span>${stats.uncategorized} uncategorized</span>
   `;
   tbody.innerHTML = stats.fresh.map(tx => {
     const autocat = autoMatchMerchant(tx.merchant, tx.amount, store);
-    return `<tr class="${tx.possibleDuplicate ? 'bg-amber-50/50' : 'hover:bg-slate-50/50'}">
-      <td class="py-2.5 px-3 tabular-nums">${tx.date}${tx.possibleDuplicate ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 border border-dashed border-amber-300" title="Possible duplicate of existing transaction">dup?</span>' : ''}</td>
+    const isIgnored = autocat && autocat.type === 'ignore';
+    const showDupe = tx.possibleDuplicate && !isIgnored;
+    return `<tr class="${showDupe ? 'bg-amber-50/50' : 'hover:bg-slate-50/50'}">
+      <td class="py-2.5 px-3 tabular-nums">${tx.date}${showDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 border border-dashed border-amber-300" title="Possible duplicate of existing transaction">dup?</span>' : ''}</td>
       <td class="py-2.5 px-3 font-medium">${esc(tx.merchant)}</td>
       <td class="py-2.5 px-3 text-slate-500">${esc(tx.description)}</td>
       <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-600'}">${fmt(tx.amount)}</td>
@@ -785,7 +788,8 @@ function renderTransactions() {
   const tbody = document.getElementById('tx-body');
   tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
-    const isDupe = !isSplitChild && result.duplicateFingerprints[txFingerprint(tx)] > 1;
+    const fpInfo = result.duplicateFingerprints[txFingerprint(tx)];
+    const isDupe = !isSplitChild && fpInfo && fpInfo.count > 1 && tx.id !== fpInfo.minId;
     const isRecurring = !!derived.recurring[normalizeMerchantName(tx.merchant)];
     const suggestion = !tx.category ? autoMatchMerchant(tx.merchant, tx.amount, store) : null;
     const certainty = suggestion && suggestion.category ? computeCategoryCertainty(tx, suggestion, derived.merchantStats, derived.recurring, store) : 0;
