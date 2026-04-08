@@ -37,6 +37,16 @@ import {
   getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
+import {
+  computePacing,
+  computeRunway,
+  computeForecast,
+  getDailyCumulative,
+  getWeeklyHistorySlices,
+  getWeekRange,
+  getVariableCategories,
+  getWeeklyDashboardData
+} from './weekly.js';
 
 class TestRunner {
   constructor() {
@@ -1121,6 +1131,237 @@ runner.suite('Split mutation safety', test => {
     const result = collapseSplitParent(parent, child);
     assertEquals(result.amount, 200);
     assertEquals(result.type, 'income');
+  });
+});
+
+runner.suite('Weekly tab math', test => {
+  function approx(actual, expected, tolerance = 0.5) {
+    if (Math.abs(actual - expected) > tolerance) {
+      throw new Error(`Expected ${expected} ± ${tolerance}, got ${actual}`);
+    }
+  }
+
+  test('computePacing flags on-pace at midpoint', () => {
+    const result = computePacing(2000, 4000, 15, 30);
+    assertEquals(result.status, 'on', 'Half the budget at half the month is on pace');
+    assertEquals(result.delta, 0);
+  });
+
+  test('computePacing flags ahead when under pace by >5%', () => {
+    const result = computePacing(1500, 4000, 15, 30);
+    assertEquals(result.status, 'ahead', 'Spending less than ideal pace by >5% is ahead');
+    assert(result.delta < 0);
+  });
+
+  test('computePacing flags behind when over pace by >5%', () => {
+    const result = computePacing(2500, 4000, 15, 30);
+    assertEquals(result.status, 'behind', 'Spending more than ideal pace by >5% is behind');
+    assert(result.delta > 0);
+  });
+
+  test('computePacing handles ±5% tolerance edge', () => {
+    // 4000 budget, halfway = 2000 ideal. 5% tolerance = 200. 2200 should still be "on".
+    const onEdge = computePacing(2200, 4000, 15, 30);
+    assertEquals(onEdge.status, 'on', '+5% exactly should be within tolerance');
+    const justOver = computePacing(2201, 4000, 15, 30);
+    assertEquals(justOver.status, 'behind', 'Just past 5% is behind');
+  });
+
+  test('computePacing handles day 1 (no spending yet)', () => {
+    // Day 1 of 30, ideal = 4000 * 1/30 = 133. Delta of -133 is -3.3%, within ±5%, so on pace.
+    const result = computePacing(0, 4000, 1, 30);
+    assertEquals(result.status, 'on', 'Day 1 zero spend is within ±5% tolerance');
+    assert(result.delta < 0, 'Delta should still be negative');
+  });
+
+  test('computePacing handles last day of month', () => {
+    const onLastDay = computePacing(4000, 4000, 30, 30);
+    assertEquals(onLastDay.status, 'on');
+    const overLastDay = computePacing(4500, 4000, 30, 30);
+    assertEquals(overLastDay.status, 'behind');
+  });
+
+  test('computePacing handles zero budget gracefully', () => {
+    const result = computePacing(100, 0, 15, 30);
+    assertEquals(result.status, 'on', 'Zero budget defaults to on (no pace to measure)');
+    assertEquals(result.budget, 0);
+  });
+
+  test('computeRunway divides remaining budget across remaining days', () => {
+    // 1000 left over 10 days = 100/day = 700/week
+    assertEquals(computeRunway(1000, 10), 700);
+  });
+
+  test('computeRunway returns 0 when no days remain', () => {
+    assertEquals(computeRunway(500, 0), 0);
+  });
+
+  test('computeForecast linearly extrapolates spend', () => {
+    // 1000 spent over 10 days of 30 = projected 3000
+    const result = computeForecast(1000, 10, 30, 4000);
+    assertEquals(result.projected, 3000);
+    assertEquals(result.variance, -1000, 'Under budget by 1000');
+    assertEquals(result.overBudget, false);
+  });
+
+  test('computeForecast flags over budget projection', () => {
+    const result = computeForecast(2000, 10, 30, 4000);
+    assertEquals(result.projected, 6000);
+    assertEquals(result.overBudget, true);
+  });
+
+  test('getDailyCumulative builds running total per day', () => {
+    const txs = [
+      { date: '2026-04-01', amount: -100 },
+      { date: '2026-04-03', amount: -50 },
+      { date: '2026-04-03', amount: -25 }
+    ];
+    const cum = getDailyCumulative(txs, 2026, 4, 30);
+    assertEquals(cum[1], 100);
+    assertEquals(cum[2], 100, 'No spend day 2 carries forward');
+    assertEquals(cum[3], 175, 'Two transactions on day 3 sum');
+    assertEquals(cum[30], 175, 'Final day reflects total');
+  });
+
+  test('getDailyCumulative ignores transactions outside the month', () => {
+    const txs = [
+      { date: '2026-03-31', amount: -500 },
+      { date: '2026-04-15', amount: -100 },
+      { date: '2026-05-01', amount: -200 }
+    ];
+    const cum = getDailyCumulative(txs, 2026, 4, 30);
+    assertEquals(cum[15], 100, 'Only April transactions counted');
+    assertEquals(cum[30], 100);
+  });
+
+  test('getWeekRange returns Mon-Sun for a Wednesday', () => {
+    const wed = new Date(Date.UTC(2026, 3, 8)); // April 8 2026 is a Wednesday
+    const { start, end } = getWeekRange(wed);
+    assertEquals(start.getUTCDate(), 6, 'Monday April 6');
+    assertEquals(end.getUTCDate(), 12, 'Sunday April 12');
+  });
+
+  test('getWeekRange returns Mon-Sun for a Sunday', () => {
+    const sun = new Date(Date.UTC(2026, 3, 12)); // Sunday
+    const { start, end } = getWeekRange(sun);
+    assertEquals(start.getUTCDate(), 6);
+    assertEquals(end.getUTCDate(), 12);
+  });
+
+  test('getWeekRange handles month-boundary weeks', () => {
+    const may1 = new Date(Date.UTC(2026, 4, 1)); // Friday May 1 2026
+    const { start, end } = getWeekRange(may1);
+    assertEquals(start.getUTCMonth(), 3, 'Week starts in April');
+    assertEquals(start.getUTCDate(), 27);
+    assertEquals(end.getUTCMonth(), 4, 'Week ends in May');
+    assertEquals(end.getUTCDate(), 3);
+  });
+
+  test('getVariableCategories returns Variable group minus deleted', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries', 'Eating out', 'Nightlife'], Income: ['Salary'] },
+      deletedCategories: ['Nightlife']
+    });
+    const cats = getVariableCategories(store);
+    assert(cats.includes('Groceries'));
+    assert(cats.includes('Eating out'));
+    assert(!cats.includes('Nightlife'), 'Deleted category should be excluded');
+  });
+
+  test('getVariableCategories ignores fixed groups', () => {
+    // normalizeStore backfills DEFAULT_CATEGORIES into Variable, so we can't assert exact count.
+    // Instead, prove that none of the Fixed/Subscription/Insurance/Income/Savings names leak in.
+    const store = createStore({
+      categories: {
+        Variable: ['Groceries'],
+        'Fixed costs': ['Rent'],
+        Subscriptions: ['Netflix'],
+        Insurance: ['Health'],
+        Income: ['Salary']
+      }
+    });
+    const cats = getVariableCategories(store);
+    assert(cats.includes('Groceries'), 'Variable group entries returned');
+    assert(!cats.includes('Rent'), 'Fixed-cost category must not appear');
+    assert(!cats.includes('Netflix'), 'Subscription category must not appear');
+    assert(!cats.includes('Health'), 'Insurance category must not appear');
+    assert(!cats.includes('Salary'), 'Income category must not appear');
+  });
+
+  test('getWeeklyHistorySlices returns N consecutive Mon-Sun buckets ending with current week', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      transactions: [
+        { id: 1, date: '2026-04-08', amount: -100, type: 'spending', category: 'Groceries', covered: false },
+        { id: 2, date: '2026-04-01', amount: -200, type: 'spending', category: 'Groceries', covered: false },
+        { id: 3, date: '2026-03-25', amount: -50, type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const slices = getWeeklyHistorySlices(
+      store.transactions,
+      new Date(Date.UTC(2026, 3, 8)),
+      4,
+      new Set(['Groceries']),
+      true
+    );
+    assertEquals(slices.length, 4);
+    assertEquals(slices[3].isCurrent, true, 'Last bucket is current week');
+    assertEquals(slices[3].total, 100, 'Current week (Apr 6-12) has Apr 8 spend');
+    assertEquals(slices[2].total, 200, 'Prior week (Mar 30-Apr 5) has Apr 1 spend');
+    assertEquals(slices[1].total, 50, 'Two weeks prior (Mar 23-29) has Mar 25 spend');
+    assertEquals(slices[0].total, 0, 'Three weeks prior is empty');
+  });
+
+  test('getWeeklyDashboardData filters out fixed categories from totals', () => {
+    const store = createStore({
+      categories: {
+        Variable: ['Groceries'],
+        'Fixed costs': ['Rent'],
+        Income: ['Salary']
+      },
+      budgets: {
+        '2026': {
+          Groceries: { '01': 0, '02': 0, '03': 0, '04': 2000, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 },
+          Rent: { '01': 0, '02': 0, '03': 0, '04': 5000, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 }
+        }
+      },
+      transactions: [
+        { id: 1, date: '2026-04-05', amount: -500, type: 'spending', category: 'Groceries', covered: false },
+        { id: 2, date: '2026-04-01', amount: -5000, type: 'spending', category: 'Rent', covered: false }
+      ]
+    });
+    const data = getWeeklyDashboardData('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    assertEquals(data.totalSpent, 500, 'Only variable spend counted');
+    assertEquals(data.totalBudget, 2000, 'Only variable budgets counted');
+  });
+
+  test('getWeeklyDashboardData reports past months as final state with no remaining days', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      budgets: {
+        '2026': {
+          Groceries: { '01': 0, '02': 2000, '03': 0, '04': 0, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 }
+        }
+      },
+      transactions: [
+        { id: 1, date: '2026-02-15', amount: -1500, type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const data = getWeeklyDashboardData('2026-02', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    assertEquals(data.isPast, true);
+    assertEquals(data.dayOfMonth, 28, 'Past month uses last day of month');
+    assertEquals(data.remainingDays, 0);
+    assertEquals(data.totalSpent, 1500);
   });
 });
 

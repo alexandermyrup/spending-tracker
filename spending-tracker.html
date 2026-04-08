@@ -128,13 +128,14 @@ tailwind.config = {
     <section id="tab-dashboard" class="section-content space-y-6">
       <div class="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 shadow-sm">
         <div class="inline-flex rounded-lg bg-slate-100 p-0.5">
+          <button class="dash-view-btn px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="weekly" onclick="switchDashView('weekly')">Weekly</button>
           <button class="dash-view-btn active px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="monthly" onclick="switchDashView('monthly')">Monthly</button>
           <button class="dash-view-btn px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="yearly" onclick="switchDashView('yearly')">Yearly</button>
         </div>
-        <select id="dash-month" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderDashboard()"></select>
+        <select id="dash-month" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderDashboard(); renderWeeklyDashboard()"></select>
         <select id="dash-year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderYearlyDashboard()" style="display:none"></select>
         <label class="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-          <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> Exclude covered
+          <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard(); renderWeeklyDashboard()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> Exclude covered
         </label>
         <label class="inline-flex items-center gap-2 text-sm text-slate-600">
           Salary shift
@@ -177,6 +178,18 @@ tailwind.config = {
             <div id="dash-obligations"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Weekly view -->
+      <div id="dash-weekly-view" style="display:none" class="space-y-6">
+        <div id="weekly-hero"></div>
+        <div id="weekly-burndown" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+        <div id="weekly-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="weekly-forecast" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+          <div id="weekly-history" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+        </div>
+        <div id="weekly-small-multiples" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
       </div>
 
       <!-- Yearly view -->

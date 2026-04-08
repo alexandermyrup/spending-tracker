@@ -45,6 +45,7 @@ import {
   getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
+import { getWeeklyDashboardData } from './weekly.js';
 
 const APP_VERSION = 'v0.2';
 const APP_VERSION_METADATA_URL = './version.json';
@@ -1278,6 +1279,347 @@ function saveSalaryShiftDay(value) {
   commit(null);
 }
 
+// ---------- Weekly tab rendering ----------
+
+const WEEKLY_STATUS_COLORS = {
+  on: { dot: 'bg-emerald-500', pill: 'bg-emerald-100 text-emerald-700', text: 'text-emerald-600', label: 'on pace' },
+  ahead: { dot: 'bg-blue-500', pill: 'bg-blue-100 text-blue-700', text: 'text-blue-600', label: 'ahead' },
+  behind: { dot: 'bg-red-500', pill: 'bg-red-100 text-red-600', text: 'text-red-500', label: 'behind' }
+};
+
+function renderWeeklyHero(data, monthLabel) {
+  const status = WEEKLY_STATUS_COLORS[data.pacing.status];
+  const deltaSign = data.pacing.delta > 0 ? '+' : '';
+  const deltaLabel = `${deltaSign}${fmt(Math.round(data.pacing.delta))}`;
+  const dayProgressPct = Math.min(100, Math.round((data.dayOfMonth / data.totalDays) * 100));
+  const subline = data.isPast
+    ? `${monthLabel} • final state`
+    : data.isFuture
+      ? `${monthLabel} • not yet started`
+      : `${monthLabel} • Week of ${data.weekLabel}`;
+  const runwayLine = data.isPast || data.isFuture
+    ? ''
+    : `<div class="text-sm text-slate-600 mt-4 pt-4 border-t border-slate-200/40">→ <span class="font-semibold tabular-nums">${fmt(Math.round(data.runway))}</span>/week left to stay on budget <span class="text-slate-400">(${data.remainingDays} day${data.remainingDays !== 1 ? 's' : ''} remaining)</span></div>`;
+
+  return `<div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-6 sm:p-8">
+    <div class="relative z-10">
+      <div class="flex flex-wrap items-center gap-2.5 mb-5">
+        <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Day ${data.dayOfMonth} of ${data.totalDays}</span>
+        <span class="px-2.5 py-1 rounded-full text-xs font-bold ${status.pill}">${status.label}${data.pacing.budget > 0 ? ` ${deltaLabel}` : ''}</span>
+        <span class="text-xs text-slate-500">${esc(subline)}</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr] gap-6 items-start">
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">Variable spend, month-to-date</div>
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-2 tabular-nums">${fmt(Math.round(data.totalSpent))} <span class="text-slate-400 font-bold">/ ${fmt(Math.round(data.totalBudget))}</span></h2>
+          <p class="text-sm text-slate-500 leading-relaxed max-w-[52ch]">Across ${data.variableCategoryCount} variable ${data.variableCategoryCount === 1 ? 'category' : 'categories'}. Fixed costs and subscriptions excluded.</p>
+        </div>
+        <div class="space-y-3">
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/70">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Month progress</div>
+            <div class="text-xl font-bold tabular-nums tracking-tight">${dayProgressPct}%</div>
+            <div class="mt-2 h-1.5 w-full bg-slate-200/70 rounded-full overflow-hidden"><div class="h-full ${data.pacing.status === 'behind' ? 'bg-red-400' : 'bg-blue-500'}" style="width:${dayProgressPct}%"></div></div>
+          </div>
+          <div class="p-3.5 rounded-xl border border-slate-200/60 bg-white/70">
+            <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Ideal pace</div>
+            <div class="text-xl font-bold tabular-nums tracking-tight text-slate-600">${fmt(Math.round(data.pacing.idealSpent))}</div>
+            <div class="text-xs text-slate-500 mt-1">${data.pacing.delta >= 0 ? `${fmt(Math.round(data.pacing.delta))} above` : `${fmt(Math.round(-data.pacing.delta))} below`} ideal</div>
+          </div>
+        </div>
+      </div>
+      ${runwayLine}
+    </div>
+  </div>`;
+}
+
+function renderWeeklyBurndown(data) {
+  if (data.totalBudget <= 0 && data.totalSpent <= 0) {
+    return `<h3 class="text-base font-semibold mb-1">Burn-down</h3><p class="text-sm text-slate-500">No variable budget or spending in this month.</p>`;
+  }
+  const width = 720;
+  const height = 220;
+  const padL = 56;
+  const padR = 16;
+  const padT = 16;
+  const padB = 30;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+  const maxY = Math.max(data.totalBudget, data.dailyCumulative[data.totalDays] || 0, 1);
+  const xFor = day => padL + (day - 1) / Math.max(1, data.totalDays - 1) * innerW;
+  const yFor = value => padT + innerH - (value / maxY) * innerH;
+
+  // Ideal pace line
+  const idealEndY = yFor(data.totalBudget);
+  const idealStartY = yFor(0);
+  const idealLine = `<line x1="${xFor(1)}" y1="${idealStartY}" x2="${xFor(data.totalDays)}" y2="${idealEndY}" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+
+  // Actual cumulative as a step path up to "today"
+  const lastDay = Math.max(1, Math.min(data.dayOfMonth, data.totalDays));
+  const points = [];
+  for (let day = 1; day <= lastDay; day++) {
+    points.push(`${xFor(day).toFixed(1)},${yFor(data.dailyCumulative[day] || 0).toFixed(1)}`);
+  }
+  const actualPath = points.length > 0
+    ? `<polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="${points.join(' ')}"/>`
+    : '';
+
+  // Projection from today to month end (only if current month, has spend, and not over the budget line)
+  let projectionLine = '';
+  if (!data.isPast && !data.isFuture && data.dayOfMonth >= 1 && data.dayOfMonth < data.totalDays && data.totalSpent > 0) {
+    const projectedEnd = data.forecast.projected;
+    projectionLine = `<line x1="${xFor(data.dayOfMonth)}" y1="${yFor(data.dailyCumulative[data.dayOfMonth] || 0)}" x2="${xFor(data.totalDays)}" y2="${yFor(Math.min(projectedEnd, maxY))}" stroke="${data.forecast.overBudget ? '#ef4444' : '#3b82f6'}" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>`;
+  }
+
+  // Today marker (only current month)
+  let todayMarker = '';
+  if (!data.isPast && !data.isFuture && data.dayOfMonth >= 1 && data.dayOfMonth <= data.totalDays) {
+    const tx = xFor(data.dayOfMonth);
+    const ty = yFor(data.dailyCumulative[data.dayOfMonth] || 0);
+    todayMarker = `
+      <line x1="${tx}" y1="${padT}" x2="${tx}" y2="${padT + innerH}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 3"/>
+      <circle cx="${tx}" cy="${ty}" r="4.5" fill="#2563eb" stroke="white" stroke-width="2"/>
+    `;
+  }
+
+  // Y-axis labels
+  const yTicks = [];
+  const yStep = niceStep(maxY, 4);
+  for (let v = 0; v <= maxY; v += yStep) {
+    yTicks.push(`<text x="${padL - 8}" y="${yFor(v) + 3}" text-anchor="end" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${fmtShort(Math.round(v))}</text>`);
+    yTicks.push(`<line x1="${padL}" y1="${yFor(v)}" x2="${width - padR}" y2="${yFor(v)}" stroke="#f1f5f9" stroke-width="1"/>`);
+  }
+  // X-axis ticks every ~5 days
+  const xTicks = [];
+  const xStep = data.totalDays >= 28 ? 5 : 3;
+  for (let day = 1; day <= data.totalDays; day += xStep) {
+    xTicks.push(`<text x="${xFor(day)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${day}</text>`);
+  }
+  if (data.totalDays % xStep !== 0) {
+    xTicks.push(`<text x="${xFor(data.totalDays)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${data.totalDays}</text>`);
+  }
+
+  return `
+    <div class="flex justify-between items-baseline mb-3">
+      <h3 class="text-base font-semibold">Burn-down</h3>
+      <div class="flex items-center gap-4 text-[11px] text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-[2px] bg-blue-600 inline-block"></span>Actual</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-[2px] inline-block" style="background:repeating-linear-gradient(to right, #cbd5e1 0 4px, transparent 4px 8px)"></span>Ideal</span>
+        ${!data.isPast && !data.isFuture && data.totalSpent > 0 ? `<span class="flex items-center gap-1.5"><span class="w-3 h-[2px] inline-block" style="background:repeating-linear-gradient(to right, ${data.forecast.overBudget ? '#ef4444' : '#3b82f6'} 0 3px, transparent 3px 6px)"></span>Projection</span>` : ''}
+      </div>
+    </div>
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
+      ${yTicks.join('')}
+      ${idealLine}
+      ${actualPath}
+      ${projectionLine}
+      ${todayMarker}
+      ${xTicks.join('')}
+    </svg>
+  `;
+}
+
+function niceStep(maxValue, targetTicks) {
+  if (maxValue <= 0) return 1;
+  const rough = maxValue / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const candidates = [1, 2, 2.5, 5, 10];
+  return mag * candidates.find(c => c * mag >= rough);
+}
+
+function renderMiniBars(slices, accent = '#2563eb', highlight = '#1d4ed8') {
+  if (!slices || slices.length === 0) return '';
+  const max = Math.max(...slices.map(s => s.total), 1);
+  const barW = 6;
+  const gap = 3;
+  const totalW = slices.length * barW + (slices.length - 1) * gap;
+  const h = 24;
+  const bars = slices.map((s, i) => {
+    const barH = Math.max(1, Math.round((s.total / max) * h));
+    const x = i * (barW + gap);
+    const y = h - barH;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="1" fill="${s.isCurrent ? highlight : accent}" opacity="${s.isCurrent ? 1 : 0.55}"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${totalW} ${h}" preserveAspectRatio="xMinYMid meet" width="${totalW}" height="${h}" class="inline-block align-middle">${bars}</svg>`;
+}
+
+function renderWeeklyCard(data) {
+  if (data.categoryRows.length === 0) {
+    return `<h3 class="text-base font-semibold mb-1">Week of ${esc(data.weekLabel)}</h3><p class="text-sm text-slate-500">No variable categories defined.</p>`;
+  }
+  const status = WEEKLY_STATUS_COLORS[data.week.status];
+  const rows = data.categoryRows.map(row => {
+    const rowStatus = WEEKLY_STATUS_COLORS[row.status];
+    const deltaText = row.weekSpent > row.weekTarget && row.weekTarget > 0
+      ? `<span class="${rowStatus.text} text-xs font-medium tabular-nums">+${fmt(Math.round(row.weekSpent - row.weekTarget))}</span>`
+      : '';
+    const targetLabel = row.weekTarget > 0
+      ? `<span class="text-slate-400">/ ${fmt(Math.round(row.weekTarget))}</span>`
+      : '<span class="text-slate-300 text-xs">no budget</span>';
+    return `<div class="flex items-center gap-3 py-2.5 border-t border-slate-100">
+      <div class="flex-1 min-w-0 text-sm font-medium text-slate-700 truncate">${esc(row.category)}</div>
+      <div class="hidden sm:block">${renderMiniBars(row.history)}</div>
+      <div class="text-sm tabular-nums text-right min-w-[120px]"><span class="font-semibold">${fmt(Math.round(row.weekSpent))}</span> ${targetLabel}</div>
+      <div class="w-12 text-right">${deltaText}</div>
+      <span class="w-2 h-2 rounded-full ${rowStatus.dot}" aria-label="${rowStatus.label}"></span>
+    </div>`;
+  }).join('');
+
+  return `<div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+      <h3 class="text-base font-semibold">Week of ${esc(data.weekLabel)}</h3>
+      <div class="flex items-center gap-3 text-sm">
+        <span class="tabular-nums font-semibold">${fmt(Math.round(data.week.spent))}</span>
+        <span class="text-slate-400 tabular-nums">/ ${fmt(Math.round(data.week.target))}</span>
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${status.pill}">${status.label}</span>
+      </div>
+    </div>
+    <p class="text-xs text-slate-500 mb-3">${data.isPast || data.isFuture ? 'Outside the current month — last full week shown for reference.' : 'Spent vs. weekly equivalent of monthly budget.'}</p>
+    <div class="-mt-1">${rows}</div>`;
+}
+
+function renderWeeklyForecastCard(data) {
+  if (data.isPast) {
+    const finalVariance = data.totalBudget - data.totalSpent;
+    return `<h3 class="text-base font-semibold mb-3">Final state</h3>
+      <div class="text-2xl font-bold tabular-nums ${finalVariance >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(Math.round(data.totalSpent))} / ${fmt(Math.round(data.totalBudget))}</div>
+      <p class="text-sm text-slate-500 mt-1">${finalVariance >= 0 ? `Finished ${fmt(Math.round(finalVariance))} under budget.` : `Finished ${fmt(Math.round(-finalVariance))} over budget.`}</p>`;
+  }
+  if (data.isFuture || data.totalSpent === 0) {
+    return `<h3 class="text-base font-semibold mb-3">Forecast</h3>
+      <p class="text-sm text-slate-500">Not enough data yet to project end of month.</p>`;
+  }
+  const overColor = data.forecast.overBudget ? 'text-red-500' : 'text-emerald-600';
+  const projected = Math.round(data.forecast.projected);
+  const variance = Math.round(data.forecast.variance);
+  const recoveryRunway = Math.round(data.runway);
+  const recoveryLine = data.forecast.overBudget && data.remainingDays > 0
+    ? `<p class="text-sm text-slate-600 mt-3 pt-3 border-t border-slate-200/60">To land on budget, spend <span class="font-semibold tabular-nums">${fmt(recoveryRunway)}</span>/week for the rest of the month.</p>`
+    : data.remainingDays > 0
+      ? `<p class="text-sm text-slate-600 mt-3 pt-3 border-t border-slate-200/60">Stay below <span class="font-semibold tabular-nums">${fmt(recoveryRunway)}</span>/week to keep this margin.</p>`
+      : '';
+  return `<h3 class="text-base font-semibold mb-3">Forecast</h3>
+    <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">At current pace, end of month</div>
+    <div class="text-3xl font-extrabold tabular-nums ${overColor}">${fmt(projected)}</div>
+    <p class="text-sm ${overColor} mt-1 font-medium">${data.forecast.overBudget ? `${fmt(variance)} over budget` : `${fmt(-variance)} under budget`}</p>
+    ${recoveryLine}`;
+}
+
+function renderWeeklyHistoryCard(data) {
+  if (data.weeklyHistory.length === 0) {
+    return `<h3 class="text-base font-semibold mb-3">Last 8 weeks</h3><p class="text-sm text-slate-500">No history yet.</p>`;
+  }
+  const max = Math.max(...data.weeklyHistory.map(s => s.total), 1);
+  const width = 320;
+  const height = 130;
+  const padL = 8;
+  const padR = 8;
+  const padT = 12;
+  const padB = 22;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+  const slotW = innerW / data.weeklyHistory.length;
+  const barW = Math.min(slotW * 0.7, 28);
+  const bars = data.weeklyHistory.map((s, i) => {
+    const cx = padL + slotW * (i + 0.5);
+    const barH = (s.total / max) * innerH;
+    const y = padT + innerH - barH;
+    const fill = s.isCurrent ? '#1d4ed8' : '#93c5fd';
+    return `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="${fill}"/>`;
+  }).join('');
+  // Average line
+  const avgY = padT + innerH - (data.trend.average / max) * innerH;
+  const avgLine = data.trend.average > 0
+    ? `<line x1="${padL}" y1="${avgY}" x2="${width - padR}" y2="${avgY}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>`
+    : '';
+  // X labels: -7w .. now
+  const labels = data.weeklyHistory.map((s, i) => {
+    const cx = padL + slotW * (i + 0.5);
+    const offset = data.weeklyHistory.length - 1 - i;
+    const label = offset === 0 ? 'now' : `-${offset}w`;
+    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#94a3b8'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
+  }).join('');
+
+  const trendIcon = data.trend.direction === 'up' ? '↗' : data.trend.direction === 'down' ? '↘' : '→';
+  const trendColor = data.trend.direction === 'up' ? 'text-red-500' : data.trend.direction === 'down' ? 'text-emerald-600' : 'text-slate-500';
+  const trendPct = data.trend.delta !== 0 ? `${data.trend.delta > 0 ? '+' : ''}${Math.round(data.trend.delta * 100)}%` : 'flat';
+
+  return `<h3 class="text-base font-semibold mb-1">Last 8 weeks</h3>
+    <p class="text-xs text-slate-500 mb-3">Variable spend, weekly</p>
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
+      ${avgLine}
+      ${bars}
+      ${labels}
+    </svg>
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs">
+      <span class="text-slate-500">avg <span class="font-semibold tabular-nums text-slate-700">${fmt(Math.round(data.trend.average))}</span>/week</span>
+      <span class="${trendColor} font-semibold">${trendIcon} ${trendPct}</span>
+    </div>`;
+}
+
+function renderWeeklySmallMultiples(data) {
+  if (data.categoryRows.length === 0) return '';
+  const w = 180;
+  const h = 80;
+  const padL = 8;
+  const padR = 8;
+  const padT = 8;
+  const padB = 16;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const charts = data.categoryRows.map(row => {
+    const maxY = Math.max(row.monthBudget, row.monthDailyCumulative[data.totalDays] || 0, 1);
+    const xFor = day => padL + (day - 1) / Math.max(1, data.totalDays - 1) * innerW;
+    const yFor = value => padT + innerH - (value / maxY) * innerH;
+    const idealLine = `<line x1="${xFor(1)}" y1="${yFor(0)}" x2="${xFor(data.totalDays)}" y2="${yFor(row.monthBudget)}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>`;
+    const lastDay = Math.max(1, Math.min(data.dayOfMonth, data.totalDays));
+    const points = [];
+    for (let day = 1; day <= lastDay; day++) {
+      points.push(`${xFor(day).toFixed(1)},${yFor(row.monthDailyCumulative[day] || 0).toFixed(1)}`);
+    }
+    const status = WEEKLY_STATUS_COLORS[row.status];
+    const stroke = row.status === 'behind' ? '#ef4444' : row.status === 'ahead' ? '#3b82f6' : '#10b981';
+    const path = points.length > 0
+      ? `<polyline fill="none" stroke="${stroke}" stroke-width="1.75" stroke-linejoin="round" points="${points.join(' ')}"/>`
+      : '';
+    return `<div class="rounded-lg border border-slate-100 p-3 bg-slate-50/40">
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <div class="text-xs font-semibold text-slate-700 truncate">${esc(row.category)}</div>
+        <span class="w-1.5 h-1.5 rounded-full ${status.dot}"></span>
+      </div>
+      <div class="text-[11px] text-slate-500 mb-1 tabular-nums">${fmt(Math.round(row.monthSpent))} / ${fmt(Math.round(row.monthBudget))}</div>
+      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
+        ${idealLine}
+        ${path}
+      </svg>
+    </div>`;
+  }).join('');
+
+  return `<h3 class="text-base font-semibold mb-3">Per-category burn-down</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">${charts}</div>`;
+}
+
+function renderWeeklyDashboard() {
+  const weeklyView = document.getElementById('dash-weekly-view');
+  if (!weeklyView || weeklyView.style.display === 'none') return;
+  const month = document.getElementById('dash-month').value;
+  if (!month) return;
+  const excludeCovered = document.getElementById('dash-exclude-covered').checked;
+  const data = getWeeklyDashboardData(month, {
+    store,
+    excludeCovered,
+    ensureYearBudget: year => ensureYearBudget(store, year),
+    currentDate: new Date()
+  });
+  const [year, mk] = month.split('-');
+  const monthLabel = `${MONTHS[Number.parseInt(mk, 10) - 1]} ${year}`;
+
+  document.getElementById('weekly-hero').innerHTML = renderWeeklyHero(data, monthLabel);
+  document.getElementById('weekly-burndown').innerHTML = renderWeeklyBurndown(data);
+  document.getElementById('weekly-card').innerHTML = renderWeeklyCard(data);
+  document.getElementById('weekly-forecast').innerHTML = renderWeeklyForecastCard(data);
+  document.getElementById('weekly-history').innerHTML = renderWeeklyHistoryCard(data);
+  document.getElementById('weekly-small-multiples').innerHTML = renderWeeklySmallMultiples(data);
+}
+
 function bindBudgetEditorEvents() {
   if (budgetEventsBound) return;
   const editorEl = document.getElementById('budget-editor');
@@ -1599,10 +1941,12 @@ function populateFilters() {
 function switchDashView(view) {
   document.querySelectorAll('.dash-view-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.view === view));
   document.getElementById('dash-monthly-view').style.display = view === 'monthly' ? '' : 'none';
+  document.getElementById('dash-weekly-view').style.display = view === 'weekly' ? '' : 'none';
   document.getElementById('dash-yearly-view').style.display = view === 'yearly' ? '' : 'none';
-  document.getElementById('dash-month').style.display = view === 'monthly' ? '' : 'none';
+  document.getElementById('dash-month').style.display = (view === 'monthly' || view === 'weekly') ? '' : 'none';
   document.getElementById('dash-year').style.display = view === 'yearly' ? '' : 'none';
   if (view === 'yearly') renderYearlyDashboard();
+  else if (view === 'weekly') renderWeeklyDashboard();
   else renderDashboard();
 }
 
@@ -1704,6 +2048,7 @@ function bindGlobalActions() {
     renderBudgetEditor,
     renderAll: rerenderAll,
     renderTransactions,
+    renderWeeklyDashboard,
     renderYearlyDashboard,
     restoreSplit,
     saveLoanBudget,
