@@ -1,5 +1,7 @@
+import { buildSpendingInsights } from './export-insights.js';
+
 export const STORAGE_KEY = 'spending-tracker-v2';
-export const STORE_VERSION = 4;
+export const STORE_VERSION = 5;
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 export const MONTH_KEYS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
 export const CHART_COLORS = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#4f46e5','#c026d3','#d97706','#059669','#6366f1','#e11d48'];
@@ -211,8 +213,12 @@ export function saveStore(store, storage = window.localStorage) {
   }
 }
 
-export function exportPayload(store) {
-  return normalizeStore(store);
+export function exportPayload(store, options = {}) {
+  const normalized = normalizeStore(store);
+  return {
+    ...normalized,
+    spendingInsights: buildSpendingInsights(normalized, options)
+  };
 }
 
 export function ensureYearBudget(store, year) {
