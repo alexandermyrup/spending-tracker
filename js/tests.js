@@ -184,7 +184,38 @@ runner.suite('Store normalization', test => {
 
   test('exportPayload includes current schema version', () => {
     const payload = exportPayload(createStore());
-    assertEquals(payload.version, 4, 'Export should include schema version');
+    assertEquals(payload.version, 5, 'Export should include schema version');
+  });
+
+  test('normalizeStore upgrades v4 input to current version', () => {
+    const raw = {
+      version: 4,
+      transactions: [{ id: 1, date: '2026-02-15', amount: -100, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries' }],
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      budgets: { '2026': { Groceries: { '02': 500 } } },
+      merchantMap: {}
+    };
+    const normalized = normalizeStore(raw);
+    assertEquals(normalized.version, 5, 'v4 input should upgrade to v5');
+    assertEquals(normalized.transactions.length, 1, 'v4 transactions should survive');
+    assertEquals(normalized.transactions[0].category, 'Groceries');
+  });
+});
+
+runner.suite('Export insights skeleton', test => {
+  test('exportPayload v5 includes spendingInsights block', () => {
+    const payload = exportPayload(createStore(), { currentDate: new Date('2026-04-11T12:00:00Z') });
+    assert(payload.spendingInsights, 'spendingInsights should be present');
+    assertEquals(payload.spendingInsights.asOf, '2026-04-11', 'asOf should match currentDate');
+    assertEquals(payload.spendingInsights.windowMonths, 12, 'windowMonths default is 12');
+  });
+
+  test('exportPayload is idempotent for a given currentDate', () => {
+    const store = createStore();
+    const options = { currentDate: new Date('2026-04-11T12:00:00Z') };
+    const first = exportPayload(store, options);
+    const second = exportPayload(store, options);
+    assertEquals(JSON.stringify(first), JSON.stringify(second), 'Same input should produce identical output');
   });
 });
 
