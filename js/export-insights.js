@@ -17,7 +17,8 @@ import {
 import {
   INCOME_GROUP,
   SAVINGS_GROUP,
-  ensureYearBudget as ensureYearBudgetOnStore
+  ensureYearBudget as ensureYearBudgetOnStore,
+  normalizeMerchantName
 } from './store.js';
 
 const SPENDING_GROUPS_FOR_TRENDS = ['Variable', 'Fixed costs', 'Subscriptions', 'Insurance'];
@@ -47,13 +48,64 @@ export function buildSpendingInsights(rawStore, options = {}) {
     data: getMonthlyDashboardData(month, dashOptions)
   }));
 
-  const cashFlow = buildCashFlow(monthlyData);
+  // --- Commit 3: noise / one-off / event annotations on cloned transactions ---
+  annotateNoise(store.transactions);
+  const cleanTxs = store.transactions.filter(tx => !tx.noise);
+  const cleanStore = { ...store, transactions: cleanTxs };
+  const cleanDashOptions = {
+    store: cleanStore,
+    excludeCovered,
+    ensureYearBudget: year => ensureYearBudgetOnStore(cleanStore, year),
+    currentDate
+  };
+  const cleanMonthlyData = trailing12.map(month => ({
+    month,
+    data: getMonthlyDashboardData(month, cleanDashOptions)
+  }));
+
+  const cashFlow = buildCashFlow(monthlyData, cleanMonthlyData);
   const categoryTrends = buildCategoryTrends(store, trailing12, monthlyData);
   const budgetAdherence = buildBudgetAdherence(store, currentMonth, trailing12, dashOptions);
   const recurringCommitments = buildRecurringCommitments(store, cashFlow, excludeCovered, asOf);
   const overspendPatterns = buildOverspendPatterns(currentMonth, dashOptions);
   const monthlyVariablePacing = getMonthlyVariableData(currentMonth, dashOptions);
   const weeklyReview = getWeeklyReviewData(currentMonth, dashOptions);
+
+  // One-off classification. Reuses the already-computed recurring obligations.
+  const recurringMerchantSet = new Set(
+    recurringCommitments.obligations.map(o => normalizeMerchantName(o.merchant))
+  );
+  const categoryMedians = computeCategoryMedians(cleanTxs);
+  store.transactions.forEach(tx => {
+    tx.oneOff = tx.noise
+      ? false
+      : classifyOneOff(tx, store.transactions, categoryMedians, recurringMerchantSet);
+  });
+
+  // Event clustering on non-noise transactions.
+  const events = clusterEvents(cleanTxs);
+  const idToEventTag = {};
+  events.forEach(evt => {
+    evt.txIds.forEach(id => { idToEventTag[id] = evt.tag; });
+  });
+  store.transactions.forEach(tx => {
+    tx.eventTag = idToEventTag[tx.id] || null;
+  });
+
+  // Top 20 one-offs in the last 12 months.
+  const twelveMonthsAgo = new Date(currentDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const oneOffs = store.transactions
+    .filter(tx => tx.oneOff && tx.type === 'spending' && tx.amount < 0)
+    .filter(tx => parseIsoDateLocal(tx.date) >= twelveMonthsAgo)
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    .slice(0, 20)
+    .map(tx => ({
+      id: tx.id,
+      date: tx.date,
+      merchant: tx.merchant,
+      category: tx.category,
+      amount: round2(Math.abs(tx.amount))
+    }));
 
   return {
     asOf,
@@ -65,6 +117,8 @@ export function buildSpendingInsights(rawStore, options = {}) {
     budgetAdherence,
     recurringCommitments,
     overspendPatterns,
+    oneOffs,
+    events,
     monthlyVariablePacing,
     weeklyReview
   };
@@ -94,8 +148,17 @@ function getTrailingMonthKeys(endMonth, count) {
 
 // ---------- Cash flow ----------
 
-function buildCashFlow(monthlyData) {
-  const monthly = monthlyData.map(({ month, data }) => ({
+function buildCashFlow(rawMonthlyData, cleanMonthlyData) {
+  const monthly = rawMonthlyData.map(({ month, data }) => ({
+    month,
+    income: round2(data.totalIncome),
+    spend: round2(data.totalSpend),
+    saving: round2(data.totalSave),
+    loan: round2(data.totalLoan),
+    net: round2(data.totalIncome - data.totalSpend - data.totalSave)
+  }));
+
+  const cleanEntries = cleanMonthlyData.map(({ month, data }) => ({
     month,
     income: round2(data.totalIncome),
     spend: round2(data.totalSpend),
@@ -105,7 +168,7 @@ function buildCashFlow(monthlyData) {
   }));
 
   const windows = [1, 3, 6, 12].map(windowSize => {
-    const slice = monthly.slice(-windowSize);
+    const slice = cleanEntries.slice(-windowSize);
     const income = sumBy(slice, entry => entry.income);
     const spend = sumBy(slice, entry => entry.spend);
     const saving = sumBy(slice, entry => entry.saving);
@@ -280,4 +343,145 @@ function round2(v) {
 
 function round3(v) {
   return Math.round(v * 1000) / 1000;
+}
+
+function parseIsoDateLocal(dateString) {
+  const [y, m, d] = String(dateString || '').split('-').map(v => Number.parseInt(v, 10));
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+}
+
+function formatMonYy(date) {
+  const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${names[date.getUTCMonth()]}${String(date.getUTCFullYear()).slice(2)}`;
+}
+
+// ---------- Classifiers ----------
+
+export function detectNoise(tx, allTxs) {
+  if (!tx) return false;
+  if (tx.noise === true) return true;
+  if (/savings account/i.test(tx.merchant || '')) return true;
+  const normalized = normalizeMerchantName(tx.merchant);
+  if (!normalized) return false;
+  const txDate = parseIsoDateLocal(tx.date);
+  const txAmount = Math.abs(tx.amount || 0);
+  if (txAmount === 0) return false;
+  for (const other of allTxs) {
+    if (!other || other.id === tx.id) continue;
+    if (normalizeMerchantName(other.merchant) !== normalized) continue;
+    if (Math.sign(other.amount) === Math.sign(tx.amount)) continue;
+    const otherAmount = Math.abs(other.amount || 0);
+    if (otherAmount === 0) continue;
+    const diffDays = Math.abs((parseIsoDateLocal(other.date) - txDate) / (1000 * 60 * 60 * 24));
+    if (diffDays > 7) continue;
+    const tolerance = Math.abs(txAmount - otherAmount) / Math.max(txAmount, otherAmount);
+    if (tolerance <= 0.02) return true;
+  }
+  return false;
+}
+
+function annotateNoise(txs) {
+  txs.forEach(tx => { tx.noise = detectNoise(tx, txs); });
+}
+
+function computeCategoryMedians(txs) {
+  const byCat = {};
+  txs.forEach(tx => {
+    if (tx.type !== 'spending' || tx.amount >= 0 || tx.splitInto) return;
+    if (!tx.category) return;
+    if (!byCat[tx.category]) byCat[tx.category] = [];
+    byCat[tx.category].push(Math.abs(tx.amount));
+  });
+  const medians = {};
+  Object.entries(byCat).forEach(([cat, amounts]) => {
+    const sorted = amounts.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    medians[cat] = sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  });
+  return medians;
+}
+
+export function classifyOneOff(tx, allTxs, categoryMedians, recurringMerchantSet) {
+  if (!tx || tx.type !== 'spending' || tx.amount >= 0 || tx.splitInto) return false;
+  if (tx.noise) return false;
+  const median = categoryMedians && categoryMedians[tx.category];
+  if (!median || median <= 0) return false;
+  if (Math.abs(tx.amount) <= 3 * median) return false;
+  const normalized = normalizeMerchantName(tx.merchant);
+  if (recurringMerchantSet && recurringMerchantSet.has(normalized)) return false;
+  const txDate = parseIsoDateLocal(tx.date);
+  const cutoff = new Date(txDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+  for (const other of allTxs) {
+    if (!other || other.id === tx.id) continue;
+    if (normalizeMerchantName(other.merchant) !== normalized) continue;
+    const otherDate = parseIsoDateLocal(other.date);
+    if (otherDate >= cutoff && otherDate < txDate) return false;
+  }
+  return true;
+}
+
+export function clusterEvents(txs) {
+  const sorted = (txs || [])
+    .filter(tx => tx && tx.type === 'spending' && tx.amount < 0 && !tx.splitInto)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const events = [];
+  const used = new Set();
+
+  for (let i = 0; i < sorted.length; i++) {
+    if (used.has(sorted[i].id)) continue;
+    const windowStart = parseIsoDateLocal(sorted[i].date);
+    const windowEnd = new Date(windowStart.getTime() + 4 * 24 * 60 * 60 * 1000); // 5-day inclusive
+
+    const windowTxs = [];
+    for (let j = i; j < sorted.length; j++) {
+      if (used.has(sorted[j].id)) continue;
+      const d = parseIsoDateLocal(sorted[j].date);
+      if (d.getTime() > windowEnd.getTime()) break;
+      windowTxs.push(sorted[j]);
+    }
+
+    const travelCount = windowTxs.filter(tx => tx.category === 'Travel').length;
+    const hasTravel = windowTxs.some(tx => tx.category === 'Travel');
+    const hasEatingOut = windowTxs.some(tx => tx.category === 'Eating out');
+    const hasTransport = windowTxs.some(tx => tx.category === 'Transport');
+    const hasTriad = hasTravel && hasEatingOut && hasTransport;
+
+    if (travelCount >= 2 || hasTriad) {
+      const breakdown = {};
+      const txIds = [];
+      let total = 0;
+      let lastDate = sorted[i].date;
+      windowTxs.forEach(tx => {
+        const key = tx.category || 'Uncategorized';
+        breakdown[key] = round2((breakdown[key] || 0) + Math.abs(tx.amount));
+        total += Math.abs(tx.amount);
+        txIds.push(tx.id);
+        used.add(tx.id);
+        if (tx.date > lastDate) lastDate = tx.date;
+      });
+
+      const travelTx = windowTxs.find(tx => tx.category === 'Travel');
+      const monYy = formatMonYy(windowStart);
+      let tag;
+      if (travelTx) {
+        const token = String(travelTx.merchant || '').split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+        tag = token ? `${token}-${monYy}` : `event-${monYy}-${events.length + 1}`;
+      } else {
+        tag = `event-${monYy}-${events.length + 1}`;
+      }
+
+      events.push({
+        tag,
+        dateRange: { start: sorted[i].date, end: lastDate },
+        total: round2(total),
+        breakdown,
+        txIds
+      });
+    }
+  }
+  return events;
 }
