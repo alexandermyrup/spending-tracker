@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spending Tracker - Test Suite (2026-03-29)</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace; background: #f5f5f5; padding: 20px; }
+.test-container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+.header { background: #2c3e50; color: #fff; padding: 20px; }
+.header h1 { margin: 0; font-size: 24px; }
+.header p { margin: 5px 0 0 0; opacity: 0.8; font-size: 14px; }
+.test-suite { border-bottom: 1px solid #e0e0e0; }
+.test-suite-header { background: #34495e; color: #fff; padding: 12px 20px; font-weight: 600; font-size: 14px; text-transform: uppercase; cursor: pointer; user-select: none; }
+.test-suite-header:hover { background: #2c3e50; }
+.test-suite-header.collapsed::before { content: '\25B6 '; }
+.test-suite-header.expanded::before { content: '\25BC '; }
+.test-list { padding: 10px 20px; background: #fafafa; display: none; }
+.test-list.visible { display: block; }
+.test-item { padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid #ddd; background: #fff; font-size: 13px; }
+.test-item.pass { background: #d4edda; border-left-color: #28a745; color: #155724; }
+.test-item.fail { background: #f8d7da; border-left-color: #dc3545; color: #721c24; }
+.test-item.pending { background: #fff3cd; border-left-color: #ffc107; color: #856404; }
+.test-code { font-family: 'Courier New', monospace; font-size: 12px; margin-top: 5px; background: #f0f0f0; padding: 8px; border-radius: 3px; overflow-x: auto; display: block; }
+.summary { padding: 20px; background: #fff; border-top: 2px solid #e0e0e0; }
+.summary-row { display: flex; gap: 30px; margin-bottom: 10px; font-size: 14px; flex-wrap: wrap; }
+.summary-row span { font-weight: 600; }
+.pass-count { color: #28a745; }
+.fail-count { color: #dc3545; }
+.pending-count { color: #ffc107; }
+.progress-bar { height: 4px; background: #e0e0e0; border-radius: 2px; margin: 10px 0; overflow: hidden; }
+.progress-fill { height: 100%; background: #28a745; }
+</style>
+</head>
+<body>
+<div class="test-container">
+  <div class="header">
+    <h1>Spending Tracker - Automated Test Suite</h1>
+    <p>Module-based tests for shared app logic (2026-03-29)</p>
+  </div>
+  <div id="test-suites"></div>
+  <div class="summary">
+    <div class="summary-row">
+      <span>Total Tests: <span id="total-count">0</span></span>
+      <span class="pass-count">Passed: <span id="pass-count">0</span></span>
+      <span class="fail-count">Failed: <span id="fail-count">0</span></span>
+      <span class="pending-count">Pending: <span id="pending-count">0</span></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
+</div>
+<script type="module" src="../js/tests.js"></script>
+</body>
+</html>

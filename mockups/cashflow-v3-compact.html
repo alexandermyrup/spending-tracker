@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cash Flow — V3 Compact</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+}
+</script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="bg-slate-50 p-8">
+<div class="max-w-4xl mx-auto">
+  <p class="text-xs text-slate-400 mb-3 font-medium tracking-wide uppercase">V3 — Single bar with income cap + spending fill</p>
+
+  <!-- Cash Flow Card -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <!-- Header + Legend -->
+    <div class="flex justify-between items-baseline mb-5">
+      <h2 class="text-base font-semibold text-slate-800">Cash Flow</h2>
+      <div class="flex items-center gap-4 text-[11px] text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-300 inline-block"></span> Income</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block"></span> Spending</span>
+        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block"></span> Over budget</span>
+        <span class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-amber-500 inline-block"></span> Budget</span>
+      </div>
+    </div>
+
+    <!-- Chart: single bar per month — income as container, spending as fill -->
+    <div class="flex items-end gap-3" style="height:200px">
+      <!-- Jan: income 140, spend 68, budget at 80 — under budget -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <!-- Income container (the full bar outline) -->
+          <div class="w-full rounded-t bg-emerald-50 border border-emerald-200/60 border-b-0 relative" style="height:140px">
+            <!-- Spending fill from bottom -->
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-sm" style="height:68px"></div>
+            <!-- Budget marker -->
+            <div class="absolute left-[-4px] right-[-4px] h-[2px] bg-amber-500 rounded-full" style="bottom:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+      </div>
+      <!-- Feb: income 155, spend 120, budget at 80 — over budget -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-emerald-50 border border-emerald-200/60 border-b-0 relative" style="height:155px">
+            <!-- Under-budget portion (blue) -->
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-500" style="height:80px"></div>
+            <!-- Over-budget portion (red) -->
+            <div class="absolute left-0 right-0 bg-red-400 rounded-t-sm" style="height:40px; bottom:80px"></div>
+            <!-- Budget marker -->
+            <div class="absolute left-[-4px] right-[-4px] h-[2px] bg-amber-500 rounded-full" style="bottom:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+      </div>
+      <!-- Mar: income 148, spend 105, budget at 80 — over budget -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-emerald-50 border border-emerald-200/60 border-b-0 relative" style="height:148px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-500" style="height:80px"></div>
+            <div class="absolute left-0 right-0 bg-red-400 rounded-t-sm" style="height:25px; bottom:80px"></div>
+            <div class="absolute left-[-4px] right-[-4px] h-[2px] bg-amber-500 rounded-full" style="bottom:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+      </div>
+      <!-- Apr: partial -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-emerald-50 border border-emerald-200/60 border-b-0 relative" style="height:12px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t-sm" style="height:8px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Apr</div>
+      </div>
+      <!-- May–Dec forecast -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">May</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Jun</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Jul</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Aug</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Sep</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Oct</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Nov</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="w-[70%] relative flex items-end" style="height:100%">
+          <div class="w-full rounded-t bg-slate-50 border border-slate-200/40 border-b-0 relative" style="height:100px">
+            <div class="absolute bottom-0 left-0 right-0 bg-blue-100 rounded-t-sm" style="height:80px"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-300 mt-2">Dec</div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="mt-3 pt-3 border-t border-slate-100">
+      <div class="flex items-center gap-6 text-sm tabular-nums text-slate-500">
+        <span>In: <strong class="text-emerald-600">84.485</strong></span>
+        <span>Out: <strong class="text-blue-600">61.552</strong></span>
+        <span>Saved: <strong class="text-violet-600">27.100</strong></span>
+        <span class="text-slate-300">|</span>
+        <span>Net: <strong class="text-red-500">-4.167</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="mt-6 text-xs text-slate-400 space-y-1">
+    <p><strong>What's different from V1 and V2:</strong></p>
+    <ul class="list-disc pl-4 space-y-0.5">
+      <li>Single bar per month instead of paired bars — income is the container (outlined), spending fills it from the bottom</li>
+      <li>You instantly see how much of your income was consumed by spending</li>
+      <li>Over-budget: spending fill turns red above the budget marker</li>
+      <li>Budget marker extends slightly beyond bar edges for visibility</li>
+      <li>More compact — one bar takes less horizontal space than two, so months breathe more</li>
+      <li>Trade-off: harder to read exact income amount (it's the outline height, not a solid fill)</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

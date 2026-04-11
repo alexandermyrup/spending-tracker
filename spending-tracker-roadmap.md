@@ -36,6 +36,8 @@
 
 ### P1: Do next
 
+- **Review week (weekly dashboard)**: Weekly spending view alongside the existing monthly/yearly toggle. Purpose: drive spending awareness by shortening the feedback loop from monthly to weekly. Shows variable costs only (fixed costs hidden -- rent/subscriptions aren't weekly decisions). Core content: total variable spend this week vs weekly budget target (monthly budget / 4.33), category breakdown with WoW delta and 4-week rolling average, daily run rate (actual vs target kr/day), and a "month pace" indicator (on track for the month given weeks remaining?). Week = Mon-Sun. Current week shown as partial until Sunday. Transactions attributed to the week they fall in regardless of month boundaries. No new data model needed -- purely a view layer on existing transactions. Scope: ~1 session for basic view + comparisons, second session for polish if needed.
+
 - **Yearly view polish**: YoY dots should also appear on the monthly spend vs budget chart (currently only on the cash flow chart). Scope: ~15 min.
 
 - **Nav & import restructure**: Remove "Import CSV" as a standalone nav page. Move import functionality into the Transactions page as a button/section. Fix sidebar and mobile nav icons (currently wrong/mismatched). Scope: ~1 session.
@@ -43,6 +45,8 @@
 - **Feriepenge auto-budget**: Feriepenge budget should auto-calculate as 12.5% of part-time job income budget per month, not a manual flat number. Scope: ~15 min.
 
 - **Asset & loan overview**: New tab/section that aggregates financial positions beyond monthly spending. Start with SU loan tracking (total borrowed to date, projected total at graduation, repayment terms from su.dk, outstanding balance). Extend to show investment contributions over time (pension + investment categories aggregated from transaction data), and a simple net worth view (assets minus liabilities). This replaces the old "SU tracker" and "Investing overview" items as one unified surface. Data model needs: a liabilities store (loan name, principal, rate, term) and an asset aggregation layer on top of existing savings/investment transaction types. Scope: ~2-3 sessions. First session: data model + SU loan card. Second session: investment aggregation. Third session: net worth view.
+
+- **Fix recurring transactions**: Investigate and fix recurring transaction detection. May be related to the categorization/certainty system. Scope: TBD.
 
 - **Tagging & certainty UX review**: The certainty system works well mechanically but the user-facing experience needs polish. Current issues to investigate: (1) badge colours and labels may not be intuitive to scan quickly, (2) the relationship between suggestion badges, certainty bands, and review modes isn't obvious to a first-time user, (3) "low certainty" and "conflicts" review modes are powerful but hidden behind a dropdown. Goal: make the categorization workflow feel obvious without reading documentation. Scope: ~1 session. Approach: use the app for a real import, note friction points, then redesign the affordances.
 

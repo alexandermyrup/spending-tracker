@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft A+B: Bars + Pace Line</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+</style>
+</head>
+<body class="p-6 max-w-5xl mx-auto space-y-6">
+
+<h1 class="text-lg font-bold text-slate-800">Draft A+B: Vertical Bars + Cumulative Pace Line</h1>
+<p class="text-sm text-slate-500 mb-4">Monthly bars with budget markers, overlaid cumulative pace line, YoY paired bars.</p>
+
+<!-- ========================================= -->
+<!-- SPEND VS BUDGET WITH PACE LINE           -->
+<!-- ========================================= -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+  <div class="flex justify-between items-baseline mb-1">
+    <h2 class="text-base font-semibold text-slate-800">Monthly Spend vs Budget</h2>
+    <div class="flex items-center gap-5 text-xs text-slate-500">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> Actual</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-slate-200 inline-block"></span> Forecast</span>
+      <span class="flex items-center gap-1.5"><span class="w-5 h-0.5 bg-amber-500 inline-block"></span> Budget</span>
+      <span class="flex items-center gap-1.5"><span class="w-5 h-0.5 inline-block" style="border-top: 2px dashed #6366f1"></span> Cumulative pace</span>
+    </div>
+  </div>
+  <p class="text-xs text-slate-400 mb-6">Bars show monthly spend. The dashed line tracks cumulative spend vs budget pace.</p>
+
+  <div class="relative" style="height: 280px">
+    <!-- SVG overlay for pace line + annotations -->
+    <svg viewBox="0 0 720 280" class="absolute inset-0 w-full h-full" preserveAspectRatio="none" style="z-index: 2; pointer-events: none">
+      <!-- Cumulative budget pace (straight line from 0 to 200k) -->
+      <line x1="30" y1="260" x2="700" y2="30" stroke="#a5b4fc" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.6"/>
+
+      <!-- Cumulative actual spend line -->
+      <polyline points="
+        90,250
+        150,218
+        210,183
+        270,183
+      " fill="none" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round"/>
+
+      <!-- Projected extension (dashed) -->
+      <polyline points="
+        270,183
+        330,159
+        390,138
+        450,117
+        510,96
+        570,75
+        630,55
+        690,35
+      " fill="none" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.35"/>
+
+      <!-- Current position dot -->
+      <circle cx="270" cy="183" r="5" fill="#6366f1"/>
+      <circle cx="270" cy="183" r="9" fill="#6366f1" opacity="0.15"/>
+
+      <!-- Pace dot at same x -->
+      <circle cx="270" cy="203" r="3" fill="#a5b4fc" opacity="0.6"/>
+
+      <!-- Annotation callout -->
+      <line x1="270" y1="183" x2="320" y2="145" stroke="#6366f1" stroke-width="1" opacity="0.4"/>
+    </svg>
+
+    <!-- Annotation HTML (positioned over SVG) -->
+    <div class="absolute z-10 bg-white border border-indigo-200 rounded-lg px-3 py-2 shadow-sm" style="left: 325px; top: 120px">
+      <div class="text-xs font-semibold text-red-500">5.177 kr. over pace</div>
+      <div class="text-[11px] text-slate-500">after 3 months (30.2% spent, 25% expected)</div>
+    </div>
+
+    <!-- Y-axis scale -->
+    <div class="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-[10px] text-slate-400 w-7 text-right">
+      <span>25k</span>
+      <span>20k</span>
+      <span>15k</span>
+      <span>10k</span>
+      <span>5k</span>
+      <span>0</span>
+    </div>
+
+    <!-- Right Y-axis (cumulative) -->
+    <div class="absolute right-0 top-0 bottom-6 flex flex-col justify-between text-[10px] text-indigo-400 w-9 text-left">
+      <span>200k</span>
+      <span>160k</span>
+      <span>120k</span>
+      <span>80k</span>
+      <span>40k</span>
+      <span>0</span>
+    </div>
+
+    <!-- Bar chart area -->
+    <div class="absolute left-8 right-10 top-0 bottom-0 flex items-end gap-1.5" style="padding-bottom: 24px">
+      <!-- Jan (actual, slightly over) -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full relative">
+        <div class="text-[10px] font-medium text-slate-600 mb-1 tabular-nums">19.0k</div>
+        <div class="w-full rounded-t-md bg-blue-500 relative" style="height: 72%">
+          <div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom: 87%" title="Budget: 16.5k"></div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+      </div>
+      <!-- Feb (actual, over) -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] font-medium text-red-500 mb-1 tabular-nums">20.9k</div>
+        <div class="w-full rounded-t-md bg-red-500/85 relative" style="height: 80%">
+          <div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom: 80%" title="Budget: 16.5k"></div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+      </div>
+      <!-- Mar (actual, over) -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] font-medium text-red-500 mb-1 tabular-nums">20.7k</div>
+        <div class="w-full rounded-t-md bg-red-500/85 relative" style="height: 79%">
+          <div class="absolute left-0 right-0 h-[2px] bg-amber-500 rounded" style="bottom: 82%" title="Budget: 17.0k"></div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+      </div>
+      <!-- Apr (forecast) -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">17.5k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 66%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Apr</div>
+      </div>
+      <!-- May -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">14.6k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 55%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">May</div>
+      </div>
+      <!-- Jun -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">17.0k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 64%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Jun</div>
+      </div>
+      <!-- Jul -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">15.6k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 59%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Jul</div>
+      </div>
+      <!-- Aug -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">16.5k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 62%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Aug</div>
+      </div>
+      <!-- Sep -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">14.6k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 55%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Sep</div>
+      </div>
+      <!-- Oct -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">17.5k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 66%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Oct</div>
+      </div>
+      <!-- Nov -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">14.6k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 55%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Nov</div>
+      </div>
+      <!-- Dec -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="text-[10px] text-slate-400 mb-1 tabular-nums">16.5k</div>
+        <div class="w-full rounded-t-md bg-slate-200 border border-slate-200" style="height: 62%"></div>
+        <div class="text-[11px] text-slate-400 mt-2">Dec</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================= -->
+<!-- YOY COMPARISON                           -->
+<!-- ========================================= -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+  <div class="flex justify-between items-baseline mb-1">
+    <h2 class="text-base font-semibold text-slate-800">Year-over-Year</h2>
+    <div class="flex items-center gap-4 text-xs text-slate-500">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> 2026</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-slate-300 inline-block"></span> 2025</span>
+    </div>
+  </div>
+  <p class="text-xs text-slate-400 mb-6">Side-by-side monthly comparison. Only months with data in both years are paired.</p>
+
+  <div class="flex items-end gap-2" style="height: 180px">
+    <!-- Jan -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300 transition-all" style="height: 62%" title="2025: 16.2k"></div>
+        <div class="w-[42%] rounded-t-sm bg-blue-500 transition-all" style="height: 73%" title="2026: 19.0k"></div>
+      </div>
+      <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+    </div>
+    <!-- Feb -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 68%"></div>
+        <div class="w-[42%] rounded-t-sm bg-red-500" style="height: 80%"></div>
+      </div>
+      <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+    </div>
+    <!-- Mar -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 72%"></div>
+        <div class="w-[42%] rounded-t-sm bg-red-500" style="height: 79%"></div>
+      </div>
+      <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+    </div>
+    <!-- Apr (only 2025) -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 55%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Apr</div>
+    </div>
+    <!-- May -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 60%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">May</div>
+    </div>
+    <!-- Jun -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 70%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Jun</div>
+    </div>
+    <!-- Jul -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 78%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Jul</div>
+    </div>
+    <!-- Aug -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 85%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Aug</div>
+    </div>
+    <!-- Sep -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 52%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Sep</div>
+    </div>
+    <!-- Oct -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 88%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Oct</div>
+    </div>
+    <!-- Nov -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 65%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Nov</div>
+    </div>
+    <!-- Dec -->
+    <div class="flex-1 flex flex-col items-center justify-end h-full">
+      <div class="flex gap-1 items-end w-full justify-center" style="height: 100%">
+        <div class="w-[42%] rounded-t-sm bg-slate-300" style="height: 92%"></div>
+        <div class="w-[42%]"></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2">Dec</div>
+    </div>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="flex justify-between items-center mt-5 pt-4 border-t border-slate-100">
+    <div class="flex gap-6">
+      <div class="text-sm">
+        <span class="text-slate-500">YTD 2026:</span>
+        <span class="font-semibold text-red-500 tabular-nums ml-1">60.631 kr.</span>
+      </div>
+      <div class="text-sm">
+        <span class="text-slate-500">YTD 2025:</span>
+        <span class="font-semibold text-slate-700 tabular-nums ml-1">56.100 kr.</span>
+      </div>
+    </div>
+    <div class="px-3 py-1.5 rounded-full bg-red-50 border border-red-200/60">
+      <span class="text-xs font-semibold text-red-500">+8.1% vs last year</span>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================= -->
+<!-- FORECAST (kept from existing)            -->
+<!-- ========================================= -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-l-4 border-l-amber-400">
+  <h2 class="text-base font-semibold text-slate-800 mb-1">Year-End Forecast (9 months projected)</h2>
+  <p class="text-xs text-slate-400 mb-5">Future spending uses budget. Future income and savings use the year-to-date average. Loan uses the expected annual amount.</p>
+  <div class="space-y-2 text-sm">
+    <div class="flex justify-between"><span class="text-slate-500">Projected income</span><span class="font-medium tabular-nums text-emerald-600">335.126 kr.</span></div>
+    <div class="flex justify-between"><span class="text-slate-500">Projected loan inflow</span><span class="font-medium tabular-nums text-slate-500">34.191 kr. / 45.588 kr. budgeted</span></div>
+    <div class="flex justify-between"><span class="text-slate-500">Projected spending</span><span class="font-medium tabular-nums text-red-500">-205.290 kr.</span></div>
+    <div class="flex justify-between"><span class="text-slate-500">Projected savings</span><span class="font-medium tabular-nums text-violet-600">-108.400 kr.</span></div>
+    <div class="flex justify-between pt-3 mt-2 border-t-2 border-slate-300 font-semibold text-base">
+      <span>Projected remaining</span>
+      <span class="tabular-nums text-emerald-600">21.436 kr.</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

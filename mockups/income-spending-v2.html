@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Income vs Spending v2 — Three Versions</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .label { position: sticky; top: 0; z-index: 10; }
+</style>
+</head>
+<body class="p-6 max-w-5xl mx-auto space-y-10">
+
+<h1 class="text-xl font-bold text-slate-800">Income vs Spending v2</h1>
+<p class="text-sm text-slate-500 mb-4">Paired bars (income vs outflows) with savings stacked on spending, plus YoY dots. Three layout variations.</p>
+
+<!-- ========================================= -->
+<!-- VERSION A: Savings stacked, YoY dot on   -->
+<!-- income bar, clean separation              -->
+<!-- ========================================= -->
+<section>
+  <div class="label bg-blue-800 text-white px-4 py-2 rounded-t-xl text-sm font-bold tracking-wide">VERSION A: Stacked outflows beside income, YoY dot on income</div>
+  <div class="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6">
+    <div class="flex justify-between items-baseline mb-1">
+      <h2 class="text-base font-semibold text-slate-800">Monthly Cash Flow</h2>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block"></span> Income</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> Spending</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-violet-500 inline-block"></span> Saved</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400 inline-block"></span> 2025 income</span>
+      </div>
+    </div>
+    <p class="text-xs text-slate-400 mb-6">Income on the left, spending + savings stacked on the right. Dot marks last year's income for the same month.</p>
+
+    <div class="flex items-end gap-1.5" style="height: 240px">
+      <!-- Jan -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <!-- Income bar -->
+          <div class="w-[40%] rounded-t-md bg-emerald-500 relative" style="height: 80%">
+            <!-- YoY dot -->
+            <div class="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-slate-400" style="bottom: 85%" title="2025: 25.2k"></div>
+          </div>
+          <!-- Stacked: spending + savings -->
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 26%"></div>
+            <div class="bg-blue-500" style="height: 49%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+      </div>
+      <!-- Feb -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-500 relative" style="height: 78%">
+            <div class="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-slate-400" style="bottom: 82%" title="2025: 24.8k"></div>
+          </div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 26%"></div>
+            <div class="bg-red-500/85" style="height: 60%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+      </div>
+      <!-- Mar -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-500 relative" style="height: 82%">
+            <div class="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-slate-400" style="bottom: 78%" title="2025: 23.5k"></div>
+          </div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 26%"></div>
+            <div class="bg-red-500/85" style="height: 59%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+      </div>
+      <!-- Apr-Dec forecast -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 50%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Apr</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 42%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">May</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 49%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Jun</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 45%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Jul</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 47%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Aug</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 42%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Sep</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 50%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Oct</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 42%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Nov</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[40%] rounded-t-md bg-emerald-200 border border-emerald-200" style="height: 78%"></div>
+          <div class="w-[40%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 26%"></div>
+            <div class="bg-slate-200" style="height: 47%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Dec</div>
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center mt-5 pt-4 border-t border-slate-100">
+      <div class="flex gap-5 text-sm">
+        <div><span class="text-slate-500">Income:</span> <strong class="text-emerald-600 tabular-nums">83.781 kr.</strong></div>
+        <div><span class="text-slate-500">Spent:</span> <strong class="text-blue-600 tabular-nums">60.631 kr.</strong></div>
+        <div><span class="text-slate-500">Saved:</span> <strong class="text-violet-600 tabular-nums">27.100 kr.</strong></div>
+      </div>
+      <div class="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/60">
+        <span class="text-xs font-semibold text-amber-600">-3.950 kr. net</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================= -->
+<!-- VERSION B: Single stacked bar per month  -->
+<!-- with income line overlay + YoY dots       -->
+<!-- ========================================= -->
+<section>
+  <div class="label bg-emerald-800 text-white px-4 py-2 rounded-t-xl text-sm font-bold tracking-wide">VERSION B: Single stacked bar + income line + YoY dots</div>
+  <div class="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6">
+    <div class="flex justify-between items-baseline mb-1">
+      <h2 class="text-base font-semibold text-slate-800">Monthly Cash Flow</h2>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> Spending</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-violet-500 inline-block"></span> Saved</span>
+        <span class="flex items-center gap-1.5"><span class="w-5 h-0.5 bg-emerald-500 inline-block"></span> Income</span>
+        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400 inline-block"></span> 2025</span>
+      </div>
+    </div>
+    <p class="text-xs text-slate-400 mb-6">Stacked outflows as bars, income as a line. When the bar exceeds the line, you overspent that month.</p>
+
+    <div class="relative" style="height: 240px">
+      <!-- SVG income line + YoY dots -->
+      <svg viewBox="0 0 720 240" class="absolute inset-0 w-full h-full" preserveAspectRatio="none" style="z-index: 2; pointer-events: none">
+        <!-- Income line 2026 -->
+        <polyline points="60,48 120,53 180,44 240,53 300,53 360,53 420,53 480,53 540,53 600,53 660,53 720,53"
+          fill="none" stroke="#10b981" stroke-width="2.5" stroke-linejoin="round"/>
+
+        <!-- Income dots 2026 -->
+        <circle cx="60" cy="48" r="3.5" fill="#10b981"/>
+        <circle cx="120" cy="53" r="3.5" fill="#10b981"/>
+        <circle cx="180" cy="44" r="3.5" fill="#10b981"/>
+
+        <!-- YoY dots 2025 (slightly different positions) -->
+        <circle cx="60" cy="62" r="3" fill="white" stroke="#94a3b8" stroke-width="2"/>
+        <circle cx="120" cy="58" r="3" fill="white" stroke="#94a3b8" stroke-width="2"/>
+        <circle cx="180" cy="70" r="3" fill="white" stroke="#94a3b8" stroke-width="2"/>
+        <circle cx="240" cy="65" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="300" cy="55" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="360" cy="48" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="420" cy="42" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="480" cy="50" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="540" cy="60" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="600" cy="45" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="660" cy="52" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+        <circle cx="720" cy="40" r="3" fill="white" stroke="#94a3b8" stroke-width="1.5" opacity="0.5"/>
+      </svg>
+
+      <!-- Bars -->
+      <div class="absolute left-0 right-0 top-0 bottom-0 flex items-end gap-2" style="padding-bottom: 24px">
+        <!-- Jan -->
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 24%"></div>
+            <div class="bg-blue-500" style="height: 51%"></div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+        </div>
+        <!-- Feb -->
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 24%"></div>
+            <div class="bg-red-500/85" style="height: 56%"></div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+        </div>
+        <!-- Mar -->
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-500" style="height: 24%"></div>
+            <div class="bg-red-500/85" style="height: 55%"></div>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+        </div>
+        <!-- Apr-Dec -->
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 46%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Apr</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 39%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">May</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 45%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Jun</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 42%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Jul</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 44%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Aug</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 39%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Sep</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 46%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Oct</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 39%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Nov</div>
+        </div>
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-[70%] flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="rounded-t-md bg-violet-200" style="height: 24%"></div>
+            <div class="bg-slate-200" style="height: 44%"></div>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">Dec</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center mt-2 pt-4 border-t border-slate-100 text-sm">
+      <span class="text-slate-500">When the bar stays below the green line, you're in surplus.</span>
+      <div class="px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/60">
+        <span class="text-xs font-semibold text-emerald-600">Income covers 96% of outflows</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================= -->
+<!-- VERSION C: Compact paired + stacked with -->
+<!-- YoY as subtle background bar              -->
+<!-- ========================================= -->
+<section>
+  <div class="label bg-violet-800 text-white px-4 py-2 rounded-t-xl text-sm font-bold tracking-wide">VERSION C: Paired bars, stacked outflows, YoY as ghost bar</div>
+  <div class="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6">
+    <div class="flex justify-between items-baseline mb-1">
+      <h2 class="text-base font-semibold text-slate-800">Monthly Cash Flow</h2>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-emerald-500 inline-block"></span> Income</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span> Spending</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-violet-500 inline-block"></span> Saved</span>
+        <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm border-2 border-slate-300 inline-block bg-transparent"></span> 2025 total</span>
+      </div>
+    </div>
+    <p class="text-xs text-slate-400 mb-6">Ghost outline shows last year's total outflows for comparison. Stacked bar shows this year's spending + savings.</p>
+
+    <div class="flex items-end gap-1.5" style="height: 240px">
+      <!-- Jan -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <!-- Income -->
+          <div class="w-[38%] rounded-t-md bg-emerald-500" style="height: 80%"></div>
+          <!-- Stacked outflows with ghost -->
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <!-- Ghost bar (2025) -->
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-300 bg-transparent" style="height: 68%"></div>
+            <!-- 2026 stacked -->
+            <div class="rounded-t-md bg-violet-500 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-blue-500 relative z-[1]" style="height: 49%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Jan</div>
+      </div>
+      <!-- Feb -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-500" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-300 bg-transparent" style="height: 72%"></div>
+            <div class="rounded-t-md bg-violet-500 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-red-500/85 relative z-[1]" style="height: 60%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Feb</div>
+      </div>
+      <!-- Mar -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center relative" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-500" style="height: 82%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-300 bg-transparent" style="height: 75%"></div>
+            <div class="rounded-t-md bg-violet-500 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-red-500/85 relative z-[1]" style="height: 59%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2 font-medium">Mar</div>
+      </div>
+      <!-- Apr-Dec forecast -->
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 60%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 46%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Apr</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 66%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 39%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">May</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 73%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 45%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Jun</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 80%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 42%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Jul</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 88%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 44%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Aug</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 55%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 39%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Sep</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 92%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 46%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Oct</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 68%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 39%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Nov</div>
+      </div>
+      <div class="flex-1 flex flex-col items-center justify-end h-full">
+        <div class="flex gap-[3px] items-end w-full justify-center" style="height: 100%">
+          <div class="w-[38%] rounded-t-md bg-emerald-200" style="height: 78%"></div>
+          <div class="w-[38%] relative flex flex-col items-stretch justify-end" style="height: 100%">
+            <div class="absolute bottom-0 left-0 right-0 rounded-t-md border-2 border-dashed border-slate-200 bg-transparent" style="height: 95%"></div>
+            <div class="rounded-t-md bg-violet-200 relative z-[1]" style="height: 24%"></div>
+            <div class="bg-slate-200 relative z-[1]" style="height: 44%"></div>
+          </div>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-2">Dec</div>
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center mt-5 pt-4 border-t border-slate-100">
+      <div class="flex gap-5 text-sm">
+        <div><span class="text-slate-500">Income:</span> <strong class="text-emerald-600 tabular-nums">83.781 kr.</strong></div>
+        <div><span class="text-slate-500">Outflows:</span> <strong class="text-slate-700 tabular-nums">87.731 kr.</strong></div>
+      </div>
+      <div class="flex gap-3">
+        <div class="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/60">
+          <span class="text-xs font-semibold text-amber-600">-3.950 kr. net</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200/60">
+          <span class="text-xs font-semibold text-slate-600">2025 outflows were 12% lower at this point</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="text-center text-sm text-slate-400 py-6">End of versions</div>
+
+</body>
+</html>

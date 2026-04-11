@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview Mockup D</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #f6f3ee;
+  --card: #ffffff;
+  --ink: #131313;
+  --muted: #66625f;
+  --line: #ddd6cf;
+  --red: #cf3b2d;
+  --green: #23804f;
+  --blue: #1f5fd2;
+  --violet: #6a48e8;
+}
+body { margin: 0; font-family: system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+.page { max-width: 1180px; margin: 0 auto; padding: 30px 24px 70px; }
+.header { display: flex; justify-content: space-between; margin-bottom: 18px; color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+.hero {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  padding: 28px;
+  margin-bottom: 18px;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.05);
+}
+.hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 24px; }
+.title { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.hero h1 { margin: 0 0 10px; font-size: 58px; line-height: 0.95; letter-spacing: -0.05em; max-width: 10ch; }
+.hero h1 span { color: var(--red); }
+.hero p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--muted); max-width: 42ch; }
+.numbers { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.tile {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #faf9f7;
+}
+.tile .label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.tile .value { margin-top: 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.04em; }
+.good { color: var(--green); } .bad { color: var(--red); } .violet { color: var(--violet); }
+.layout { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 22px;
+}
+.card h2 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.diag { display: grid; gap: 12px; }
+.diag-item { padding: 14px; border-radius: 16px; background: #faf7f5; border: 1px solid #efe5df; }
+.diag-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.diag-name { font-size: 18px; font-weight: 800; }
+.diag-over { font-size: 15px; font-weight: 800; color: var(--red); }
+.diag-copy { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.split { display: grid; gap: 18px; }
+.list { display: grid; gap: 0; }
+.list-row { display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.list-row:last-child { border-bottom: 0; }
+@media (max-width: 900px) { .hero-grid, .layout { grid-template-columns: 1fr; } .hero h1 { font-size: 44px; } }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="header"><span>Mockup D · Compact scorecard</span><span>Sharper app UI</span></div>
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <div class="title">Last completed month · Feb 26</div>
+          <h1>Budget was the problem. <span>Not the whole month.</span></h1>
+          <p>You overspent, but the month still held together. This version is denser and more operational, with a strong hero and compressed secondary sections.</p>
+        </div>
+        <div class="numbers">
+          <div class="tile"><div class="label">Income</div><div class="value good">29,783</div></div>
+          <div class="tile"><div class="label">Spent / Budget</div><div class="value bad">20,860 / 15,075</div></div>
+          <div class="tile"><div class="label">Invested</div><div class="value violet">8,000</div></div>
+          <div class="tile"><div class="label">Remaining Cash</div><div class="value good">923</div></div>
+        </div>
+      </div>
+    </section>
+    <div class="layout">
+      <section class="card">
+        <h2>Budget Diagnosis</h2>
+        <div class="diag">
+          <div class="diag-item"><div class="diag-head"><span class="diag-name">Travel</span><span class="diag-over">3,000 over</span></div><div class="diag-copy">One-off · Budget 1,500 · Last month 0 · 3-mo avg 500 · 1-year avg 375</div></div>
+          <div class="diag-item"><div class="diag-head"><span class="diag-name">Groceries</span><span class="diag-over">300 over</span></div><div class="diag-copy">Budget issue · Budget 2,600 · Last month 3,100 · 3-mo avg 3,100 · 1-year avg 2,650</div></div>
+          <div class="diag-item"><div class="diag-head"><span class="diag-name">Nightlife</span><span class="diag-over">260 over</span></div><div class="diag-copy">Recurring habit · Budget 600 · Last month 720 · 3-mo avg 653 · 1-year avg 410</div></div>
+        </div>
+      </section>
+      <div class="split">
+        <section class="card">
+          <h2>Savings Progress</h2>
+          <div class="list">
+            <div class="list-row"><span>Month invested</span><strong class="violet">8,000 kr.</strong></div>
+            <div class="list-row"><span>YTD invested</span><strong class="violet">11,400 kr.</strong></div>
+            <div class="list-row"><span>YTD cash saved</span><strong>2,100 kr.</strong></div>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Recurring Obligations</h2>
+          <div class="list">
+            <div class="list-row"><span>Rent + utilities</span><strong>4,805 kr.</strong></div>
+            <div class="list-row"><span>iCloud</span><strong>89 kr.</strong></div>
+            <div class="list-row"><span>Accident insurance</span><strong>117 kr.</strong></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

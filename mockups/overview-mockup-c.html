@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview Mockup C</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #f4ecdf;
+  --paper: #fffaf1;
+  --ink: #201a17;
+  --muted: #786e66;
+  --line: #dbcdbd;
+  --accent: #0a5b4c;
+  --green: #2e7d57;
+  --red: #b64033;
+  --violet: #604df2;
+}
+body {
+  margin: 0;
+  font-family: Georgia, serif;
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0)),
+    var(--bg);
+}
+.page { max-width: 1160px; margin: 0 auto; padding: 34px 24px 80px; }
+.topline {
+  display: flex; justify-content: space-between; align-items: end;
+  padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 26px;
+}
+.brand { font: 700 18px/1 system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.stamp { font: 600 12px/1 system-ui, sans-serif; color: var(--muted); }
+.hero {
+  display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 18px; margin-bottom: 18px;
+}
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  box-shadow: 0 18px 40px rgba(54, 35, 14, 0.06);
+}
+.lead {
+  padding: 28px;
+  min-height: 430px;
+}
+.section-kicker {
+  font: 700 12px/1 system-ui, sans-serif;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.headline {
+  margin: 18px 0 10px;
+  font-size: clamp(44px, 6vw, 78px);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+}
+.headline.bad { color: var(--red); }
+.summary {
+  max-width: 38ch;
+  margin: 0 0 24px;
+  font: 500 17px/1.55 system-ui, sans-serif;
+  color: var(--muted);
+}
+.rail {
+  display: grid; gap: 12px;
+}
+.rail-item {
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.rail-item:last-child { border-bottom: 0; }
+.rail-label { font: 600 13px/1.2 system-ui, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.rail-value { font: 700 30px/1 Georgia, serif; letter-spacing: -0.04em; }
+.good { color: var(--green); }
+.bad { color: var(--red); }
+.violet { color: var(--violet); }
+.diag { padding: 24px; }
+.diag h3, .sub h3 { margin: 0 0 14px; font: 700 12px/1 system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.diag-block { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.diag-block:last-child { border-bottom: 0; }
+.diag-head { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 5px; }
+.diag-title { font-size: 22px; line-height: 1; }
+.diag-over { font: 700 16px/1 system-ui, sans-serif; color: var(--red); }
+.diag-copy { font: 500 13px/1.45 system-ui, sans-serif; color: var(--muted); }
+.subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.sub { padding: 22px; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); font: 500 14px/1.4 system-ui, sans-serif; }
+.row:last-child { border-bottom: 0; }
+@media (max-width: 900px) { .hero, .subgrid { grid-template-columns: 1fr; } .headline { font-size: 48px; } }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="topline">
+      <div class="brand">Monthly Briefing</div>
+      <div class="stamp">Mockup C · Quiet FT-adjacent</div>
+    </div>
+    <div class="hero">
+      <section class="card lead">
+        <div class="section-kicker">February 2026</div>
+        <h1 class="headline bad">A weak month, but not a broken one.</h1>
+        <p class="summary">Budget discipline slipped, mainly on travel and nightlife, while the month still closed with positive cash after a large investment transfer.</p>
+        <div class="rail">
+          <div class="rail-item"><div><div class="rail-label">True income</div></div><div class="rail-value good">29,783</div></div>
+          <div class="rail-item"><div><div class="rail-label">Spent vs budget</div></div><div class="rail-value bad">20,860 / 15,075</div></div>
+          <div class="rail-item"><div><div class="rail-label">Invested</div></div><div class="rail-value violet">8,000</div></div>
+          <div class="rail-item"><div><div class="rail-label">Remaining cash</div></div><div class="rail-value good">923</div></div>
+        </div>
+      </section>
+      <aside class="card diag">
+        <h3>Diagnosis</h3>
+        <div class="diag-block">
+          <div class="diag-head"><div class="diag-title">Travel</div><div class="diag-over">3,000 over</div></div>
+          <div class="diag-copy">One-off spike. Budget 1,500 · last month 0 · 3-mo avg 500 · 1-year avg 375.</div>
+        </div>
+        <div class="diag-block">
+          <div class="diag-head"><div class="diag-title">Nightlife</div><div class="diag-over">260 over</div></div>
+          <div class="diag-copy">Recurring habit. Budget 600 · last month 720 · 3-mo avg 653 · 1-year avg 410.</div>
+        </div>
+        <div class="diag-block">
+          <div class="diag-head"><div class="diag-title">Groceries</div><div class="diag-over">300 over</div></div>
+          <div class="diag-copy">Likely budget issue. Budget 2,600 · last month 3,100 · 3-mo avg 3,100 · 1-year avg 2,650.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="subgrid">
+      <section class="card sub">
+        <h3>Savings Progress</h3>
+        <div class="row"><span>Month invested</span><strong class="violet">8,000 kr.</strong></div>
+        <div class="row"><span>YTD invested</span><strong class="violet">11,400 kr.</strong></div>
+        <div class="row"><span>YTD cash saved</span><strong>2,100 kr.</strong></div>
+      </section>
+      <section class="card sub">
+        <h3>Recurring Obligations</h3>
+        <div class="row"><span>Rent + utilities</span><strong>4,805 kr.</strong></div>
+        <div class="row"><span>iCloud</span><strong>89 kr.</strong></div>
+        <div class="row"><span>Accident insurance</span><strong>117 kr.</strong></div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

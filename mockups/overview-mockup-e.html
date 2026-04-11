@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview Mockup E</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --ft-bg: #f6e9d8;
+  --ft-paper: #fff1e0;
+  --ft-ink: #221f1b;
+  --ft-muted: #6d6258;
+  --ft-line: #d9c4ae;
+  --ft-salmon: #f4c6b4;
+  --ft-green: #11785a;
+  --ft-red: #b3372a;
+  --ft-violet: #6a4cff;
+}
+body {
+  margin: 0;
+  color: var(--ft-ink);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0)),
+    var(--ft-bg);
+  font-family: Georgia, serif;
+}
+.sheet {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 28px 24px 90px;
+}
+.masthead {
+  display: grid;
+  grid-template-columns: 220px 1fr 220px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--ft-line);
+  margin-bottom: 24px;
+}
+.masthead .tag,
+.masthead .right {
+  font: 700 11px/1 system-ui, sans-serif;
+  color: var(--ft-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.masthead .center {
+  text-align: center;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr;
+  gap: 18px;
+}
+.panel {
+  background: rgba(255,241,224,0.9);
+  border: 1px solid var(--ft-line);
+  border-radius: 24px;
+  padding: 24px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 430px;
+}
+.monthline {
+  font: 700 12px/1 system-ui, sans-serif;
+  color: var(--ft-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.hero h1 {
+  margin: 18px 0 8px;
+  font-size: clamp(54px, 7vw, 92px);
+  line-height: 0.88;
+  letter-spacing: -0.07em;
+}
+.hero h1 span { color: var(--ft-red); }
+.hero p {
+  max-width: 44ch;
+  margin: 0 0 24px;
+  font: 500 18px/1.55 system-ui, sans-serif;
+  color: var(--ft-muted);
+}
+.meter {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.meter-item {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.28);
+  border: 1px solid var(--ft-line);
+}
+.meter-item .label {
+  font: 700 11px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ft-muted);
+}
+.meter-item .value {
+  margin-top: 10px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.green { color: var(--ft-green); }
+.red { color: var(--ft-red); }
+.violet { color: var(--ft-violet); }
+.side {
+  display: grid;
+  gap: 18px;
+}
+.block-title {
+  margin: 0 0 12px;
+  font: 700 12px/1 system-ui, sans-serif;
+  color: var(--ft-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.diag {
+  padding: 14px 0;
+  border-top: 1px solid var(--ft-line);
+}
+.diag:first-of-type { border-top: 0; padding-top: 0; }
+.diag-head {
+  display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px;
+}
+.diag-name { font-size: 24px; line-height: 1; }
+.diag-over { font: 700 16px/1 system-ui, sans-serif; color: var(--ft-red); }
+.diag-copy { font: 500 13px/1.5 system-ui, sans-serif; color: var(--ft-muted); }
+.minirow {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--ft-line);
+  font: 500 14px/1.4 system-ui, sans-serif;
+}
+.minirow:first-of-type { border-top: 0; padding-top: 0; }
+.footer-note {
+  margin-top: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ft-line);
+  font: 500 12px/1.5 system-ui, sans-serif;
+  color: var(--ft-muted);
+}
+@media (max-width: 980px) {
+  .masthead { grid-template-columns: 1fr; gap: 8px; text-align: center; }
+  .grid { grid-template-columns: 1fr; }
+  .meter { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="masthead">
+      <div class="tag">Mockup E</div>
+      <div class="center">Monthly Scorecard</div>
+      <div class="right">FT leaning</div>
+    </div>
+    <div class="grid">
+      <section class="panel hero">
+        <div class="monthline">February 2026 · Last completed month</div>
+        <h1>Spending overshot plan, <span>but cash held.</span></h1>
+        <p>The month was dragged off course by a few categories rather than a broad collapse in discipline. Investing remained high. The budget diagnosis carries the explanation; the scorecard carries the judgment.</p>
+        <div class="meter">
+          <div class="meter-item"><div class="label">Income</div><div class="value green">29,783</div></div>
+          <div class="meter-item"><div class="label">Spent / Budget</div><div class="value red">20,860 / 15,075</div></div>
+          <div class="meter-item"><div class="label">Invested</div><div class="value violet">8,000</div></div>
+          <div class="meter-item"><div class="label">Remaining</div><div class="value green">923</div></div>
+        </div>
+      </section>
+      <aside class="side">
+        <section class="panel">
+          <h2 class="block-title">Budget Diagnosis</h2>
+          <div class="diag">
+            <div class="diag-head"><div class="diag-name">Travel</div><div class="diag-over">3,000 over</div></div>
+            <div class="diag-copy">One-off. Budget 1,500 · last month 0 · 3-mo avg 500 · 1-year avg 375.</div>
+          </div>
+          <div class="diag">
+            <div class="diag-head"><div class="diag-name">Groceries</div><div class="diag-over">300 over</div></div>
+            <div class="diag-copy">Likely budget issue. Budget 2,600 · last month 3,100 · 3-mo avg 3,100 · 1-year avg 2,650.</div>
+          </div>
+          <div class="diag">
+            <div class="diag-head"><div class="diag-name">Nightlife</div><div class="diag-over">260 over</div></div>
+            <div class="diag-copy">Recurring habit. Budget 600 · last month 720 · 3-mo avg 653 · 1-year avg 410.</div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2 class="block-title">Supporting Detail</h2>
+          <div class="minirow"><span>YTD invested</span><strong class="violet">11,400 kr.</strong></div>
+          <div class="minirow"><span>YTD cash saved</span><strong>2,100 kr.</strong></div>
+          <div class="minirow"><span>Recurring rent</span><strong>4,805 kr.</strong></div>
+          <div class="minirow"><span>Recurring iCloud</span><strong>89 kr.</strong></div>
+          <div class="footer-note">This direction intentionally feels more like a calm FT-style briefing than a generic app dashboard.</div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

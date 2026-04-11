@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview Mockup F</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #f6e9d8;
+  --panel: rgba(255, 244, 229, 0.92);
+  --panel-strong: rgba(255, 248, 239, 0.98);
+  --ink: #1f1b17;
+  --muted: #6c6157;
+  --line: #d8c2ab;
+  --accent: #0e6b57;
+  --good: #187451;
+  --bad: #b63a2d;
+  --violet: #644bff;
+  --shadow: 0 18px 48px rgba(66, 40, 18, 0.08);
+}
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,0.35), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0)),
+    var(--bg);
+  font-family: "Iowan Old Style", Georgia, serif;
+}
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 36px 24px 88px;
+}
+.kicker {
+  margin-bottom: 18px;
+  font: 700 11px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+.frame {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  gap: 18px;
+}
+.nav,
+.main-panel,
+.subpanel {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.nav {
+  padding: 18px;
+}
+.brand {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.brand h1 {
+  margin: 0;
+  font-size: 38px;
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+}
+.brand p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font: 500 14px/1.45 system-ui, sans-serif;
+}
+.nav-section { margin-bottom: 20px; }
+.nav-title {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font: 700 11px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.pill {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.22);
+  color: var(--ink);
+  font: 600 14px/1.2 system-ui, sans-serif;
+}
+.pill.active {
+  background: rgba(14,107,87,0.1);
+  border-color: rgba(14,107,87,0.18);
+  color: var(--accent);
+}
+.content {
+  display: grid;
+  gap: 18px;
+}
+.main-panel {
+  padding: 24px;
+}
+.headline {
+  display: grid;
+  grid-template-columns: 1.25fr 0.95fr;
+  gap: 18px;
+}
+.verdict {
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--panel-strong);
+  border: 1px solid rgba(216,194,171,0.85);
+}
+.month {
+  color: var(--muted);
+  font: 700 12px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.verdict h2 {
+  margin: 14px 0 8px;
+  font-size: clamp(50px, 5.6vw, 74px);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+}
+.verdict h2.bad { color: var(--bad); }
+.verdict p {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font: 500 15px/1.55 system-ui, sans-serif;
+}
+.snapshot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.tile {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(216,194,171,0.8);
+  background: rgba(255,248,239,0.8);
+}
+.tile .label {
+  color: var(--muted);
+  font: 700 11px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.tile .value {
+  margin-top: 10px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.violet { color: var(--violet); }
+.mid {
+  display: grid;
+  grid-template-columns: 1.12fr 0.88fr;
+  gap: 18px;
+}
+.subpanel {
+  padding: 22px;
+}
+.title {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font: 700 12px/1 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+.diag-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.diag-row:last-child { border-bottom: 0; }
+.diag-row strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 20px;
+  line-height: 1.05;
+}
+.diag-row p {
+  margin: 0;
+  color: var(--muted);
+  font: 500 13px/1.45 system-ui, sans-serif;
+}
+.diag-over {
+  white-space: nowrap;
+  color: var(--bad);
+  font: 800 15px/1 system-ui, sans-serif;
+}
+.stack {
+  display: grid;
+  gap: 18px;
+}
+.mini {
+  display: grid;
+  gap: 0;
+}
+.mini-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font: 500 14px/1.4 system-ui, sans-serif;
+}
+.mini-row:last-child { border-bottom: 0; }
+.bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.chart {
+  height: 230px;
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+.col { flex: 1; }
+.col .bar {
+  width: 100%;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(180deg, #77c4aa, var(--accent));
+}
+.col.badcol .bar {
+  background: linear-gradient(180deg, #ef9182, var(--bad));
+}
+.col:nth-child(1) .bar { height: 34%; }
+.col:nth-child(2) .bar { height: 49%; }
+.col:nth-child(3) .bar { height: 44%; }
+.col:nth-child(4) .bar { height: 63%; }
+.col:nth-child(5) .bar { height: 88%; }
+.month-tag {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--muted);
+  font: 700 12px/1 system-ui, sans-serif;
+}
+@media (max-width: 980px) {
+  .frame, .headline, .mid, .bottom { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="kicker">Mockup F · B structure + E styling</div>
+    <div class="frame">
+      <aside class="nav">
+        <div class="brand">
+          <h1>Spending Tracker</h1>
+          <p>A scorecard-first overview with a warmer, more editorial tone, while keeping an app-like structure.</p>
+        </div>
+        <div class="nav-section">
+          <div class="nav-title">Views</div>
+          <div class="pill active">Monthly overview</div>
+          <div class="pill">Yearly review</div>
+          <div class="pill">Transactions</div>
+        </div>
+        <div class="nav-section">
+          <div class="nav-title">Focus</div>
+          <div class="pill active">February 2026</div>
+          <div class="pill">Exclude covered</div>
+          <div class="pill">Salary shift: 20th</div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="main-panel">
+          <div class="headline">
+            <div class="verdict">
+              <div class="month">Last completed month · Feb 26</div>
+              <h2 class="bad">Over budget by 5,785 kr.</h2>
+              <p>Travel and nightlife pulled the month off plan, but not enough to wipe out the month entirely. Income remained solid, and the investment transfer still looks intentional rather than accidental overspend.</p>
+            </div>
+            <div class="snapshot">
+              <div class="tile">
+                <div class="label">True Income</div>
+                <div class="value good">29,783</div>
+              </div>
+              <div class="tile">
+                <div class="label">Spent / Budget</div>
+                <div class="value bad">20,860 / 15,075</div>
+              </div>
+              <div class="tile">
+                <div class="label">Invested</div>
+                <div class="value violet">8,000</div>
+              </div>
+              <div class="tile">
+                <div class="label">Remaining Cash</div>
+                <div class="value good">923</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="mid">
+          <article class="subpanel">
+            <h3 class="title">Budget Diagnosis</h3>
+            <div class="diag-row">
+              <div>
+                <strong>Travel</strong>
+                <p>One-off. Budget 1,500 · Last month 0 · 3-mo avg 500 · 1-year avg 375</p>
+              </div>
+              <div class="diag-over">3,000 over</div>
+            </div>
+            <div class="diag-row">
+              <div>
+                <strong>Groceries</strong>
+                <p>Likely budget issue. Budget 2,600 · Last month 3,100 · 3-mo avg 3,100 · 1-year avg 2,650</p>
+              </div>
+              <div class="diag-over">300 over</div>
+            </div>
+            <div class="diag-row">
+              <div>
+                <strong>Nightlife</strong>
+                <p>Recurring habit. Budget 600 · Last month 720 · 3-mo avg 653 · 1-year avg 410</p>
+              </div>
+              <div class="diag-over">260 over</div>
+            </div>
+          </article>
+
+          <div class="stack">
+            <article class="subpanel">
+              <h3 class="title">Savings Progress</h3>
+              <div class="mini">
+                <div class="mini-row"><span>Month invested</span><strong class="violet">8,000 kr.</strong></div>
+                <div class="mini-row"><span>YTD invested</span><strong class="violet">11,400 kr.</strong></div>
+                <div class="mini-row"><span>YTD cash saved</span><strong>2,100 kr.</strong></div>
+              </div>
+            </article>
+            <article class="subpanel">
+              <h3 class="title">Recurring Obligations</h3>
+              <div class="mini">
+                <div class="mini-row"><span>Rent + utilities</span><strong>4,805 kr.</strong></div>
+                <div class="mini-row"><span>iCloud</span><strong>89 kr.</strong></div>
+                <div class="mini-row"><span>Accident insurance</span><strong>117 kr.</strong></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="bottom">
+          <article class="subpanel">
+            <h3 class="title">Monthly Trend</h3>
+            <div class="chart">
+              <div class="col"><div class="bar"></div><div class="month-tag">10</div></div>
+              <div class="col"><div class="bar"></div><div class="month-tag">11</div></div>
+              <div class="col"><div class="bar"></div><div class="month-tag">12</div></div>
+              <div class="col"><div class="bar"></div><div class="month-tag">01</div></div>
+              <div class="col badcol"><div class="bar"></div><div class="month-tag">02</div></div>
+            </div>
+          </article>
+          <article class="subpanel">
+            <h3 class="title">Top Merchants</h3>
+            <div class="mini">
+              <div class="mini-row"><span>Nordnet</span><strong>8,000 kr.</strong></div>
+              <div class="mini-row"><span>FOETEX</span><strong>2,900 kr.</strong></div>
+              <div class="mini-row"><span>Wolt</span><strong>910 kr.</strong></div>
+              <div class="mini-row"><span>DSB</span><strong>1,240 kr.</strong></div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
