@@ -21,6 +21,11 @@ import {
   txFingerprint
 } from './transactions.js';
 import {
+  detectNoise,
+  classifyOneOff,
+  clusterEvents
+} from './export-insights.js';
+import {
   classifyOverspendPattern,
   detectRecurringObligations,
   getEarliestMonthForDashboard,
@@ -320,6 +325,89 @@ runner.suite('Export insights content', test => {
     assert(ins.monthlyVariablePacing.totalBudget > 0, 'variable pacing should have a budget');
     assertEquals(ins.monthlyVariablePacing.month, '2026-04');
     assertEquals(ins.weeklyReview.month, '2026-04');
+  });
+});
+
+runner.suite('Noise, one-offs, events', test => {
+  test('detectNoise flags both sides of a WHOOP refund pair', () => {
+    const txs = [
+      { id: 1, date: '2026-02-10', amount: -1800, merchant: 'WHOOP', type: 'spending', category: 'Subscriptions' },
+      { id: 2, date: '2026-02-12', amount: 1800, merchant: 'WHOOP', type: 'income', category: 'Reimbursement' }
+    ];
+    assertEquals(detectNoise(txs[0], txs), true, 'charge flagged');
+    assertEquals(detectNoise(txs[1], txs), true, 'refund flagged');
+  });
+
+  test('detectNoise flags savings account transfers in either direction', () => {
+    assertEquals(detectNoise({ id: 1, date: '2026-03-01', amount: -5000, merchant: 'Savings account', type: 'ignore' }, []), true);
+    assertEquals(detectNoise({ id: 2, date: '2026-03-01', amount: 5000, merchant: 'From savings account', type: 'ignore' }, []), true);
+  });
+
+  test('detectNoise ignores pairs outside 7-day window or 2% tolerance', () => {
+    const far = [
+      { id: 1, date: '2026-02-01', amount: -1000, merchant: 'Friend A', type: 'spending', category: 'Transfer out' },
+      { id: 2, date: '2026-02-20', amount: 1000, merchant: 'Friend A', type: 'income', category: 'Reimbursement' }
+    ];
+    assertEquals(detectNoise(far[0], far), false, '19 days apart should not pair');
+    const off = [
+      { id: 3, date: '2026-02-01', amount: -1000, merchant: 'Friend B', type: 'spending', category: 'Transfer out' },
+      { id: 4, date: '2026-02-03', amount: 950, merchant: 'Friend B', type: 'income', category: 'Reimbursement' }
+    ];
+    assertEquals(detectNoise(off[0], off), false, '5% tolerance exceeds 2%');
+  });
+
+  test('classifyOneOff does not flag a recurring rent transaction', () => {
+    const rent = { id: 1, date: '2026-04-05', amount: -5000, merchant: 'Landlord', type: 'spending', category: 'Rent' };
+    const medians = { Rent: 5000 };
+    const recurring = new Set(['LANDLORD']);
+    assertEquals(classifyOneOff(rent, [rent], medians, recurring), false);
+  });
+
+  test('classifyOneOff flags a SAS flight priced above 3x Travel median', () => {
+    const txs = [
+      { id: 1, date: '2026-01-15', amount: -300, merchant: 'Stansted Express', type: 'spending', category: 'Travel' },
+      { id: 2, date: '2026-02-10', amount: -250, merchant: 'TFL TRAVEL', type: 'spending', category: 'Travel' },
+      { id: 3, date: '2026-03-05', amount: -400, merchant: 'DSB Travel', type: 'spending', category: 'Travel' },
+      { id: 4, date: '2026-04-02', amount: -2500, merchant: 'SAS', type: 'spending', category: 'Travel' }
+    ];
+    const medians = { Travel: 350 };
+    assertEquals(classifyOneOff(txs[3], txs, medians, new Set()), true, 'SAS one-off');
+    assertEquals(classifyOneOff(txs[0], txs, medians, new Set()), false, 'Stansted not large enough');
+  });
+
+  test('clusterEvents groups a London 3-day cluster into a single event with 4 txIds', () => {
+    const txs = [
+      { id: 10, date: '2026-03-20', amount: -1500, merchant: 'British Airways London', type: 'spending', category: 'Travel' },
+      { id: 11, date: '2026-03-20', amount: -400, merchant: 'The Breakfast Club', type: 'spending', category: 'Eating out' },
+      { id: 12, date: '2026-03-21', amount: -200, merchant: 'TFL', type: 'spending', category: 'Transport' },
+      { id: 13, date: '2026-03-22', amount: -800, merchant: 'Heathrow Express', type: 'spending', category: 'Travel' },
+      { id: 14, date: '2026-03-28', amount: -120, merchant: 'Netflix', type: 'spending', category: 'Netflix' }
+    ];
+    const events = clusterEvents(txs);
+    assertEquals(events.length, 1, 'exactly one event');
+    assertEquals(events[0].txIds.length, 4, 'four txs in cluster');
+    assertEquals(events[0].total, 2900, 'total = sum of abs amounts');
+    assertEquals(events[0].dateRange.start, '2026-03-20');
+    assertEquals(events[0].dateRange.end, '2026-03-22');
+  });
+
+  test('buildSpendingInsights excludes noise pair from cashFlow.clean but keeps it in monthly', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Subscriptions: ['WHOOP'], Income: ['Salary', 'Reimbursement'] },
+      budgets: { '2026': getDefaultYearBudget() },
+      transactions: [
+        { id: 1, date: '2026-03-01', amount: 22000, merchant: 'Salary', type: 'income', category: 'Salary' },
+        { id: 2, date: '2026-03-05', amount: -1500, merchant: 'FOETEX', type: 'spending', category: 'Groceries' },
+        { id: 3, date: '2026-03-10', amount: -1800, merchant: 'WHOOP', type: 'spending', category: 'WHOOP' },
+        { id: 4, date: '2026-03-12', amount: 1800, merchant: 'WHOOP', type: 'income', category: 'Reimbursement' }
+      ]
+    });
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    const mar = ins.cashFlow.monthly.find(m => m.month === '2026-03');
+    assertEquals(mar.spend, 3300, 'Raw monthly still counts WHOOP charge (1500 + 1800)');
+    const oneMonth = ins.cashFlow.clean.find(w => w.window === '1m');
+    assertEquals(oneMonth.months[0], '2026-03');
+    assertEquals(oneMonth.spend, 1500, 'Clean window excludes the WHOOP refund pair');
   });
 });
 
