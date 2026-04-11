@@ -45,7 +45,7 @@ import {
   getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
-import { getWeeklyDashboardData } from './weekly.js';
+import { getMonthlyVariableData, getWeeklyReviewData } from './variable-spend.js';
 
 const APP_VERSION = 'v0.2';
 const APP_VERSION_METADATA_URL = './version.json';
@@ -954,6 +954,9 @@ function renderDashboard() {
       </div>
     `).join('');
 
+  // Render the variable spend pacing section (moved from old Weekly tab)
+  renderMonthlyVariableSection();
+
   const overspent = getOverspentCategories(month, dashboardOptions);
   const diagnosisPatternClasses = {
     'budget-issue': 'bg-blue-50 text-blue-600',
@@ -1555,31 +1558,40 @@ function renderWeeklyHistoryCard(data) {
     </div>`;
 }
 
-function renderWeeklySmallMultiples(data) {
+function renderMonthlyCategoryComparison(data) {
   if (data.categoryRows.length === 0) return '';
   const w = 180;
   const h = 80;
   const padL = 8;
   const padR = 8;
   const padT = 8;
-  const padB = 16;
+  const padB = 18;
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
   const charts = data.categoryRows.map(row => {
-    const maxY = Math.max(row.monthBudget, row.monthDailyCumulative[data.totalDays] || 0, 1);
-    const xFor = day => padL + (day - 1) / Math.max(1, data.totalDays - 1) * innerW;
-    const yFor = value => padT + innerH - (value / maxY) * innerH;
-    const idealLine = `<line x1="${xFor(1)}" y1="${yFor(0)}" x2="${xFor(data.totalDays)}" y2="${yFor(row.monthBudget)}" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/>`;
-    const lastDay = Math.max(1, Math.min(data.dayOfMonth, data.totalDays));
-    const points = [];
-    for (let day = 1; day <= lastDay; day++) {
-      points.push(`${xFor(day).toFixed(1)},${yFor(row.monthDailyCumulative[day] || 0).toFixed(1)}`);
-    }
+    const slices = row.monthlyHistory || [];
+    const max = Math.max(...slices.map(s => s.total), row.monthBudget, 1);
+    const slotW = innerW / Math.max(slices.length, 1);
+    const barW = Math.min(slotW * 0.65, 22);
     const status = WEEKLY_STATUS_COLORS[row.status];
-    const stroke = row.status === 'behind' ? '#ef4444' : row.status === 'ahead' ? '#3b82f6' : '#10b981';
-    const path = points.length > 0
-      ? `<polyline fill="none" stroke="${stroke}" stroke-width="1.75" stroke-linejoin="round" points="${points.join(' ')}"/>`
+    const bars = slices.map((s, i) => {
+      const cx = padL + slotW * (i + 0.5);
+      const barH = (s.total / max) * innerH;
+      const y = padT + innerH - barH;
+      const fill = s.isCurrent
+        ? (row.status === 'behind' ? '#ef4444' : row.status === 'ahead' ? '#3b82f6' : '#10b981')
+        : '#cbd5e1';
+      return `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${Math.max(barH, 1)}" rx="1.5" fill="${fill}"/>`;
+    }).join('');
+    // Budget reference line (if any)
+    const budgetLine = row.monthBudget > 0
+      ? `<line x1="${padL}" y1="${padT + innerH - (row.monthBudget / max) * innerH}" x2="${w - padR}" y2="${padT + innerH - (row.monthBudget / max) * innerH}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 3"/>`
       : '';
+    // Tiny month labels for first/last only
+    const firstLabel = slices[0] ? slices[0].month.slice(5) : '';
+    const lastLabel = slices[slices.length - 1] ? slices[slices.length - 1].month.slice(5) : '';
+    const xFirst = padL + slotW * 0.5;
+    const xLast = padL + slotW * (slices.length - 0.5);
     return `<div class="rounded-lg border border-slate-100 p-3 bg-slate-50/40">
       <div class="flex items-center justify-between gap-2 mb-1">
         <div class="text-xs font-semibold text-slate-700 truncate">${esc(row.category)}</div>
@@ -1587,23 +1599,26 @@ function renderWeeklySmallMultiples(data) {
       </div>
       <div class="text-[11px] text-slate-500 mb-1 tabular-nums">${fmt(Math.round(row.monthSpent))} / ${fmt(Math.round(row.monthBudget))}</div>
       <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
-        ${idealLine}
-        ${path}
+        ${budgetLine}
+        ${bars}
+        <text x="${xFirst}" y="${h - 4}" text-anchor="middle" fill="#cbd5e1" font-size="8" font-family="Inter, sans-serif">${firstLabel}</text>
+        <text x="${xLast}" y="${h - 4}" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="Inter, sans-serif" font-weight="600">${lastLabel}</text>
       </svg>
     </div>`;
   }).join('');
 
-  return `<h3 class="text-base font-semibold mb-3">Per-category burn-down</h3>
+  return `<h3 class="text-base font-semibold mb-1">Per category, last 6 months</h3>
+    <p class="text-xs text-slate-500 mb-3">Highlighted bar = current month. Dashed line = monthly budget.</p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">${charts}</div>`;
 }
 
-function renderWeeklyDashboard() {
-  const weeklyView = document.getElementById('dash-weekly-view');
-  if (!weeklyView || weeklyView.style.display === 'none') return;
+function renderMonthlyVariableSection() {
+  const container = document.getElementById('monthly-variable-section');
+  if (!container) return;
   const month = document.getElementById('dash-month').value;
   if (!month) return;
   const excludeCovered = document.getElementById('dash-exclude-covered').checked;
-  const data = getWeeklyDashboardData(month, {
+  const data = getMonthlyVariableData(month, {
     store,
     excludeCovered,
     ensureYearBudget: year => ensureYearBudget(store, year),
@@ -1612,12 +1627,149 @@ function renderWeeklyDashboard() {
   const [year, mk] = month.split('-');
   const monthLabel = `${MONTHS[Number.parseInt(mk, 10) - 1]} ${year}`;
 
-  document.getElementById('weekly-hero').innerHTML = renderWeeklyHero(data, monthLabel);
-  document.getElementById('weekly-burndown').innerHTML = renderWeeklyBurndown(data);
-  document.getElementById('weekly-card').innerHTML = renderWeeklyCard(data);
-  document.getElementById('weekly-forecast').innerHTML = renderWeeklyForecastCard(data);
-  document.getElementById('weekly-history').innerHTML = renderWeeklyHistoryCard(data);
-  document.getElementById('weekly-small-multiples').innerHTML = renderWeeklySmallMultiples(data);
+  container.innerHTML = `
+    ${renderWeeklyHero(data, monthLabel)}
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">${renderWeeklyBurndown(data)}</div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">${renderWeeklyForecastCard(data)}</div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">${renderMonthlyCategoryComparison(data)}</div>
+  `;
+}
+
+// ---------- Weekly Review (new last-full-week tab) ----------
+
+function renderWeeklyReviewHero(data, monthLabel) {
+  if (!data.hasData) {
+    return `<div class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+      <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">Last full week</div>
+      <h2 class="text-2xl font-bold text-slate-700 mb-1">No data yet</h2>
+      <p class="text-sm text-slate-500">Once you have a completed Mon-Sun week of variable spending, your weekly review will land here.</p>
+    </div>`;
+  }
+  const status = WEEKLY_STATUS_COLORS[data.status];
+  const baselineDeltaPct = Math.round(data.baseline.delta * 100);
+  const baselineLine = data.baseline.count > 0
+    ? `${baselineDeltaPct >= 0 ? '+' : ''}${baselineDeltaPct}% vs your ${data.baseline.count}-week avg (${fmt(Math.round(data.baseline.average))})`
+    : 'no baseline yet';
+  const baselineColor = baselineDeltaPct > 5 ? 'text-red-500' : baselineDeltaPct < -5 ? 'text-emerald-600' : 'text-slate-500';
+  const projVariance = Math.round(data.projection.variance);
+  const projColor = data.projection.overBudget ? 'text-red-500' : 'text-emerald-600';
+  const projVerb = data.projection.overBudget ? 'overshooting' : 'saving';
+  const projAmount = fmt(Math.abs(projVariance));
+
+  return `<div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-6 sm:p-8">
+    <div class="relative z-10">
+      <div class="flex flex-wrap items-center gap-2.5 mb-5">
+        <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Last full week</span>
+        <span class="px-2.5 py-1 rounded-full text-xs font-bold ${status.pill}">${status.label}</span>
+        <span class="text-xs text-slate-500">${esc(data.weekLabel)} • variable spend only</span>
+      </div>
+      <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">Spent vs weekly target</div>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 tabular-nums">${fmt(Math.round(data.weekSpent))} <span class="text-slate-400 font-bold">/ ${fmt(Math.round(data.weekTarget))}</span></h2>
+      <div class="space-y-1 text-sm pt-3 border-t border-slate-200/40">
+        <div class="text-slate-600">${esc(data.ranking.label)} • <span class="${baselineColor} font-medium">${baselineLine}</span></div>
+        <div class="text-slate-600">→ At this pace, ${esc(monthLabel)}: <span class="font-semibold tabular-nums">${fmt(Math.round(data.projection.projected))}</span> <span class="${projColor} font-medium">(${projVerb} ${projAmount})</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderWeeklyReviewCategories(data) {
+  if (data.categoryRows.length === 0) {
+    return `<h3 class="text-base font-semibold mb-1">Per category</h3><p class="text-sm text-slate-500">No variable categories defined.</p>`;
+  }
+  if (!data.hasData) {
+    return `<h3 class="text-base font-semibold mb-1">Per category</h3><p class="text-sm text-slate-500">No variable spending in the last full week.</p>`;
+  }
+  const rows = data.categoryRows.map(row => {
+    const rowStatus = WEEKLY_STATUS_COLORS[row.status];
+    const deltaText = row.weekSpent > row.weekTarget && row.weekTarget > 0
+      ? `<span class="${rowStatus.text} text-xs font-medium tabular-nums">+${fmt(Math.round(row.weekSpent - row.weekTarget))}</span>`
+      : '';
+    const targetLabel = row.weekTarget > 0
+      ? `<span class="text-slate-400">/ ${fmt(Math.round(row.weekTarget))}</span>`
+      : '<span class="text-slate-300 text-xs">no budget</span>';
+    return `<div class="flex items-center gap-3 py-2.5 border-t border-slate-100">
+      <div class="flex-1 min-w-0 text-sm font-medium text-slate-700 truncate">${esc(row.category)}</div>
+      <div class="hidden sm:block">${renderMiniBars(row.history.map(h => ({ total: h.total, isCurrent: h.isReference })))}</div>
+      <div class="text-sm tabular-nums text-right min-w-[120px]"><span class="font-semibold">${fmt(Math.round(row.weekSpent))}</span> ${targetLabel}</div>
+      <div class="w-12 text-right">${deltaText}</div>
+      <span class="w-2 h-2 rounded-full ${rowStatus.dot}" aria-label="${rowStatus.label}"></span>
+    </div>`;
+  }).join('');
+  return `<div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+      <h3 class="text-base font-semibold">Per category</h3>
+      <span class="text-xs text-slate-500">${esc(data.weekLabel)} • 8-week trend per row</span>
+    </div>
+    <p class="text-xs text-slate-500 mb-3">Sorted by overshoot, then alphabetical. Bars show the last 8 weeks; highlighted bar is the week shown.</p>
+    <div class="-mt-1">${rows}</div>`;
+}
+
+function renderWeeklyReviewTrend(data) {
+  if (!data.weekHistory || data.weekHistory.length === 0 || !data.hasData) {
+    return `<h3 class="text-base font-semibold mb-3">Last 8 weeks</h3><p class="text-sm text-slate-500">No history yet.</p>`;
+  }
+  const slices = data.weekHistory.map(w => ({ total: w.total, isCurrent: w.isReference, start: w.start }));
+  const max = Math.max(...slices.map(s => s.total), 1);
+  const width = 320;
+  const height = 130;
+  const padL = 8;
+  const padR = 8;
+  const padT = 12;
+  const padB = 22;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+  const slotW = innerW / slices.length;
+  const barW = Math.min(slotW * 0.7, 28);
+  const bars = slices.map((s, i) => {
+    const cx = padL + slotW * (i + 0.5);
+    const barH = (s.total / max) * innerH;
+    const y = padT + innerH - barH;
+    const fill = s.isCurrent ? '#1d4ed8' : '#93c5fd';
+    return `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="${fill}"/>`;
+  }).join('');
+  // Average line across all 8 weeks
+  const avg = slices.reduce((sum, s) => sum + s.total, 0) / slices.length;
+  const avgY = padT + innerH - (avg / max) * innerH;
+  const avgLine = avg > 0
+    ? `<line x1="${padL}" y1="${avgY}" x2="${width - padR}" y2="${avgY}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>`
+    : '';
+  // Labels: -7w .. ref
+  const labels = slices.map((s, i) => {
+    const cx = padL + slotW * (i + 0.5);
+    const offset = slices.length - 1 - i;
+    const label = offset === 0 ? 'last' : `-${offset}w`;
+    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#94a3b8'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
+  }).join('');
+  return `<h3 class="text-base font-semibold mb-1">Last 8 weeks</h3>
+    <p class="text-xs text-slate-500 mb-3">Variable spend, weekly. Highlighted bar = the week reviewed.</p>
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
+      ${avgLine}
+      ${bars}
+      ${labels}
+    </svg>
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs">
+      <span class="text-slate-500">8-week avg <span class="font-semibold tabular-nums text-slate-700">${fmt(Math.round(avg))}</span>/week</span>
+    </div>`;
+}
+
+function renderWeeklyDashboard() {
+  const weeklyView = document.getElementById('dash-weekly-view');
+  if (!weeklyView || weeklyView.style.display === 'none') return;
+  const month = document.getElementById('dash-month').value;
+  if (!month) return;
+  const excludeCovered = document.getElementById('dash-exclude-covered').checked;
+  const data = getWeeklyReviewData(month, {
+    store,
+    excludeCovered,
+    ensureYearBudget: year => ensureYearBudget(store, year),
+    currentDate: new Date()
+  });
+  const [year, mk] = month.split('-');
+  const monthLabel = `${MONTHS[Number.parseInt(mk, 10) - 1]} ${year}`;
+
+  document.getElementById('weekly-review-hero').innerHTML = renderWeeklyReviewHero(data, monthLabel);
+  document.getElementById('weekly-review-categories').innerHTML = renderWeeklyReviewCategories(data);
+  document.getElementById('weekly-review-trend').innerHTML = renderWeeklyReviewTrend(data);
 }
 
 function bindBudgetEditorEvents() {

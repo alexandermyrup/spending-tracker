@@ -45,8 +45,11 @@ import {
   getWeeklyHistorySlices,
   getWeekRange,
   getVariableCategories,
-  getWeeklyDashboardData
-} from './weekly.js';
+  getMonthlyVariableData,
+  getWeeklyReviewData,
+  getLastFullWeek,
+  getRanking
+} from './variable-spend.js';
 
 class TestRunner {
   constructor() {
@@ -1312,7 +1315,7 @@ runner.suite('Weekly tab math', test => {
     assertEquals(slices[0].total, 0, 'Three weeks prior is empty');
   });
 
-  test('getWeeklyDashboardData filters out fixed categories from totals', () => {
+  test('getMonthlyVariableData filters out fixed categories from totals', () => {
     const store = createStore({
       categories: {
         Variable: ['Groceries'],
@@ -1330,7 +1333,7 @@ runner.suite('Weekly tab math', test => {
         { id: 2, date: '2026-04-01', amount: -5000, type: 'spending', category: 'Rent', covered: false }
       ]
     });
-    const data = getWeeklyDashboardData('2026-04', {
+    const data = getMonthlyVariableData('2026-04', {
       store,
       excludeCovered: true,
       ensureYearBudget: () => {},
@@ -1340,7 +1343,153 @@ runner.suite('Weekly tab math', test => {
     assertEquals(data.totalBudget, 2000, 'Only variable budgets counted');
   });
 
-  test('getWeeklyDashboardData reports past months as final state with no remaining days', () => {
+  test('getLastFullWeek returns prior Mon-Sun for a Wednesday', () => {
+    const wed = new Date(Date.UTC(2026, 3, 8)); // Wed Apr 8 2026
+    const { start, end } = getLastFullWeek(wed);
+    assertEquals(start.getUTCDate(), 30, 'Last Monday is Mar 30');
+    assertEquals(start.getUTCMonth(), 2);
+    assertEquals(end.getUTCDate(), 5, 'Last Sunday is Apr 5');
+    assertEquals(end.getUTCMonth(), 3);
+  });
+
+  test('getLastFullWeek returns the same week for any day in the following week', () => {
+    // Sun Apr 12 should also return Mar 30 - Apr 5 (the prior completed week)
+    const sun = new Date(Date.UTC(2026, 3, 12));
+    const { start, end } = getLastFullWeek(sun);
+    assertEquals(start.getUTCDate(), 30);
+    assertEquals(end.getUTCDate(), 5);
+  });
+
+  test('getLastFullWeek advances on Monday to the just-completed week', () => {
+    const mon = new Date(Date.UTC(2026, 3, 13)); // Mon Apr 13 2026
+    const { start, end } = getLastFullWeek(mon);
+    assertEquals(start.getUTCDate(), 6, 'Apr 6 is the new last-week Monday');
+    assertEquals(end.getUTCDate(), 12, 'Apr 12 is the new last-week Sunday');
+  });
+
+  test('getRanking ranks the highest as 1st', () => {
+    const r = getRanking([100, 200, 150, 250]);
+    assertEquals(r.rank, 1);
+    assertEquals(r.total, 4);
+  });
+
+  test('getRanking ranks the lowest as Nth', () => {
+    const r = getRanking([300, 200, 250, 100]);
+    assertEquals(r.rank, 4);
+  });
+
+  test('getRanking treats target as winner on ties (more recent wins)', () => {
+    const r = getRanking([200, 200, 200]);
+    assertEquals(r.rank, 1, 'Tied target counts as the rank-1 since no value is strictly greater');
+  });
+
+  test('getRanking ranks middle correctly', () => {
+    const r = getRanking([100, 200, 300, 150]);
+    assertEquals(r.rank, 3, 'Two values (200, 300) are strictly greater than 150');
+  });
+
+  test('getRanking handles single-element history', () => {
+    const r = getRanking([500]);
+    assertEquals(r.rank, 1);
+    assertEquals(r.total, 1);
+  });
+
+  test('getWeeklyReviewData computes spend, target, baseline, projection correctly', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      budgets: {
+        '2026': {
+          Groceries: { '01': 0, '02': 0, '03': 0, '04': 2100, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 }
+        }
+      },
+      transactions: [
+        { id: 1, date: '2026-04-01', amount: -500, type: 'spending', category: 'Groceries', covered: false },
+        { id: 2, date: '2026-03-25', amount: -400, type: 'spending', category: 'Groceries', covered: false },
+        { id: 3, date: '2026-03-18', amount: -300, type: 'spending', category: 'Groceries', covered: false },
+        { id: 4, date: '2026-03-12', amount: -600, type: 'spending', category: 'Groceries', covered: false },
+        { id: 5, date: '2026-03-05', amount: -200, type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const data = getWeeklyReviewData('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    assertEquals(data.weekStart, '2026-03-30');
+    assertEquals(data.weekEnd, '2026-04-05');
+    assertEquals(data.weekSpent, 500);
+    assertEquals(data.monthlyBudget, 2100);
+    assertEquals(data.weekTarget, 490, '2100 × 7/30 = 490');
+    assertEquals(data.status, 'on', '500 is +2% over 490, within ±5%');
+    assertEquals(data.baseline.average, 375, '(400+300+600+200)/4');
+    assertEquals(data.baseline.count, 4);
+    assert(Math.abs(data.baseline.delta - 1/3) < 0.001, '500 is +33% above 375');
+  });
+
+  test('getWeeklyReviewData projects from week pace and flags over budget', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      budgets: {
+        '2026': {
+          Groceries: { '01': 0, '02': 0, '03': 0, '04': 2000, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 }
+        }
+      },
+      transactions: [
+        { id: 1, date: '2026-04-01', amount: -500, type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const data = getWeeklyReviewData('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    // 500 × (30/7) ≈ 2142.86 > 2000 budget
+    assert(Math.abs(data.projection.projected - 2142.857) < 0.5);
+    assert(data.projection.overBudget === true);
+    assert(data.projection.variance > 0);
+  });
+
+  test('getWeeklyReviewData ranks the reference week within the 8-week history', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      budgets: {
+        '2026': {
+          Groceries: { '01': 0, '02': 0, '03': 0, '04': 1000, '05': 0, '06': 0, '07': 0, '08': 0, '09': 0, '10': 0, '11': 0, '12': 0 }
+        }
+      },
+      transactions: [
+        { id: 1, date: '2026-04-01', amount: -500, type: 'spending', category: 'Groceries', covered: false },
+        { id: 2, date: '2026-03-12', amount: -600, type: 'spending', category: 'Groceries', covered: false }
+      ]
+    });
+    const data = getWeeklyReviewData('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    assertEquals(data.ranking.rank, 2, '600 is greater than 500, so 500 is 2nd of 8');
+    assertEquals(data.ranking.total, 8);
+  });
+
+  test('getWeeklyReviewData reports hasData=false for empty stores', () => {
+    const store = createStore({
+      categories: { Variable: ['Groceries'], Income: ['Salary'] },
+      transactions: []
+    });
+    const data = getWeeklyReviewData('2026-04', {
+      store,
+      excludeCovered: true,
+      ensureYearBudget: () => {},
+      currentDate: new Date(Date.UTC(2026, 3, 8))
+    });
+    assertEquals(data.hasData, false);
+    assertEquals(data.weekSpent, 0);
+  });
+
+  test('getMonthlyVariableData reports past months as final state with no remaining days', () => {
     const store = createStore({
       categories: { Variable: ['Groceries'], Income: ['Salary'] },
       budgets: {
@@ -1352,7 +1501,7 @@ runner.suite('Weekly tab math', test => {
         { id: 1, date: '2026-02-15', amount: -1500, type: 'spending', category: 'Groceries', covered: false }
       ]
     });
-    const data = getWeeklyDashboardData('2026-02', {
+    const data = getMonthlyVariableData('2026-02', {
       store,
       excludeCovered: true,
       ensureYearBudget: () => {},

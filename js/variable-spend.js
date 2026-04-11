@@ -202,9 +202,40 @@ function getCategoryThisWeekSpend(category, txs, weekStart, weekEnd) {
     .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 }
 
-// ---------- Main entry point ----------
+// ---------- Per-category monthly history (month-over-month comparison) ----------
 
-export function getWeeklyDashboardData(month, options) {
+// Returns the last `count` months ending with `currentMonth` for a single
+// category. Each entry = total spend in that month. Current month flagged.
+// Used by the Monthly view's per-category column comparison.
+export function getCategoryMonthlyHistory(category, transactions, currentMonth, count, excludeCovered) {
+  const [yearStr, monthStr] = currentMonth.split('-');
+  const year = Number.parseInt(yearStr, 10);
+  const monthNum = Number.parseInt(monthStr, 10);
+  const slices = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const cursor = new Date(Date.UTC(year, monthNum - 1 - i, 1));
+    const cy = cursor.getUTCFullYear();
+    const cm = cursor.getUTCMonth() + 1;
+    const ymPrefix = `${cy}-${String(cm).padStart(2, '0')}-`;
+    const total = transactions
+      .filter(tx => !tx.splitInto && tx.type === 'spending' && tx.amount < 0 && tx.category === category)
+      .filter(tx => !excludeCovered || !tx.covered)
+      .filter(tx => tx.date && tx.date.startsWith(ymPrefix))
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    slices.push({
+      month: `${cy}-${String(cm).padStart(2, '0')}`,
+      total,
+      isCurrent: i === 0
+    });
+  }
+  return slices;
+}
+
+// ---------- Main entry points ----------
+
+// Renamed from getWeeklyDashboardData. This now feeds the Monthly view's
+// variable-spend section (MTD pacing, burn-down, forecast, per-category comparison).
+export function getMonthlyVariableData(month, options) {
   const { store, excludeCovered, ensureYearBudget, currentDate = new Date() } = options;
   const [yearStr, monthStr] = month.split('-');
   const year = Number.parseInt(yearStr, 10);
@@ -278,14 +309,9 @@ export function getWeeklyDashboardData(month, options) {
     const monthSpent = monthTxs
       .filter(tx => tx.category === cat)
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const status = computeCategoryStatus(weekSpent, weekTarget);
-    const history = getCategoryWeeklyHistory(cat, store.transactions, effectiveToday, 8, excludeCovered);
-    const monthDailyCumulative = getDailyCumulative(
-      monthTxs.filter(tx => tx.category === cat),
-      year,
-      monthNum,
-      totalDays
-    );
+    // Status: month-spend vs month-budget (the relevant signal in Monthly view)
+    const status = computeCategoryStatus(monthSpent, monthBudget);
+    const monthlyHistory = getCategoryMonthlyHistory(cat, store.transactions, month, 6, excludeCovered);
     return {
       category: cat,
       weekSpent,
@@ -293,15 +319,14 @@ export function getWeeklyDashboardData(month, options) {
       monthSpent,
       monthBudget,
       status,
-      history,
-      monthDailyCumulative
+      monthlyHistory
     };
   });
 
-  // Sort: over-target first (worst variance), then alphabetical
+  // Sort: over-budget first (worst variance), then alphabetical
   categoryRows.sort((a, b) => {
-    const overA = a.weekSpent - a.weekTarget;
-    const overB = b.weekSpent - b.weekTarget;
+    const overA = a.monthSpent - a.monthBudget;
+    const overB = b.monthSpent - b.monthBudget;
     if (overA > 0 && overB <= 0) return -1;
     if (overB > 0 && overA <= 0) return 1;
     if (overA !== overB) return overB - overA;
@@ -381,4 +406,258 @@ function formatWeekLabel(start, end) {
     ? String(end.getUTCDate())
     : `${MONTH_NAMES_SHORT[end.getUTCMonth()]} ${end.getUTCDate()}`;
   return `${startLabel} – ${endLabel}`;
+}
+
+// ====================================================================
+// Weekly Review (last full week + comparison)
+// ====================================================================
+
+// Returns the most recent fully completed Mon-Sun week before currentDate.
+// "Fully completed" means the week's Sunday is strictly before today.
+export function getLastFullWeek(currentDate) {
+  const today = toUtcDate(currentDate.getUTCFullYear(), currentDate.getUTCMonth() + 1, currentDate.getUTCDate());
+  // Go back to the most recent Sunday that is < today
+  const day = today.getUTCDay(); // Sun=0..Sat=6
+  // Days to subtract to get to "last Sunday strictly before today":
+  //   if today is Mon (1) → 1 day back (yesterday's Sunday)
+  //   if today is Sun (0) → 7 days back (last Sunday, not today)
+  //   if today is Wed (3) → 3 days back
+  const daysSinceLastSunday = day === 0 ? 7 : day;
+  const lastSunday = new Date(today.getTime());
+  lastSunday.setUTCDate(lastSunday.getUTCDate() - daysSinceLastSunday);
+  const lastMonday = new Date(lastSunday.getTime());
+  lastMonday.setUTCDate(lastMonday.getUTCDate() - 6);
+  return { start: lastMonday, end: lastSunday };
+}
+
+// Returns the N weeks immediately BEFORE the given week (used as the
+// independent baseline for comparison). Going back from `weekStart`.
+function getPriorWeeks(weekStart, count) {
+  const weeks = [];
+  for (let i = 1; i <= count; i++) {
+    const start = new Date(weekStart.getTime());
+    start.setUTCDate(start.getUTCDate() - i * 7);
+    const end = new Date(start.getTime());
+    end.setUTCDate(end.getUTCDate() + 6);
+    weeks.push({ start, end });
+  }
+  return weeks; // Most recent prior week first
+}
+
+// Sums variable spend in [start, end] (inclusive).
+function sumVariableInRange(transactions, variableSet, excludeCovered, start, end) {
+  return filterVariableSpending(transactions, variableSet, excludeCovered)
+    .filter(tx => {
+      const startIso = formatIsoDate(start);
+      const endIso = formatIsoDate(end);
+      return tx.date >= startIso && tx.date <= endIso;
+    })
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+}
+
+// Sums spend for a specific category in [start, end].
+function sumCategoryInRange(transactions, category, excludeCovered, start, end) {
+  const startIso = formatIsoDate(start);
+  const endIso = formatIsoDate(end);
+  return transactions
+    .filter(tx => !tx.splitInto && tx.type === 'spending' && tx.amount < 0 && tx.category === category)
+    .filter(tx => !excludeCovered || !tx.covered)
+    .filter(tx => tx.date >= startIso && tx.date <= endIso)
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+}
+
+// Returns the weekly history (8 weeks ending with `referenceWeekStart`'s week).
+// The reference week is included as the LAST entry (so the most recent of the 8).
+function getWeekHistoryEndingAt(transactions, variableSet, excludeCovered, referenceWeekStart, count = 8) {
+  const slices = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(referenceWeekStart.getTime());
+    start.setUTCDate(start.getUTCDate() - i * 7);
+    const end = new Date(start.getTime());
+    end.setUTCDate(end.getUTCDate() + 6);
+    const total = sumVariableInRange(transactions, variableSet, excludeCovered, start, end);
+    slices.push({
+      start: formatIsoDate(start),
+      end: formatIsoDate(end),
+      total,
+      isReference: i === 0
+    });
+  }
+  return slices;
+}
+
+// Returns the same shape but for a single category.
+function getCategoryHistoryEndingAt(transactions, category, excludeCovered, referenceWeekStart, count = 8) {
+  const slices = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const start = new Date(referenceWeekStart.getTime());
+    start.setUTCDate(start.getUTCDate() - i * 7);
+    const end = new Date(start.getTime());
+    end.setUTCDate(end.getUTCDate() + 6);
+    const total = sumCategoryInRange(transactions, category, excludeCovered, start, end);
+    slices.push({
+      start: formatIsoDate(start),
+      end: formatIsoDate(end),
+      total,
+      isReference: i === 0
+    });
+  }
+  return slices;
+}
+
+// Computes the rank of `target` within `values` (1-indexed, 1 = highest).
+// Ties: more recent wins. `values` is assumed to be in chronological order
+// (oldest first, target last). Returns { rank, total, label } where label
+// is human-readable like "3rd highest of last 8".
+export function getRanking(values) {
+  if (!values || values.length === 0) return { rank: 0, total: 0, label: '' };
+  const target = values[values.length - 1];
+  const targetIndex = values.length - 1;
+  // Count how many values are strictly greater than target
+  let strictlyGreater = 0;
+  // For ties, count those that come later (none, since target is last)
+  for (let i = 0; i < targetIndex; i++) {
+    if (values[i] > target) strictlyGreater++;
+  }
+  const rank = strictlyGreater + 1;
+  return {
+    rank,
+    total: values.length,
+    label: `${ordinal(rank)} highest of last ${values.length}`
+  };
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Computes baseline statistics from a list of weekly totals (the 4 weeks
+// BEFORE the reference week, i.e. independent baseline).
+function computeBaseline(priorWeekTotals) {
+  if (!priorWeekTotals || priorWeekTotals.length === 0) {
+    return { average: 0, count: 0 };
+  }
+  const sum = priorWeekTotals.reduce((s, v) => s + v, 0);
+  return {
+    average: sum / priorWeekTotals.length,
+    count: priorWeekTotals.length
+  };
+}
+
+// Compute week-pace projection: if every week of the displayed month looked
+// like the reference week, where would the month end up?
+function computeWeekPaceProjection(weekTotal, year, month, monthlyBudget) {
+  const totalDays = daysInMonth(year, month);
+  const weeksInMonth = totalDays / 7;
+  const projected = weekTotal * weeksInMonth;
+  const variance = projected - monthlyBudget;
+  return {
+    projected,
+    variance,
+    overBudget: variance > 0,
+    weeksInMonth
+  };
+}
+
+// Main entry point for the new Weekly tab.
+export function getWeeklyReviewData(month, options) {
+  const { store, excludeCovered, ensureYearBudget, currentDate = new Date() } = options;
+  const [yearStr, monthStr] = month.split('-');
+  const year = Number.parseInt(yearStr, 10);
+  const monthNum = Number.parseInt(monthStr, 10);
+
+  ensureYearBudget(yearStr);
+
+  const variableCategories = getVariableCategories(store);
+  const variableSet = new Set(variableCategories);
+
+  // Last full week (Mon-Sun strictly before today)
+  const { start: weekStart, end: weekEnd } = getLastFullWeek(currentDate);
+
+  // Total monthly variable budget for the displayed month
+  let monthlyBudget = 0;
+  const categoryMonthlyBudgets = {};
+  variableCategories.forEach(cat => {
+    const b = getBudgetForMonth(store, cat, month, ensureYearBudget) || 0;
+    categoryMonthlyBudgets[cat] = b;
+    monthlyBudget += b;
+  });
+
+  // Weekly target = monthly budget × 7 / days in displayed month
+  const totalDays = daysInMonth(year, monthNum);
+  const weeklyTargetMultiplier = 7 / totalDays;
+  const weekTarget = monthlyBudget * weeklyTargetMultiplier;
+
+  // Sum spend for last full week (across all variable categories)
+  const weekSpent = sumVariableInRange(store.transactions, variableSet, excludeCovered, weekStart, weekEnd);
+
+  // Status pill: vs target with ±5% tolerance (same as monthly)
+  const status = computeCategoryStatus(weekSpent, weekTarget);
+
+  // 8-week history ending with the last full week (for ranking + trend chart)
+  const weekHistory = getWeekHistoryEndingAt(store.transactions, variableSet, excludeCovered, weekStart, 8);
+  const ranking = getRanking(weekHistory.map(w => w.total));
+
+  // Baseline = the 4 weeks BEFORE the last full week (independent baseline)
+  const priorFour = getPriorWeeks(weekStart, 4).map(({ start, end }) =>
+    sumVariableInRange(store.transactions, variableSet, excludeCovered, start, end)
+  );
+  const baseline = computeBaseline(priorFour);
+  const baselineDelta = baseline.average > 0 ? (weekSpent - baseline.average) / baseline.average : 0;
+
+  // Week-pace projection: if every week looked like this one, where does the month end?
+  const projection = computeWeekPaceProjection(weekSpent, year, monthNum, monthlyBudget);
+
+  // Per-category breakdown for last full week
+  const categoryRows = variableCategories.map(cat => {
+    const monthBudget = categoryMonthlyBudgets[cat] || 0;
+    const catWeekTarget = monthBudget * weeklyTargetMultiplier;
+    const catWeekSpent = sumCategoryInRange(store.transactions, cat, excludeCovered, weekStart, weekEnd);
+    const catStatus = computeCategoryStatus(catWeekSpent, catWeekTarget);
+    const history = getCategoryHistoryEndingAt(store.transactions, cat, excludeCovered, weekStart, 8);
+    return {
+      category: cat,
+      weekSpent: catWeekSpent,
+      weekTarget: catWeekTarget,
+      monthBudget,
+      status: catStatus,
+      history
+    };
+  });
+
+  // Sort: over-target first (worst variance), then alphabetical
+  categoryRows.sort((a, b) => {
+    const overA = a.weekSpent - a.weekTarget;
+    const overB = b.weekSpent - b.weekTarget;
+    if (overA > 0 && overB <= 0) return -1;
+    if (overB > 0 && overA <= 0) return 1;
+    if (overA !== overB) return overB - overA;
+    return a.category.localeCompare(b.category);
+  });
+
+  return {
+    month,
+    year,
+    monthNum,
+    weekStart: formatIsoDate(weekStart),
+    weekEnd: formatIsoDate(weekEnd),
+    weekLabel: formatWeekLabel(weekStart, weekEnd),
+    weekSpent,
+    weekTarget,
+    monthlyBudget,
+    status,
+    ranking,
+    baseline: {
+      average: baseline.average,
+      count: baseline.count,
+      delta: baselineDelta // signed fraction; positive = above baseline
+    },
+    projection,
+    categoryRows,
+    weekHistory,
+    variableCategoryCount: variableCategories.length,
+    hasData: weekHistory.some(w => w.total > 0) || weekSpent > 0
+  };
 }

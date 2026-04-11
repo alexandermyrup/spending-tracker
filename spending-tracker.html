@@ -151,6 +151,10 @@ tailwind.config = {
       <!-- Monthly view -->
       <div id="dash-monthly-view" class="space-y-6">
         <div id="dash-surplus"></div>
+
+        <!-- Variable spend pacing (moved from Weekly tab) -->
+        <div id="monthly-variable-section" class="space-y-6"></div>
+
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
           <div class="flex justify-between items-baseline mb-4">
             <h2 class="text-base font-semibold">Budget Diagnosis</h2>
@@ -182,14 +186,9 @@ tailwind.config = {
 
       <!-- Weekly view -->
       <div id="dash-weekly-view" style="display:none" class="space-y-6">
-        <div id="weekly-hero"></div>
-        <div id="weekly-burndown" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
-        <div id="weekly-card" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div id="weekly-forecast" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
-          <div id="weekly-history" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
-        </div>
-        <div id="weekly-small-multiples" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+        <div id="weekly-review-hero"></div>
+        <div id="weekly-review-categories" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
+        <div id="weekly-review-trend" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5"></div>
       </div>
 
       <!-- Yearly view -->
