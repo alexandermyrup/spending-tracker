@@ -45,7 +45,7 @@ import {
   getYtdSavingsProgress,
   getYearlyDashboardData
 } from './dashboard.js';
-import { getMonthlyVariableData, getWeeklyReviewData } from './variable-spend.js';
+import { getMonthlyVariableData, getWeeklyReviewData, getWeekRange } from './variable-spend.js';
 
 const APP_VERSION = 'v0.2';
 const APP_VERSION_METADATA_URL = './version.json';
@@ -63,6 +63,7 @@ let pendingImport = [];
 let lastImportedIds = [];
 let splitTxId = null;
 let budgetEventsBound = false;
+let weeklySelectedWeek = null; // { start: Date, end: Date } or null (= current week)
 let modalTriggerEl = null;
 
 function getStore() {
@@ -512,7 +513,7 @@ function selectCategory(txId, category) {
     tx.manualCategory = false;
   }
   closeCatDropdowns();
-  commit(null);
+  commit(null, 'transactions');
 }
 
 function openCatDropdown(event, txId) {
@@ -744,7 +745,7 @@ function getConflictBannerHtml(conflicts) {
   </details>`;
 }
 
-function applyVisibleSuggestions() {
+function applyVisibleSuggestions(minBand = 'high') {
   const derived = getDerivedClassification();
   const filters = {
     month: document.getElementById('tx-month-filter').value,
@@ -754,21 +755,25 @@ function applyVisibleSuggestions() {
   };
   const base = getFilteredTransactions(filters, store.transactions, store);
   const display = getVisibleTransactions(base.filtered, derived);
+  const thresholds = { high: 0.8, medium: 0.4, low: 0 };
+  const minScore = thresholds[minBand] || 0;
   let changed = 0;
   display.forEach(tx => {
     if (tx.category) return;
     const suggestion = autoMatchMerchant(tx.merchant, tx.amount, store);
     if (!suggestion || !suggestion.category) return;
+    const certainty = computeCategoryCertainty(tx, suggestion, derived.merchantStats, derived.recurring, store);
+    if (certainty < minScore) return;
     tx.category = suggestion.category;
     tx.manualCategory = true;
     store.merchantMap[normalizeMerchantName(tx.merchant)] = { category: suggestion.category, type: tx.type };
     changed++;
   });
   if (changed === 0) {
-    toast('No visible suggestions to apply.');
+    toast(`No ${minBand}-certainty suggestions to apply.`);
     return;
   }
-  commit(`Applied ${changed} suggestion${changed !== 1 ? 's' : ''}.`);
+  commit(`Applied ${changed} ${minBand}-certainty suggestion${changed !== 1 ? 's' : ''}.`);
 }
 
 function renderTransactions() {
@@ -783,10 +788,27 @@ function renderTransactions() {
   const displayTxs = getVisibleTransactions(result.filtered, derived);
   document.getElementById('conflict-banner').innerHTML = getConflictBannerHtml(derived.conflicts);
   const summaryEl = document.getElementById('tx-summary');
-  const visibleSuggestions = displayTxs.filter(tx => !tx.category && autoMatchMerchant(tx.merchant, tx.amount, store)?.category).length;
+  // Count suggestions by certainty band
+  let highCertCount = 0;
+  let allSuggestionCount = 0;
+  displayTxs.forEach(tx => {
+    if (tx.category) return;
+    const suggestion = autoMatchMerchant(tx.merchant, tx.amount, store);
+    if (!suggestion || !suggestion.category) return;
+    allSuggestionCount++;
+    const certainty = computeCategoryCertainty(tx, suggestion, derived.merchantStats, derived.recurring, store);
+    if (certaintyBand(certainty) === 'high') highCertCount++;
+  });
+  const uncatCount = displayTxs.filter(tx => !tx.category && tx.type !== 'ignore').length;
+  const totalUncat = store.transactions.filter(tx => !tx.category && tx.type !== 'ignore' && !tx.splitInto).length;
+  const progressHtml = totalUncat > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${totalUncat <= 5 ? 'bg-emerald-100 text-emerald-700' : totalUncat <= 20 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'} ml-2">${totalUncat} uncategorized</span>` : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 ml-2">All categorized</span>';
+  const highBtn = highCertCount > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors ml-2" onclick="applyVisibleSuggestions('high')">Apply ${highCertCount} high-certainty</button>` : '';
+  const allBtn = allSuggestionCount > highCertCount ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-1" onclick="applyVisibleSuggestions('low')">Apply all ${allSuggestionCount}</button>` : '';
   const deleteBtn = displayTxs.length > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors ml-2" onclick="deleteFiltered()">Delete ${displayTxs.length} shown</button>` : '';
-  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${visibleSuggestions > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-2" onclick="applyVisibleSuggestions()">Apply ${visibleSuggestions} visible suggestion${visibleSuggestions !== 1 ? 's' : ''}</button>` : ''}${deleteBtn}`;
+  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${progressHtml}${highBtn}${allBtn}${deleteBtn}`;
   const tbody = document.getElementById('tx-body');
+  const scrollParent = tbody.closest('.overflow-x-auto') || window;
+  const scrollTop = scrollParent === window ? window.scrollY : scrollParent.scrollTop;
   tbody.innerHTML = displayTxs.map(tx => {
     const isSplitChild = !!tx.splitFrom;
     const fpInfo = result.duplicateFingerprints[txFingerprint(tx)];
@@ -834,6 +856,24 @@ function renderTransactions() {
       </td>
     </tr>`;
   }).join('');
+  // Empty state for review modes
+  const reviewMode = getReviewMode();
+  if (displayTxs.length === 0 && reviewMode !== 'all') {
+    const messages = {
+      uncategorized: 'All transactions are categorized!',
+      'low-certainty': 'No low-certainty suggestions to review.',
+      conflicts: 'No merchant conflicts found.',
+      'recent-imports': 'No recent imports to review.'
+    };
+    tbody.innerHTML = `<tr><td colspan="8" class="py-12 text-center">
+      <div class="text-2xl mb-2">&#10003;</div>
+      <div class="text-sm font-medium text-slate-700">${messages[reviewMode] || 'Nothing to show.'}</div>
+      <div class="text-xs text-slate-500 mt-1">Switch to "All rows" to see everything.</div>
+    </td></tr>`;
+  }
+  // Restore scroll position after DOM replacement
+  if (scrollParent === window) window.scrollTo(0, scrollTop);
+  else scrollParent.scrollTop = scrollTop;
 }
 
 function renderDashboard() {
@@ -1637,12 +1677,60 @@ function renderMonthlyVariableSection() {
 
 // ---------- Weekly Review (new last-full-week tab) ----------
 
+function weeklyNavPrev() {
+  const now = new Date();
+  if (!weeklySelectedWeek) {
+    // Currently showing current week; go back one
+    const { start } = getWeekRange(now);
+    const prev = new Date(start.getTime());
+    prev.setUTCDate(prev.getUTCDate() - 7);
+    const prevEnd = new Date(prev.getTime());
+    prevEnd.setUTCDate(prevEnd.getUTCDate() + 6);
+    weeklySelectedWeek = { start: prev, end: prevEnd };
+  } else {
+    weeklySelectedWeek.start.setUTCDate(weeklySelectedWeek.start.getUTCDate() - 7);
+    weeklySelectedWeek.end.setUTCDate(weeklySelectedWeek.end.getUTCDate() - 7);
+  }
+  renderWeeklyDashboard();
+}
+
+function weeklyNavNext() {
+  if (!weeklySelectedWeek) return; // already on current week
+  const now = new Date();
+  const { start: currentStart } = getWeekRange(now);
+  const nextStart = new Date(weeklySelectedWeek.start.getTime());
+  nextStart.setUTCDate(nextStart.getUTCDate() + 7);
+  if (nextStart.getTime() > currentStart.getTime()) {
+    // Would go past current week; snap to current
+    weeklySelectedWeek = null;
+  } else if (nextStart.getTime() === currentStart.getTime()) {
+    weeklySelectedWeek = null; // current week
+  } else {
+    weeklySelectedWeek.start.setUTCDate(weeklySelectedWeek.start.getUTCDate() + 7);
+    weeklySelectedWeek.end.setUTCDate(weeklySelectedWeek.end.getUTCDate() + 7);
+  }
+  renderWeeklyDashboard();
+}
+
+function weeklyNavReset() {
+  weeklySelectedWeek = null;
+  renderWeeklyDashboard();
+}
+
 function renderWeeklyReviewHero(data, monthLabel) {
   if (!data.hasData) {
     return `<div class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-      <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">Last full week</div>
-      <h2 class="text-2xl font-bold text-slate-700 mb-1">No data yet</h2>
-      <p class="text-sm text-slate-500">Once you have a completed Mon-Sun week of variable spending, your weekly review will land here.</p>
+      <div class="flex flex-wrap items-center gap-2.5 mb-3">
+        <div class="inline-flex items-center gap-1.5">
+          <button onclick="weeklyNavPrev()" class="w-7 h-7 rounded-md border border-slate-200 hover:bg-slate-100 inline-flex items-center justify-center text-slate-500 transition-colors" aria-label="Previous week"><span class="material-symbols-outlined" style="font-size:16px">chevron_left</span></button>
+          <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">${data.isCurrentWeek ? 'This week' : 'Week review'}</span>
+          <button onclick="weeklyNavNext()" class="w-7 h-7 rounded-md border border-slate-200 hover:bg-slate-100 inline-flex items-center justify-center text-slate-500 transition-colors ${!weeklySelectedWeek ? 'opacity-30 cursor-default' : ''}" aria-label="Next week" ${!weeklySelectedWeek ? 'disabled' : ''}><span class="material-symbols-outlined" style="font-size:16px">chevron_right</span></button>
+        </div>
+        <span class="text-xs text-slate-500">${esc(data.weekLabel)}</span>
+        ${weeklySelectedWeek ? '<button onclick="weeklyNavReset()" class="text-[11px] text-blue-600 font-medium hover:underline">Back to this week</button>' : ''}
+      </div>
+      <h2 class="text-2xl font-bold text-slate-700 mb-1">No variable spending</h2>
+      <p class="text-sm text-slate-500">No variable spending in this week. Use the arrows to browse other weeks.</p>
     </div>`;
   }
   const status = WEEKLY_STATUS_COLORS[data.status];
@@ -1659,9 +1747,14 @@ function renderWeeklyReviewHero(data, monthLabel) {
   return `<div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-6 sm:p-8">
     <div class="relative z-10">
       <div class="flex flex-wrap items-center gap-2.5 mb-5">
-        <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Last full week</span>
+        <div class="inline-flex items-center gap-1.5">
+          <button onclick="weeklyNavPrev()" class="w-7 h-7 rounded-md border border-slate-200 hover:bg-slate-100 inline-flex items-center justify-center text-slate-500 transition-colors" aria-label="Previous week"><span class="material-symbols-outlined" style="font-size:16px">chevron_left</span></button>
+          <span class="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">${data.isCurrentWeek ? 'This week' : 'Week review'}</span>
+          <button onclick="weeklyNavNext()" class="w-7 h-7 rounded-md border border-slate-200 hover:bg-slate-100 inline-flex items-center justify-center text-slate-500 transition-colors ${!weeklySelectedWeek ? 'opacity-30 cursor-default' : ''}" aria-label="Next week" ${!weeklySelectedWeek ? 'disabled' : ''}><span class="material-symbols-outlined" style="font-size:16px">chevron_right</span></button>
+        </div>
         <span class="px-2.5 py-1 rounded-full text-xs font-bold ${status.pill}">${status.label}</span>
         <span class="text-xs text-slate-500">${esc(data.weekLabel)} • variable spend only</span>
+        ${weeklySelectedWeek ? '<button onclick="weeklyNavReset()" class="text-[11px] text-blue-600 font-medium hover:underline">Back to this week</button>' : ''}
       </div>
       <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">Spent vs weekly target</div>
       <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 tabular-nums">${fmt(Math.round(data.weekSpent))} <span class="text-slate-400 font-bold">/ ${fmt(Math.round(data.weekTarget))}</span></h2>
@@ -1758,11 +1851,18 @@ function renderWeeklyDashboard() {
   const month = document.getElementById('dash-month').value;
   if (!month) return;
   const excludeCovered = document.getElementById('dash-exclude-covered').checked;
+  const now = new Date();
+  // Default to current week (including in-progress); null weekOverride = last full week fallback
+  const weekOverride = weeklySelectedWeek || (() => {
+    const { start, end } = getWeekRange(now);
+    return { start, end };
+  })();
   const data = getWeeklyReviewData(month, {
     store,
     excludeCovered,
     ensureYearBudget: year => ensureYearBudget(store, year),
-    currentDate: new Date()
+    currentDate: now,
+    weekOverride
   });
   const [year, mk] = month.split('-');
   const monthLabel = `${MONTHS[Number.parseInt(mk, 10) - 1]} ${year}`;
@@ -2202,6 +2302,9 @@ function bindGlobalActions() {
     renderTransactions,
     renderWeeklyDashboard,
     renderYearlyDashboard,
+    weeklyNavPrev,
+    weeklyNavNext,
+    weeklyNavReset,
     restoreSplit,
     saveLoanBudget,
     saveSalaryShiftDay,

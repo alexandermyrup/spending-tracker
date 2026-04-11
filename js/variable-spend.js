@@ -562,8 +562,10 @@ function computeWeekPaceProjection(weekTotal, year, month, monthlyBudget) {
 }
 
 // Main entry point for the new Weekly tab.
+// If options.weekOverride is provided ({ start: Date, end: Date }), uses that week
+// instead of the last full week. This enables the week selector (prev/next arrows).
 export function getWeeklyReviewData(month, options) {
-  const { store, excludeCovered, ensureYearBudget, currentDate = new Date() } = options;
+  const { store, excludeCovered, ensureYearBudget, currentDate = new Date(), weekOverride } = options;
   const [yearStr, monthStr] = month.split('-');
   const year = Number.parseInt(yearStr, 10);
   const monthNum = Number.parseInt(monthStr, 10);
@@ -573,8 +575,12 @@ export function getWeeklyReviewData(month, options) {
   const variableCategories = getVariableCategories(store);
   const variableSet = new Set(variableCategories);
 
-  // Last full week (Mon-Sun strictly before today)
-  const { start: weekStart, end: weekEnd } = getLastFullWeek(currentDate);
+  // Use override week if provided, otherwise default to last full week
+  const { start: weekStart, end: weekEnd } = weekOverride || getLastFullWeek(currentDate);
+  const isCurrentWeek = !weekOverride ? false : (() => {
+    const { start: cwStart } = getWeekRange(currentDate);
+    return weekOverride.start.getTime() === cwStart.getTime();
+  })();
 
   // Total monthly variable budget for the displayed month
   let monthlyBudget = 0;
@@ -658,6 +664,7 @@ export function getWeeklyReviewData(month, options) {
     categoryRows,
     weekHistory,
     variableCategoryCount: variableCategories.length,
+    isCurrentWeek: weekOverride ? isCurrentWeek : false,
     hasData: weekHistory.some(w => w.total > 0) || weekSpent > 0
   };
 }
