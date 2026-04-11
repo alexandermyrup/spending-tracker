@@ -106,7 +106,6 @@ export const MERCHANT_PATTERNS = [
   { p: 'UBER *TRIP', c: 'Nightlife', t: 'spending' },
   { p: 'UBR* PENDING.UBER', c: 'Nightlife', t: 'spending' },
   { p: 'Revolut', c: 'Transfer out', t: 'spending' },
-  { p: 'Oliver Myrup', c: 'Transfer out', t: 'spending' },
   { p: 'EVENTIM', c: 'Fun', t: 'spending' },
   { p: 'GEBR. HEINEMANN', c: 'Travel', t: 'spending' },
   { p: 'IKEA', c: 'Home', t: 'spending' },
@@ -172,7 +171,6 @@ export function autoMatchMerchant(merchantName, amount, store) {
       }
     }
   }
-  if (upper === 'LARS MYRUP' && amount && Math.abs(amount) === 910) return resolvedMatch('Macbook payment', 'spending', store);
   if (upper.includes('LØNOVERFØRSEL')) return resolvedMatch('Part-time job', 'income', store);
   if (upper === 'SAVINGS ACCOUNT' || upper === 'FROM SAVINGS ACCOUNT' || upper.includes('SAVINGS SU LÅN')) return { category: '', type: 'ignore' };
   if (upper.includes('IVAN BARBER')) return resolvedMatch('Haircut', 'spending', store);

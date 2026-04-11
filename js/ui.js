@@ -14,6 +14,7 @@ import {
   saveStore
 } from './store.js';
 import {
+  MERCHANT_PATTERNS,
   autoMatchMerchant,
   certaintyBand,
   collapseSplitParent,
@@ -201,7 +202,7 @@ function getVisibleTransactions(baseFiltered, derived) {
     displayTxs = displayTxs.filter(tx => !tx.category && tx.type !== 'ignore');
   } else if (reviewMode === 'low-certainty') {
     displayTxs = displayTxs.filter(tx => {
-      if (tx.type === 'ignore' || !tx.category) return false;
+      if (tx.type === 'ignore' || tx.category) return false;
       const suggestion = autoMatchMerchant(tx.merchant, tx.amount, store);
       if (!suggestion || !suggestion.category) return false;
       const certainty = computeCategoryCertainty(tx, suggestion, derived.merchantStats, derived.recurring, store);
@@ -221,6 +222,13 @@ function getVisibleTransactions(baseFiltered, derived) {
       const aCert = aSuggestion && aSuggestion.category ? computeCategoryCertainty(a, aSuggestion, derived.merchantStats, derived.recurring, store) : -1;
       const bCert = bSuggestion && bSuggestion.category ? computeCategoryCertainty(b, bSuggestion, derived.merchantStats, derived.recurring, store) : -1;
       if (aCert !== bCert) return bCert - aCert;
+      // Group same-merchant rows together, sorted by frequency (most common first)
+      const aKey = normalizeMerchantName(a.merchant);
+      const bKey = normalizeMerchantName(b.merchant);
+      const aCount = derived.merchantStats[aKey]?.count || 0;
+      const bCount = derived.merchantStats[bKey]?.count || 0;
+      if (aCount !== bCount) return bCount - aCount;
+      if (aKey !== bKey) return aKey.localeCompare(bKey);
       return b.date.localeCompare(a.date) || b.id - a.id;
     });
   }
@@ -315,7 +323,16 @@ function confirmImport() {
   pendingImport = [];
   lastImportedIds = importedIds;
   document.getElementById('import-preview')?.classList.add('hidden');
-  commit(`Imported ${freshRows.length} transaction${freshRows.length !== 1 ? 's' : ''}.${autoCount > 0 ? ` ${autoCount} auto-categorized.` : ''}`);
+  // Auto-switch to the most useful review mode for the imported batch
+  const uncatImported = importedIds.filter(id => {
+    const tx = store.transactions.find(t => t.id === id);
+    return tx && !tx.category && tx.type !== 'ignore';
+  }).length;
+  const reviewModeEl = document.getElementById('tx-review-mode');
+  if (reviewModeEl) {
+    reviewModeEl.value = uncatImported > 0 ? 'uncategorized' : 'recent-imports';
+  }
+  commit(`Imported ${freshRows.length} transaction${freshRows.length !== 1 ? 's' : ''}.${autoCount > 0 ? ` ${autoCount} auto-categorized.` : ''}${uncatImported > 0 ? ` ${uncatImported} need tagging.` : ''}`);
 }
 
 function cancelImport() {
@@ -513,6 +530,18 @@ function selectCategory(txId, category) {
     tx.manualCategory = false;
   }
   closeCatDropdowns();
+  // Count sibling uncategorized transactions that now have a suggestion from this tag
+  if (category) {
+    const key = normalizeMerchantName(tx.merchant);
+    const siblings = store.transactions.filter(t =>
+      t.id !== txId && !t.category && !t.splitInto && t.type !== 'ignore' &&
+      normalizeMerchantName(t.merchant) === key
+    ).length;
+    if (siblings > 0) {
+      commit(`Learned ${tx.merchant}: ${siblings} similar transaction${siblings !== 1 ? 's' : ''} updated.`, 'transactions');
+      return;
+    }
+  }
   commit(null, 'transactions');
 }
 
@@ -2318,9 +2347,28 @@ function bindGlobalActions() {
   });
 }
 
+// Seed merchantMap from hardcoded MERCHANT_PATTERNS for new users.
+// Uses a simple guard: if merchantMap is empty, this is a fresh store.
+// Existing users already have entries in merchantMap from their tagging,
+// so they skip this and keep using the MERCHANT_PATTERNS fallback in
+// autoMatchMerchant (no behavior change for them).
+function seedMerchantPatternsIfEmpty() {
+  if (Object.keys(store.merchantMap).length > 0) return;
+  let seeded = 0;
+  MERCHANT_PATTERNS.forEach(rule => {
+    const key = normalizeMerchantName(rule.p);
+    if (!store.merchantMap[key]) {
+      store.merchantMap[key] = { category: rule.c, type: rule.t };
+      seeded++;
+    }
+  });
+  if (seeded > 0) persistStore();
+}
+
 export function initApp() {
   const sanitized = sanitizeTransactions(store);
   if (sanitized > 0) persistStore();
+  seedMerchantPatternsIfEmpty();
   renderAppVersion();
   bindGlobalActions();
   bindNavEvents();
