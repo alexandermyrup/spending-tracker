@@ -219,6 +219,110 @@ runner.suite('Export insights skeleton', test => {
   });
 });
 
+runner.suite('Export insights content', test => {
+  function createInsightsFixture() {
+    const store = createStore({
+      categories: {
+        Variable: ['Groceries', 'Eating out', 'Travel'],
+        'Fixed costs': ['Rent'],
+        Subscriptions: ['Netflix'],
+        Insurance: [],
+        Income: ['Salary'],
+        Savings: ['Savings', 'Investments']
+      },
+      budgets: { '2026': getDefaultYearBudget() },
+      transactions: [
+        { id: 1, date: '2026-01-01', amount: 22000, merchant: 'Salary', description: '', type: 'income', category: 'Salary', covered: false },
+        { id: 2, date: '2026-01-02', amount: -5000, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent', covered: false },
+        { id: 3, date: '2026-01-15', amount: -120, merchant: 'Netflix', description: '', type: 'spending', category: 'Netflix', covered: false },
+        { id: 4, date: '2026-02-01', amount: 22000, merchant: 'Salary', description: '', type: 'income', category: 'Salary', covered: false },
+        { id: 5, date: '2026-02-02', amount: -5000, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent', covered: false },
+        { id: 6, date: '2026-02-05', amount: -2500, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 7, date: '2026-02-15', amount: -120, merchant: 'Netflix', description: '', type: 'spending', category: 'Netflix', covered: false },
+        { id: 8, date: '2026-03-01', amount: 22000, merchant: 'Salary', description: '', type: 'income', category: 'Salary', covered: false },
+        { id: 9, date: '2026-03-02', amount: -5000, merchant: 'Landlord', description: '', type: 'spending', category: 'Rent', covered: false },
+        { id: 10, date: '2026-03-05', amount: -2800, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 11, date: '2026-03-10', amount: -800, merchant: 'Restaurant', description: '', type: 'spending', category: 'Eating out', covered: false },
+        { id: 12, date: '2026-03-15', amount: -120, merchant: 'Netflix', description: '', type: 'spending', category: 'Netflix', covered: false },
+        { id: 13, date: '2026-04-01', amount: 22000, merchant: 'Salary', description: '', type: 'income', category: 'Salary', covered: false },
+        { id: 14, date: '2026-04-08', amount: -2800, merchant: 'FOETEX', description: '', type: 'spending', category: 'Groceries', covered: false },
+        { id: 15, date: '2026-04-09', amount: -1200, merchant: 'Restaurant', description: '', type: 'spending', category: 'Eating out', covered: false }
+      ]
+    });
+    store.budgets['2026']['Rent'] = {};
+    store.budgets['2026']['Netflix'] = {};
+    MONTH_KEYS.forEach(m => {
+      store.budgets['2026']['Rent'][m] = 5000;
+      store.budgets['2026']['Groceries'][m] = 2500;
+      store.budgets['2026']['Eating out'][m] = 500;
+      store.budgets['2026']['Netflix'][m] = 120;
+    });
+    return store;
+  }
+
+  test('cashFlow monthly totals match dashboard data for known months', () => {
+    const store = createInsightsFixture();
+    const payload = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') });
+    const ins = payload.spendingInsights;
+    assertEquals(ins.currentMonth, '2026-04');
+    assertEquals(ins.lastCompletedMonth, '2026-03');
+    const mar = ins.cashFlow.monthly.find(m => m.month === '2026-03');
+    assert(mar, 'March entry should exist');
+    assertEquals(mar.income, 22000);
+    assertEquals(mar.spend, 8720, 'Mar spend should equal 5000+2800+800+120');
+    assertEquals(mar.net, 13280, 'Net = income - spend - saving');
+  });
+
+  test('cashFlow 3m window averages match raw math', () => {
+    const store = createInsightsFixture();
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    const threeMonth = ins.cashFlow.clean.find(w => w.window === '3m');
+    assertEquals(threeMonth.months.length, 3);
+    assertEquals(threeMonth.months[2], '2026-03', '3m window ends with lastCompletedMonth');
+    // Jan + Feb + Mar income = 22000 × 3 = 66000; avg = 22000
+    assertEquals(threeMonth.income, 66000);
+    assertEquals(threeMonth.avgPerMonth.income, 22000);
+  });
+
+  test('categoryTrends covers all variable + fixed + subscription categories', () => {
+    const store = createInsightsFixture();
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    const categories = new Set(ins.categoryTrends.map(t => t.category));
+    assert(categories.has('Groceries'), 'Groceries trend missing');
+    assert(categories.has('Rent'), 'Rent trend missing');
+    assert(categories.has('Netflix'), 'Netflix trend missing');
+    const groceries = ins.categoryTrends.find(t => t.category === 'Groceries');
+    assertEquals(groceries.monthSeries.length, 12, '12-entry month series');
+    assertEquals(groceries.monthSeries[11].month, '2026-03', 'last entry is lastCompletedMonth');
+    assertEquals(groceries.monthSeries[11].total, 2800);
+  });
+
+  test('budgetAdherence flags current-month overspend', () => {
+    const store = createInsightsFixture();
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    const eatingOut = ins.budgetAdherence.byCategory.find(c => c.category === 'Eating out');
+    assert(eatingOut, 'Eating out should appear in adherence');
+    assertEquals(eatingOut.overBudget, true, 'Eating out Apr spend 1200 > budget 500');
+    assertEquals(eatingOut.variance, 700);
+  });
+
+  test('recurringCommitments detects monthly Netflix and Rent', () => {
+    const store = createInsightsFixture();
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    const merchants = new Set(ins.recurringCommitments.obligations.map(o => o.merchant));
+    assert(merchants.has('Landlord'), 'Landlord should be detected as monthly');
+    assert(ins.recurringCommitments.totalMonthly >= 5000, 'Monthly total should include Landlord');
+  });
+
+  test('monthlyVariablePacing and weeklyReview are populated', () => {
+    const store = createInsightsFixture();
+    const ins = exportPayload(store, { currentDate: new Date('2026-04-11T12:00:00Z') }).spendingInsights;
+    assert(ins.monthlyVariablePacing.totalBudget > 0, 'variable pacing should have a budget');
+    assertEquals(ins.monthlyVariablePacing.month, '2026-04');
+    assertEquals(ins.weeklyReview.month, '2026-04');
+  });
+});
+
 runner.suite('Import and parsing', test => {
   test('resolveMerchant strips 2025 date suffix', () => {
     assertEquals(resolveMerchant('FOETEX Den 12.02', ''), 'FOETEX', 'Should strip date suffix');
