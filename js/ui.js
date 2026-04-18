@@ -263,11 +263,11 @@ function renderImportPreview() {
       <td class="py-2.5 px-3 tabular-nums">${tx.date}${showDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-600 border border-dashed border-amber-300" title="Possible duplicate of existing transaction">dup?</span>' : ''}</td>
       <td class="py-2.5 px-3 font-medium">${esc(tx.merchant)}</td>
       <td class="py-2.5 px-3 text-slate-500">${esc(tx.description)}</td>
-      <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-600'}">${fmt(tx.amount)}</td>
+      <td class="py-2.5 px-3 text-right tabular-nums font-medium ${tx.amount < 0 ? 'text-red-500' : 'text-emerald-700'}">${fmt(tx.amount)}</td>
       <td class="py-2.5 px-3">${autocat && autocat.category
         ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600">${esc(autocat.category)} ?</span>`
         : autocat && autocat.type === 'ignore'
-          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600">Ignore</span>'
+          ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700">Ignore</span>'
           : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-600">?</span>'}</td>
     </tr>`;
   }).join('');
@@ -710,7 +710,7 @@ function updateSplitRemainder() {
   const el = document.getElementById('split-remainder');
   const btn = document.getElementById('split-confirm-btn');
   if (Math.abs(remainder) < 0.01) {
-    el.innerHTML = '<span class="text-emerald-600">Fully allocated</span>';
+    el.innerHTML = '<span class="text-emerald-700">Fully allocated</span>';
     btn.disabled = false;
   } else {
     el.innerHTML = `<span class="text-amber-600">Remainder: ${fmt(tx.amount > 0 ? remainder : -remainder)}</span>`;
@@ -848,12 +848,12 @@ function renderTransactions() {
     const band = certaintyBand(certainty);
     const suggestBase = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors';
     const bandClass = band === 'high'
-      ? `${suggestBase} bg-emerald-50 text-emerald-600 border border-emerald-400 hover:bg-emerald-100`
+      ? `${suggestBase} bg-emerald-50 text-emerald-700 border border-emerald-400 hover:bg-emerald-100`
       : band === 'medium'
-        ? `${suggestBase} bg-amber-50 text-amber-600 border border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`
-        : `${suggestBase} bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-400`;
+        ? `${suggestBase} bg-amber-50 text-amber-600 border border-amber-400 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-400`
+        : `${suggestBase} bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-400`;
     const restoreAction = isSplitChild ? `<button type="button" class="cursor-pointer text-sm text-slate-500 opacity-60 hover:opacity-100 hover:text-blue-600 transition-all inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-slate-100" onclick="restoreSplit(${tx.splitFrom})" title="Restore original transaction" aria-label="Restore split">&#8634;</button>` : '';
-    const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-600';
+    const amountColor = tx.amount < 0 ? (tx.type === 'saving' ? 'text-violet-600' : 'text-red-500') : 'text-emerald-700';
     const rowBg = isSplitChild ? 'bg-blue-50/30' : isDupe ? 'bg-red-50/30' : 'hover:bg-slate-50/50';
     return `<tr class="${rowBg}">
       <td class="py-3 px-3 tabular-nums">${tx.date}${isSplitChild ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">split</span>' : ''}${isDupe ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-500 border border-dashed border-red-300" title="Possible duplicate">dup?</span>' : ''}</td>
@@ -865,7 +865,7 @@ function renderTransactions() {
         : suggestion && suggestion.category
           ? `<span class="${bandClass}" data-txid="${tx.id}" data-cat="${esc(suggestion.category)}" onclick="acceptSuggestion(this)" title="${Math.round(certainty * 100)}% certainty">${esc(suggestion.category)} &#x2713;</span><span class="ml-0.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium cursor-pointer bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-400 transition-colors" onclick="openCatDropdown(event, ${tx.id})">&#x25BE;</span>`
           : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer bg-amber-50 text-amber-600 border border-dashed border-amber-400 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors" onclick="openCatDropdown(event, ${tx.id})">+ Category</span>`}</div></td>
-      <td class="py-3 px-3"><select class="px-1.5 py-0.5 rounded border border-slate-200 text-[11px] bg-white cursor-pointer" onchange="setTxType(${tx.id}, this.value)">
+      <td class="py-3 px-3"><select class="px-1.5 py-0.5 rounded border border-slate-200 text-[11px] bg-white cursor-pointer" onchange="setTxType(${tx.id}, this.value)" aria-label="Transaction type for ${esc(tx.merchant)} on ${tx.date}">
         ${tx.amount < 0 ? `
           <option value="spending" ${tx.type === 'spending' ? 'selected' : ''}>Spending</option>
           <option value="saving" ${tx.type === 'saving' ? 'selected' : ''}>Saving</option>
@@ -994,7 +994,7 @@ function renderDashboard() {
     </div>
     <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
       <div><div class="font-medium">Cash saved (YTD)</div><div class="text-xs text-slate-600 mt-0.5">Non-investment savings transfers</div></div>
-      <strong class="tabular-nums text-emerald-600">${fmt(savingsYtd.ytd.cashSaved)}</strong>
+      <strong class="tabular-nums text-emerald-700">${fmt(savingsYtd.ytd.cashSaved)}</strong>
     </div>
     <div class="flex justify-between items-start py-3 border-t border-slate-100 text-sm">
       <div><div class="font-medium">Invested (YTD)</div><div class="text-xs text-slate-600 mt-0.5">Keeps savings visible without counting against budget</div></div>
@@ -1078,7 +1078,7 @@ function renderDashboard() {
         <span class="text-xs tabular-nums text-slate-600 shrink-0 w-32 text-right">${fmt(-actual)} / ${fmt(-budget)}</span>
         <span class="text-xs tabular-nums ${statusColor} shrink-0 w-24 text-right">${statusText}</span>
       </div>
-      <div class="flex gap-4 mt-1.5 ml-36 sm:ml-44 pl-3 text-[11px] text-slate-400 tabular-nums">
+      <div class="flex gap-4 mt-1.5 ml-36 sm:ml-44 pl-3 text-[11px] text-slate-500 tabular-nums">
         <span>Last mo: ${fmt(-comparisons.previousMonth.actual)}</span>
         <span>3-mo avg: ${fmt(-comparisons.threeMonthAverage.actual)}</span>
         <span>1-yr avg: ${fmt(-comparisons.twelveMonthAverage.actual)}</span>
@@ -1089,8 +1089,8 @@ function renderDashboard() {
   breakdownEl.innerHTML = breakdownItems.length > 0
     ? `<div class="border-t border-slate-200 mt-4 pt-2">
         <div class="flex justify-between items-baseline mb-2 px-1">
-          <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">All categories</span>
-          <span class="text-[11px] text-slate-400">Sorted by most over budget</span>
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">All categories</span>
+          <span class="text-[11px] text-slate-500">Sorted by most over budget</span>
         </div>
         ${breakdownHTML.join('')}
       </div>`
@@ -1122,13 +1122,13 @@ function renderYearlyDashboard() {
         <span class="text-sm text-slate-500">kr/year</span>
       </div>
       <div class="space-y-1.5 text-sm">
-        <div class="flex justify-between"><span class="text-slate-500">YTD Income</span><span class="font-medium tabular-nums text-emerald-600">${fmt(data.ytd.income)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">YTD Income</span><span class="font-medium tabular-nums text-emerald-700">${fmt(data.ytd.income)}</span></div>
         ${data.ytd.loan > 0 || data.annualLoanBudget > 0 ? `<div class="flex justify-between"><span class="text-slate-500">YTD Loan inflow (SU-lan)</span><span class="font-medium tabular-nums text-slate-500">${fmt(data.ytd.loan)}${data.ytdLoanBudget > 0 ? ` / ${fmt(data.ytdLoanBudget)} expected` : ''}</span></div>` : ''}
         <div class="flex justify-between"><span class="text-slate-500">YTD Spending</span><span class="font-medium tabular-nums text-red-500">${fmt(-data.ytd.spend)}</span></div>
         <div class="flex justify-between"><span class="text-slate-500">YTD Saved / invested</span><span class="font-medium tabular-nums text-violet-600">${fmt(-data.ytd.save)}</span></div>
         <div class="flex justify-between pt-2 border-t border-slate-200/40"><span class="text-slate-500">YTD Budget (spending)</span><span class="font-medium tabular-nums text-slate-500">${fmt(-data.ytd.budget)}</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">${data.ytd.budget - data.ytd.spend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="font-medium tabular-nums ${data.ytd.budget - data.ytd.spend >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.ytd.budget - data.ytd.spend)}</span></div>
-        <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>${data.ytd.remaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="tabular-nums ${data.ytd.remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}">${fmt(data.ytd.remaining)}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">${data.ytd.budget - data.ytd.spend >= 0 ? 'Under budget' : 'Over budget'}</span><span class="font-medium tabular-nums ${data.ytd.budget - data.ytd.spend >= 0 ? 'text-emerald-700' : 'text-red-500'}">${fmt(data.ytd.budget - data.ytd.spend)}</span></div>
+        <div class="flex justify-between pt-2 mt-1 border-t-2 border-slate-300 font-semibold text-base"><span>${data.ytd.remaining >= 0 ? 'YTD Remaining' : 'YTD Shortfall'}</span><span class="tabular-nums ${data.ytd.remaining >= 0 ? 'text-emerald-700' : 'text-red-500'}">${fmt(data.ytd.remaining)}</span></div>
       </div>
     </div>
     <div class="absolute inset-0 opacity-[0.03] pointer-events-none text-blue-800 bg-[radial-gradient(circle,_currentColor_1px,_transparent_1px)] [background-size:20px_20px]"></div>
@@ -1169,7 +1169,7 @@ function renderYearlyDashboard() {
     cfGridLines.push({ bottom: v / maxCashflow * 170, label: fmtShort(v) });
   }
   const yAxisHTML = cfGridLines.map(g =>
-    `<div class="absolute left-0 right-0 h-px bg-slate-100" style="bottom:${g.bottom + 28}px"></div><div class="absolute text-[9px] text-slate-400 tabular-nums" style="bottom:${g.bottom + 24}px;left:-4px;transform:translateX(-100%)">${g.label}</div>`
+    `<div class="absolute left-0 right-0 h-px bg-slate-100" style="bottom:${g.bottom + 28}px"></div><div class="absolute text-[9px] text-slate-500 tabular-nums" style="bottom:${g.bottom + 24}px;left:-4px;transform:translateX(-100%)">${g.label}</div>`
   ).join('');
   document.getElementById('year-cashflow-bars').innerHTML = `<div class="relative flex items-end gap-2 ml-10" style="height:200px">${yAxisHTML}${data.monthData.map((m) => {
     const isFuture = !m.hasActuals && !m.isPast;
@@ -1197,7 +1197,7 @@ function renderYearlyDashboard() {
   // Summary line
   document.getElementById('year-cashflow-summary').innerHTML = `
     <div class="flex items-center gap-6 text-sm tabular-nums text-slate-500">
-      <span>In: <strong class="text-emerald-600">${fmtShort(data.ytd.income)}</strong></span>
+      <span>In: <strong class="text-emerald-700">${fmtShort(data.ytd.income)}</strong></span>
       <span>Out: <strong class="text-red-500">${fmtShort(data.ytd.spend)}</strong></span>
       <span>Saved: <strong class="text-violet-600">${fmtShort(data.ytd.save)}</strong></span>
     </div>`;
@@ -1233,22 +1233,22 @@ function renderYearlyDashboard() {
     </div>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">YTD Saved</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">YTD Saved</div>
         <div class="text-xl font-bold tabular-nums text-violet-600">${fmtShort(data.ytd.save)}</div>
         <div class="text-xs text-slate-500 mt-0.5">${data.ytd.elapsedMonthCount > 0 ? fmtShort(data.ytd.save / data.ytd.elapsedMonthCount) : '0'}/mo avg</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned YTD</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Planned YTD</div>
         <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0)}</div>
         <div class="text-xs text-slate-500 mt-0.5">from budget</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">vs Plan</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">vs Plan</div>
         <div class="text-xl font-bold tabular-nums ${data.ytd.save >= (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0) ? 'text-emerald-600' : 'text-red-500'}">${fmtShort(data.ytd.save - (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0))}</div>
         <div class="text-xs text-slate-500 mt-0.5">${data.ytd.save >= (plannedCumulative[data.ytd.elapsedMonthCount - 1] || 0) ? 'ahead' : 'behind'}</div>
       </div>
       <div>
-        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Planned EOY</div>
+        <div class="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Planned EOY</div>
         <div class="text-xl font-bold tabular-nums text-slate-600">${fmtShort(plannedEOY)}</div>
         <div class="text-xs text-slate-500 mt-0.5">income - spending budget</div>
       </div>
@@ -1308,11 +1308,11 @@ function renderYearlyDashboard() {
   svg += actualPts.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#7c3aed"/>').join('');
   // Month labels
   svg += data.monthData.map((m, i) =>
-    '<text x="' + toX(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + m.month + '</text>'
+    '<text x="' + toX(i) + '" y="' + (svgH - 4) + '" text-anchor="middle" fill="#64748b" font-size="10">' + m.month + '</text>'
   ).join('');
   // Y-axis labels
   svg += gridLines.map(g =>
-    '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#94a3b8" font-size="9">' + g.label + '</text>'
+    '<text x="' + (padL - 4) + '" y="' + (g.y + 3) + '" text-anchor="end" fill="#64748b" font-size="9">' + g.label + '</text>'
   ).join('');
   // Interactive hover zones per month (invisible rects with visible children on hover)
   const colW = chartW / 11;
@@ -1332,7 +1332,7 @@ function renderYearlyDashboard() {
       + '<circle cx="' + x + '" cy="' + actualY + '" r="4" fill="#7c3aed" stroke="white" stroke-width="1.5"/>'
       + '<circle cx="' + x + '" cy="' + plannedY + '" r="3.5" fill="#cbd5e1" stroke="white" stroke-width="1.5"/>'
       + '<text x="' + x + '" y="' + (actualY - 10) + '" text-anchor="middle" fill="#7c3aed" font-size="9.5" font-weight="600">' + label + ' ' + fmtShort(actual) + '</text>'
-      + '<text x="' + x + '" y="' + (plannedY + 14) + '" text-anchor="middle" fill="#94a3b8" font-size="9">Plan ' + fmtShort(planned) + '</text>'
+      + '<text x="' + x + '" y="' + (plannedY + 14) + '" text-anchor="middle" fill="#64748b" font-size="9">Plan ' + fmtShort(planned) + '</text>'
       + '</g></g>';
   }).join('');
 
@@ -1354,7 +1354,7 @@ function saveSalaryShiftDay(value) {
 // ---------- Weekly tab rendering ----------
 
 const WEEKLY_STATUS_COLORS = {
-  on: { dot: 'bg-emerald-500', pill: 'bg-emerald-100 text-emerald-700', text: 'text-emerald-600', label: 'on pace' },
+  on: { dot: 'bg-emerald-500', pill: 'bg-emerald-100 text-emerald-700', text: 'text-emerald-700', label: 'on pace' },
   ahead: { dot: 'bg-blue-500', pill: 'bg-blue-100 text-blue-700', text: 'text-blue-600', label: 'ahead' },
   behind: { dot: 'bg-red-500', pill: 'bg-red-100 text-red-600', text: 'text-red-500', label: 'behind' }
 };
@@ -1371,7 +1371,7 @@ function renderWeeklyHero(data, monthLabel) {
       : `${monthLabel} • Week of ${data.weekLabel}`;
   const runwayLine = data.isPast || data.isFuture
     ? ''
-    : `<div class="text-sm text-slate-600 mt-4 pt-4 border-t border-slate-200/40">→ <span class="font-semibold tabular-nums">${fmt(Math.round(data.runway))}</span>/week left to stay on budget <span class="text-slate-400">(${data.remainingDays} day${data.remainingDays !== 1 ? 's' : ''} remaining)</span></div>`;
+    : `<div class="text-sm text-slate-600 mt-4 pt-4 border-t border-slate-200/40">→ <span class="font-semibold tabular-nums">${fmt(Math.round(data.runway))}</span>/week left to stay on budget <span class="text-slate-500">(${data.remainingDays} day${data.remainingDays !== 1 ? 's' : ''} remaining)</span></div>`;
 
   return `<div class="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-6 sm:p-8">
     <div class="relative z-10">
@@ -1383,7 +1383,7 @@ function renderWeeklyHero(data, monthLabel) {
       <div class="grid grid-cols-1 md:grid-cols-[1.2fr_0.8fr] gap-6 items-start">
         <div>
           <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">Variable spend, month-to-date</div>
-          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-2 tabular-nums">${fmt(Math.round(data.totalSpent))} <span class="text-slate-400 font-bold">/ ${fmt(Math.round(data.totalBudget))}</span></h2>
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-2 tabular-nums">${fmt(Math.round(data.totalSpent))} <span class="text-slate-500 font-bold">/ ${fmt(Math.round(data.totalBudget))}</span></h2>
           <p class="text-sm text-slate-500 leading-relaxed max-w-[52ch]">Across ${data.variableCategoryCount} variable ${data.variableCategoryCount === 1 ? 'category' : 'categories'}. Fixed costs and subscriptions excluded.</p>
         </div>
         <div class="space-y-3">
@@ -1457,17 +1457,17 @@ function renderWeeklyBurndown(data) {
   const yTicks = [];
   const yStep = niceStep(maxY, 4);
   for (let v = 0; v <= maxY; v += yStep) {
-    yTicks.push(`<text x="${padL - 8}" y="${yFor(v) + 3}" text-anchor="end" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${fmtShort(Math.round(v))}</text>`);
+    yTicks.push(`<text x="${padL - 8}" y="${yFor(v) + 3}" text-anchor="end" fill="#64748b" font-size="10" font-family="Inter, sans-serif">${fmtShort(Math.round(v))}</text>`);
     yTicks.push(`<line x1="${padL}" y1="${yFor(v)}" x2="${width - padR}" y2="${yFor(v)}" stroke="#f1f5f9" stroke-width="1"/>`);
   }
   // X-axis ticks every ~5 days
   const xTicks = [];
   const xStep = data.totalDays >= 28 ? 5 : 3;
   for (let day = 1; day <= data.totalDays; day += xStep) {
-    xTicks.push(`<text x="${xFor(day)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${day}</text>`);
+    xTicks.push(`<text x="${xFor(day)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#64748b" font-size="10" font-family="Inter, sans-serif">${day}</text>`);
   }
   if (data.totalDays % xStep !== 0) {
-    xTicks.push(`<text x="${xFor(data.totalDays)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="Inter, sans-serif">${data.totalDays}</text>`);
+    xTicks.push(`<text x="${xFor(data.totalDays)}" y="${padT + innerH + 16}" text-anchor="middle" fill="#64748b" font-size="10" font-family="Inter, sans-serif">${data.totalDays}</text>`);
   }
 
   return `
@@ -1525,7 +1525,7 @@ function renderWeeklyCard(data) {
       ? `<span class="${rowStatus.text} text-xs font-medium tabular-nums">+${fmt(Math.round(row.weekSpent - row.weekTarget))}</span>`
       : '';
     const targetLabel = row.weekTarget > 0
-      ? `<span class="text-slate-400">/ ${fmt(Math.round(row.weekTarget))}</span>`
+      ? `<span class="text-slate-500">/ ${fmt(Math.round(row.weekTarget))}</span>`
       : '<span class="text-slate-300 text-xs">no budget</span>';
     return `<div class="flex items-center gap-3 py-2.5 border-t border-slate-100">
       <div class="flex-1 min-w-0 text-sm font-medium text-slate-700 truncate">${esc(row.category)}</div>
@@ -1540,7 +1540,7 @@ function renderWeeklyCard(data) {
       <h3 class="text-base font-semibold">Week of ${esc(data.weekLabel)}</h3>
       <div class="flex items-center gap-3 text-sm">
         <span class="tabular-nums font-semibold">${fmt(Math.round(data.week.spent))}</span>
-        <span class="text-slate-400 tabular-nums">/ ${fmt(Math.round(data.week.target))}</span>
+        <span class="text-slate-500 tabular-nums">/ ${fmt(Math.round(data.week.target))}</span>
         <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${status.pill}">${status.label}</span>
       </div>
     </div>
@@ -1559,7 +1559,7 @@ function renderWeeklyForecastCard(data) {
     return `<h3 class="text-base font-semibold mb-3">Forecast</h3>
       <p class="text-sm text-slate-500">Not enough data yet to project end of month.</p>`;
   }
-  const overColor = data.forecast.overBudget ? 'text-red-500' : 'text-emerald-600';
+  const overColor = data.forecast.overBudget ? 'text-red-500' : 'text-emerald-700';
   const projected = Math.round(data.forecast.projected);
   const variance = Math.round(data.forecast.variance);
   const recoveryRunway = Math.round(data.runway);
@@ -1607,11 +1607,11 @@ function renderWeeklyHistoryCard(data) {
     const cx = padL + slotW * (i + 0.5);
     const offset = data.weeklyHistory.length - 1 - i;
     const label = offset === 0 ? 'now' : `-${offset}w`;
-    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#94a3b8'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
+    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#64748b'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
   }).join('');
 
   const trendIcon = data.trend.direction === 'up' ? '↗' : data.trend.direction === 'down' ? '↘' : '→';
-  const trendColor = data.trend.direction === 'up' ? 'text-red-500' : data.trend.direction === 'down' ? 'text-emerald-600' : 'text-slate-500';
+  const trendColor = data.trend.direction === 'up' ? 'text-red-500' : data.trend.direction === 'down' ? 'text-emerald-700' : 'text-slate-500';
   const trendPct = data.trend.delta !== 0 ? `${data.trend.delta > 0 ? '+' : ''}${Math.round(data.trend.delta * 100)}%` : 'flat';
 
   return `<h3 class="text-base font-semibold mb-1">Last 8 weeks</h3>
@@ -1671,7 +1671,7 @@ function renderMonthlyCategoryComparison(data) {
         ${budgetLine}
         ${bars}
         <text x="${xFirst}" y="${h - 4}" text-anchor="middle" fill="#cbd5e1" font-size="8" font-family="Inter, sans-serif">${firstLabel}</text>
-        <text x="${xLast}" y="${h - 4}" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="Inter, sans-serif" font-weight="600">${lastLabel}</text>
+        <text x="${xLast}" y="${h - 4}" text-anchor="middle" fill="#64748b" font-size="8" font-family="Inter, sans-serif" font-weight="600">${lastLabel}</text>
       </svg>
     </div>`;
   }).join('');
@@ -1767,9 +1767,9 @@ function renderWeeklyReviewHero(data, monthLabel) {
   const baselineLine = data.baseline.count > 0
     ? `${baselineDeltaPct >= 0 ? '+' : ''}${baselineDeltaPct}% vs your ${data.baseline.count}-week avg (${fmt(Math.round(data.baseline.average))})`
     : 'no baseline yet';
-  const baselineColor = baselineDeltaPct > 5 ? 'text-red-500' : baselineDeltaPct < -5 ? 'text-emerald-600' : 'text-slate-500';
+  const baselineColor = baselineDeltaPct > 5 ? 'text-red-500' : baselineDeltaPct < -5 ? 'text-emerald-700' : 'text-slate-500';
   const projVariance = Math.round(data.projection.variance);
-  const projColor = data.projection.overBudget ? 'text-red-500' : 'text-emerald-600';
+  const projColor = data.projection.overBudget ? 'text-red-500' : 'text-emerald-700';
   const projVerb = data.projection.overBudget ? 'overshooting' : 'saving';
   const projAmount = fmt(Math.abs(projVariance));
 
@@ -1786,7 +1786,7 @@ function renderWeeklyReviewHero(data, monthLabel) {
         ${weeklySelectedWeek ? '<button onclick="weeklyNavReset()" class="text-[11px] text-blue-600 font-medium hover:underline">Back to this week</button>' : ''}
       </div>
       <div class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-2">Spent vs weekly target</div>
-      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 tabular-nums">${fmt(Math.round(data.weekSpent))} <span class="text-slate-400 font-bold">/ ${fmt(Math.round(data.weekTarget))}</span></h2>
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter leading-none mb-3 tabular-nums">${fmt(Math.round(data.weekSpent))} <span class="text-slate-500 font-bold">/ ${fmt(Math.round(data.weekTarget))}</span></h2>
       <div class="space-y-1 text-sm pt-3 border-t border-slate-200/40">
         <div class="text-slate-600">${esc(data.ranking.label)} • <span class="${baselineColor} font-medium">${baselineLine}</span></div>
         <div class="text-slate-600">→ At this pace, ${esc(monthLabel)}: <span class="font-semibold tabular-nums">${fmt(Math.round(data.projection.projected))}</span> <span class="${projColor} font-medium">(${projVerb} ${projAmount})</span></div>
@@ -1808,7 +1808,7 @@ function renderWeeklyReviewCategories(data) {
       ? `<span class="${rowStatus.text} text-xs font-medium tabular-nums">+${fmt(Math.round(row.weekSpent - row.weekTarget))}</span>`
       : '';
     const targetLabel = row.weekTarget > 0
-      ? `<span class="text-slate-400">/ ${fmt(Math.round(row.weekTarget))}</span>`
+      ? `<span class="text-slate-500">/ ${fmt(Math.round(row.weekTarget))}</span>`
       : '<span class="text-slate-300 text-xs">no budget</span>';
     return `<div class="flex items-center gap-3 py-2.5 border-t border-slate-100">
       <div class="flex-1 min-w-0 text-sm font-medium text-slate-700 truncate">${esc(row.category)}</div>
@@ -1860,7 +1860,7 @@ function renderWeeklyReviewTrend(data) {
     const cx = padL + slotW * (i + 0.5);
     const offset = slices.length - 1 - i;
     const label = offset === 0 ? 'last' : `-${offset}w`;
-    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#94a3b8'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
+    return `<text x="${cx}" y="${padT + innerH + 14}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#64748b'}" font-size="9" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '600' : '400'}">${label}</text>`;
   }).join('');
   return `<h3 class="text-base font-semibold mb-1">Last 8 weeks</h3>
     <p class="text-xs text-slate-500 mb-3">Variable spend, weekly. Highlighted bar = the week reviewed.</p>
@@ -1957,10 +1957,11 @@ function renderBudgetEditor() {
       if (!yb[cat]) { yb[cat] = {}; MONTH_KEYS.forEach(m => { yb[cat][m] = 0; }); }
       let rowTotal = 0;
       html += `<tr><td>${esc(cat)}</td>`;
-      MONTH_KEYS.forEach(m => {
+      MONTH_KEYS.forEach((m, mIdx) => {
         const val = Number(yb[cat][m]) || 0;
         rowTotal += val;
-        html += `<td><input type="number" value="${val}" data-year="${year}" data-cat="${esc(cat)}" data-month="${m}"></td>`;
+        const label = `${cat} budget, ${MONTHS[mIdx]} ${year}`;
+        html += `<td><input type="number" value="${val}" data-year="${year}" data-cat="${esc(cat)}" data-month="${m}" aria-label="${esc(label)}"></td>`;
       });
       html += `<td class="col-total">${fmtShort(rowTotal)}</td><td class="col-avg">${fmtShort(Math.round(rowTotal / 12))}</td></tr>`;
     });
@@ -2024,14 +2025,16 @@ function renderCategoryManager() {
       item.innerHTML = `<span>${esc(cat)} <span class="text-xs text-slate-600">(${count} txns)</span></span><div class="flex gap-2"></div>`;
       const btnWrap = item.querySelector('.flex.gap-2');
       const renameBtn = document.createElement('button');
-      renameBtn.className = 'px-2 py-0.5 rounded text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors';
-      renameBtn.textContent = 'Rename';
+      renameBtn.className = 'inline-flex items-center gap-1.5 h-10 px-3 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors';
+      renameBtn.setAttribute('aria-label', `Rename category ${cat}`);
+      renameBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px">edit</span><span>Rename</span>';
       renameBtn.addEventListener('click', () => renameCat(group, cat));
       btnWrap.appendChild(renameBtn);
       if (count === 0) {
         const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'px-2 py-0.5 rounded text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 transition-colors';
-        deleteBtn.textContent = 'Delete';
+        deleteBtn.className = 'inline-flex items-center gap-1.5 h-10 px-3 rounded-lg text-xs font-medium text-red-500 border border-red-300 hover:bg-red-50 hover:border-red-400 transition-colors';
+        deleteBtn.setAttribute('aria-label', `Delete category ${cat}`);
+        deleteBtn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true" style="font-size:16px">delete</span><span>Delete</span>';
         deleteBtn.addEventListener('click', () => deleteCat(group, cat));
         btnWrap.appendChild(deleteBtn);
       }

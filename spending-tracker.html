@@ -81,22 +81,22 @@ tailwind.config = {
 
 <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">Skip to main content</a>
 
-<!-- Top Nav -->
-<nav class="fixed top-0 w-full h-14 flex items-center justify-between px-4 sm:px-6 bg-white/80 backdrop-blur-md border-b border-slate-200/60 z-50">
-  <h2 id="nav-section-title" class="text-sm font-semibold text-slate-900 lg:hidden">Dashboard</h2>
+<!-- Top Toolbar -->
+<header role="banner" class="fixed top-0 w-full h-14 flex items-center justify-between px-4 sm:px-6 bg-white/80 backdrop-blur-md border-b border-slate-200/60 z-50">
+  <p id="nav-section-title" class="text-sm font-semibold text-slate-900 lg:hidden" role="status" aria-live="polite">Dashboard</p>
   <div class="flex items-center gap-2 ml-auto">
-    <span id="app-version-badge" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200">v0.2</span>
-    <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors" onclick="exportData()">
+    <span id="app-version-badge" class="hidden sm:inline font-mono text-[11px] text-slate-400 tracking-tight">v0.2</span>
+    <button class="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors" onclick="exportData()">
       <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">download</span>
       <span class="hidden sm:inline">Export</span>
     </button>
-    <label class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors">
+    <label class="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors">
       <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">upload</span>
       <span class="hidden sm:inline">Import JSON</span>
       <input type="file" accept=".json" class="hidden" onchange="importJSON(event)">
     </label>
   </div>
-</nav>
+</header>
 
 <!-- Sidebar -->
 <aside class="hidden lg:flex fixed left-0 top-14 h-[calc(100vh-3.5rem)] w-60 flex-col bg-slate-50 border-r border-slate-200 z-40">
@@ -105,16 +105,16 @@ tailwind.config = {
     <p class="text-[11px] font-medium text-slate-500 tracking-wider uppercase mt-0.5">Personal Finance</p>
   </div>
   <nav class="flex-1 px-3 space-y-0.5 mt-4">
-    <a href="#" data-section="dashboard" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+    <a href="#" data-section="dashboard" class="nav-item active flex items-center gap-3 px-3 py-3 min-h-[44px] rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">dashboard</span> Dashboard
     </a>
-    <a href="#" data-section="transactions" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+    <a href="#" data-section="transactions" class="nav-item flex items-center gap-3 px-3 py-3 min-h-[44px] rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span> Transactions
     </a>
-    <a href="#" data-section="budgets" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+    <a href="#" data-section="budgets" class="nav-item flex items-center gap-3 px-3 py-3 min-h-[44px] rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span> Budgets
     </a>
-    <a href="#" data-section="categories" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+    <a href="#" data-section="categories" class="nav-item flex items-center gap-3 px-3 py-3 min-h-[44px] rounded-lg text-sm font-medium transition-all">
       <span class="material-symbols-outlined" aria-hidden="true">category</span> Categories
     </a>
   </nav>
@@ -132,10 +132,10 @@ tailwind.config = {
           <button class="dash-view-btn active px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="monthly" onclick="switchDashView('monthly')">Monthly</button>
           <button class="dash-view-btn px-3 py-1.5 rounded-md text-sm font-medium transition-all" data-view="yearly" onclick="switchDashView('yearly')">Yearly</button>
         </div>
-        <select id="dash-month" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderDashboard(); renderWeeklyDashboard()"></select>
-        <select id="dash-year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderYearlyDashboard()" style="display:none"></select>
+        <select id="dash-month" aria-label="Select month" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderDashboard(); renderWeeklyDashboard()"></select>
+        <select id="dash-year" aria-label="Select year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderYearlyDashboard()" style="display:none"></select>
         <label class="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-          <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard(); renderWeeklyDashboard()" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> Exclude covered
+          <input type="checkbox" id="dash-exclude-covered" checked onchange="renderDashboard(); renderYearlyDashboard(); renderWeeklyDashboard()" class="w-4 h-4 rounded border-slate-300 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" style="accent-color: rgb(37 99 235)"> Exclude covered
         </label>
         <label class="inline-flex items-center gap-2 text-sm text-slate-600">
           Salary shift
@@ -215,21 +215,21 @@ tailwind.config = {
     <!-- TRANSACTIONS -->
     <section id="tab-transactions" class="section-content hidden">
       <div class="flex flex-wrap items-center gap-2 mb-4">
-        <select id="tx-month-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All months</option></select>
-        <select id="tx-group-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="updateCatFilter(); renderTransactions()"><option value="all">All groups</option></select>
-        <select id="tx-cat-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All categories</option></select>
-        <select id="tx-type-filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
+        <select id="tx-month-filter" aria-label="Filter by month" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All months</option></select>
+        <select id="tx-group-filter" aria-label="Filter by group" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="updateCatFilter(); renderTransactions()"><option value="all">All groups</option></select>
+        <select id="tx-cat-filter" aria-label="Filter by category" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()"><option value="all">All categories</option></select>
+        <select id="tx-type-filter" aria-label="Filter by type" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
           <option value="all">All types</option><option value="spending">Spending</option>
           <option value="saving">Saving/Investing</option><option value="income">Income</option><option value="ignore">Ignored</option>
         </select>
-        <select id="tx-review-mode" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
+        <select id="tx-review-mode" aria-label="Review filter" class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderTransactions()">
           <option value="all">All rows</option>
           <option value="uncategorized">Review: Uncategorized</option>
           <option value="low-certainty">Review: Low certainty</option>
           <option value="conflicts">Review: Conflicts</option>
           <option value="recent-imports">Review: Recent imports</option>
         </select>
-        <input type="text" id="tx-search" placeholder="Search merchant..." class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white ml-auto focus:outline-none focus:border-blue-500" oninput="renderTransactions()">
+        <input type="text" id="tx-search" aria-label="Search merchants" placeholder="Search merchant..." class="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm bg-white ml-auto focus:outline-none focus:border-blue-500" oninput="renderTransactions()">
         <label class="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-blue-600 border border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer">
           <span class="material-symbols-outlined" style="font-size:16px">upload_file</span> Import CSV
           <input type="file" id="csv-input" class="hidden" accept=".csv" onchange="handleCSV(event)">
@@ -283,7 +283,7 @@ tailwind.config = {
           <h2 class="text-base font-semibold">Monthly Budget Grid</h2>
           <p class="text-sm text-slate-500 mt-0.5">Edit individual cells. Right-click to fill rest of year.</p>
         </div>
-        <select id="budget-year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderBudgetEditor()"></select>
+        <select id="budget-year" aria-label="Select budget year" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500" onchange="renderBudgetEditor()"></select>
       </div>
       <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 overflow-x-auto">
         <div id="budget-editor"></div>
@@ -294,7 +294,7 @@ tailwind.config = {
     <section id="tab-categories" class="section-content hidden">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-base font-semibold">Category Manager</h2>
-        <button class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="openNewCatModal()">
+        <button class="inline-flex items-center gap-1.5 h-11 px-4 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors" onclick="openNewCatModal()">
           <span class="material-symbols-outlined" aria-hidden="true" style="font-size:18px">add</span> New Category
         </button>
       </div>
@@ -359,6 +359,8 @@ tailwind.config = {
     </div>
   </div>
 </div>
+
+<footer role="contentinfo" class="sr-only">Spending Tracker — local-first personal finance app.</footer>
 
 <div class="toast-el fixed bottom-5 right-5 bg-slate-900 text-white px-5 py-3 rounded-xl text-sm z-[200] shadow-lg max-w-sm" id="toast" role="status" aria-live="polite"></div>
 
