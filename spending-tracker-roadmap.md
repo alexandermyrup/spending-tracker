@@ -56,6 +56,8 @@
 
 - **SU tracker (standalone)**: If the asset & loan overview is too big to start, this is the minimal version. Track SU-lan balance as a running total: each "loan" type transaction increases the balance, show cumulative borrowed, projected total at graduation, and monthly/quarterly inflow rate. No repayment modelling, just visibility. Scope: ~1 session.
 
+- **Security hygiene (defense-in-depth)**: From the 2026-04-20 full-app audit. XSS sinks on category/group/option interpolation and prototype pollution on import have been fixed. Remaining items are not currently exploitable but should be addressed before the app grows: (1) migrate away from inline `onclick="fn(${id})"` in `ui.js` to `addEventListener`, which eliminates event-handler-attribute XSS as a class of bug and is a prerequisite for a real CSP; (2) add a strict `Content-Security-Policy` meta tag to `spending-tracker.html` once inline handlers are gone; (3) pin CDN deps by bundling Tailwind locally (Play CDN can't be pinned via SRI); (4) validate CSV fields in `parseNordeaCSV` (strict date format, length caps, no control chars) as defense if a downstream `esc()` is ever missed. Scope: ~1–2 sessions for (1)+(2) together, (3) and (4) can be separate smaller passes.
+
 ### P3: Nice to have, park for now
 
 - **Colour scheme overhaul**: Replace the hardcoded 12-colour `CHART_COLORS` array with a perceptually uniform, colourblind-friendly palette (Viridis, ColorBrewer Set2/Set3). Also review the semantic colours for income/expense/savings across the app. Small scope (~30 min) but low urgency since charts are being replaced with list views.
