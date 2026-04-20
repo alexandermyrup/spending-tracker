@@ -1888,7 +1888,7 @@ function renderWeeklyReviewCategories(data) {
       <h3 class="text-base font-semibold">Per category</h3>
       <span class="text-xs text-slate-500">${esc(data.weekLabel)} • 8-week trend per row</span>
     </div>
-    <p class="text-xs text-slate-500 mb-3">Sorted by overshoot, then alphabetical. Bars show the last 8 weeks; highlighted bar is the week shown.</p>
+    <p class="text-xs text-slate-500 mb-3">Over-budget first, then top spends, then untouched. Bars show the last 8 weeks; highlighted bar is the week shown.</p>
     <div class="-mt-1">${rows}</div>`;
 }
 
@@ -1899,15 +1899,20 @@ function renderWeeklyReviewTrend(data) {
   const slices = data.weekHistory.map(w => ({ total: w.total, isCurrent: w.isReference, start: w.start }));
   const max = Math.max(...slices.map(s => s.total), 1);
   const width = 320;
-  const height = 130;
+  const height = 140;
   const padL = 8;
   const padR = 8;
-  const padT = 12;
+  const padT = 20;
   const padB = 22;
   const innerW = width - padL - padR;
   const innerH = height - padT - padB;
   const slotW = innerW / slices.length;
   const barW = Math.min(slotW * 0.7, 28);
+  const compact = v => {
+    if (v < 1000) return String(Math.round(v));
+    if (v < 10000) return (v / 1000).toFixed(1).replace('.', ',') + 'k';
+    return Math.round(v / 1000) + 'k';
+  };
   const bars = slices.map((s, i) => {
     const cx = padL + slotW * (i + 0.5);
     const barH = (s.total / max) * innerH;
@@ -1915,13 +1920,18 @@ function renderWeeklyReviewTrend(data) {
     const fill = s.isCurrent ? '#1d4ed8' : '#93c5fd';
     return `<rect x="${cx - barW / 2}" y="${y}" width="${barW}" height="${barH}" rx="2" fill="${fill}"/>`;
   }).join('');
-  // Average line across all 8 weeks
+  const valueLabels = slices.map((s, i) => {
+    if (s.total === 0) return '';
+    const cx = padL + slotW * (i + 0.5);
+    const barH = (s.total / max) * innerH;
+    const y = padT + innerH - barH - 4;
+    return `<text x="${cx}" y="${y}" text-anchor="middle" fill="${s.isCurrent ? '#1d4ed8' : '#475569'}" font-size="8.5" font-family="Inter, sans-serif" font-weight="${s.isCurrent ? '700' : '500'}" class="tabular-nums">${compact(s.total)}</text>`;
+  }).join('');
   const avg = slices.reduce((sum, s) => sum + s.total, 0) / slices.length;
   const avgY = padT + innerH - (avg / max) * innerH;
   const avgLine = avg > 0
     ? `<line x1="${padL}" y1="${avgY}" x2="${width - padR}" y2="${avgY}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>`
     : '';
-  // Labels: -7w .. ref
   const labels = slices.map((s, i) => {
     const cx = padL + slotW * (i + 0.5);
     const offset = slices.length - 1 - i;
@@ -1930,11 +1940,14 @@ function renderWeeklyReviewTrend(data) {
   }).join('');
   return `<h3 class="text-base font-semibold mb-1">Last 8 weeks</h3>
     <p class="text-xs text-slate-500 mb-3">Variable spend, weekly. Highlighted bar = the week reviewed.</p>
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
-      ${avgLine}
-      ${bars}
-      ${labels}
-    </svg>
+    <div class="max-w-xl">
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto">
+        ${avgLine}
+        ${bars}
+        ${valueLabels}
+        ${labels}
+      </svg>
+    </div>
     <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs">
       <span class="text-slate-500">8-week avg <span class="font-semibold tabular-nums text-slate-700">${fmt(Math.round(avg))}</span>/week</span>
     </div>`;

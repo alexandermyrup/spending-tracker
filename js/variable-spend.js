@@ -633,13 +633,18 @@ export function getWeeklyReviewData(month, options) {
     };
   });
 
-  // Sort: over-target first (worst variance), then alphabetical
+  // Sort tiers: (1) over-budget by overshoot desc, (2) non-zero spend by spend desc, (3) zero spend alphabetical
+  const tier = row => {
+    if (row.weekTarget > 0 && row.weekSpent > row.weekTarget) return 0;
+    if (row.weekSpent > 0) return 1;
+    return 2;
+  };
   categoryRows.sort((a, b) => {
-    const overA = a.weekSpent - a.weekTarget;
-    const overB = b.weekSpent - b.weekTarget;
-    if (overA > 0 && overB <= 0) return -1;
-    if (overB > 0 && overA <= 0) return 1;
-    if (overA !== overB) return overB - overA;
+    const tA = tier(a);
+    const tB = tier(b);
+    if (tA !== tB) return tA - tB;
+    if (tA === 0) return (b.weekSpent - b.weekTarget) - (a.weekSpent - a.weekTarget);
+    if (tA === 1) return b.weekSpent - a.weekSpent;
     return a.category.localeCompare(b.category);
   });
 
