@@ -176,6 +176,16 @@ runner.suite('Store normalization', test => {
     assertEquals(store.nextId, 8, 'nextId should be max id + 1');
   });
 
+  test('normalizeStore strips __proto__ / constructor / prototype from imports', () => {
+    const evil = JSON.parse('{"__proto__":{"pwned1":1},"categories":{"__proto__":{"pwned2":2},"Variable":["X"]},"budgets":{"2026":{"__proto__":{"pwned3":3}}},"merchantMap":{"constructor":{"prototype":{"pwned4":4}}}}');
+    normalizeStore(evil);
+    const probe = {};
+    assertEquals(probe.pwned1, undefined, 'Top-level __proto__ must not pollute');
+    assertEquals(probe.pwned2, undefined, 'Nested categories __proto__ must not pollute');
+    assertEquals(probe.pwned3, undefined, 'Nested budgets __proto__ must not pollute');
+    assertEquals(probe.pwned4, undefined, 'constructor.prototype must not pollute');
+  });
+
   test('normalizeStore rekeys merchantMap and backfills categories/budgets', () => {
     const store = normalizeStore({
       transactions: [],

@@ -23,6 +23,23 @@ export function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+// Recursively strips __proto__, constructor, and prototype keys from any
+// nested object. Guards normalizeStore against a malicious JSON import
+// polluting Object.prototype when categories/budgets/merchantMap/etc. are
+// later assigned into the store.
+export function stripUnsafeKeys(value) {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(stripUnsafeKeys);
+  const clean = {};
+  Object.keys(value).forEach(key => {
+    if (UNSAFE_KEYS.has(key)) return;
+    clean[key] = stripUnsafeKeys(value[key]);
+  });
+  return clean;
+}
+
 export function getDefaultYearBudget() {
   const b = {};
   const allCats = [];
@@ -114,9 +131,10 @@ export function ensureCategoryBudgetEntry(budgets, cat) {
 
 export function normalizeStore(rawStore) {
   const base = createEmptyStore();
+  const safeRaw = stripUnsafeKeys(rawStore || {});
   const normalized = {
     ...base,
-    ...(rawStore || {})
+    ...safeRaw
   };
 
   normalized.version = STORE_VERSION;
