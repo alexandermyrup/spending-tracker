@@ -977,7 +977,7 @@ runner.suite('Savings and obligations', test => {
 });
 
 runner.suite('Yearly dashboard', test => {
-  test('forecast loan is numeric and uses annual loan budget', () => {
+  test('forecast loan is numeric and projects from historical average', () => {
     const store = createStore({
       loanBudget: { '2026': 24000 },
       transactions: [

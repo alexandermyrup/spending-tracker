@@ -585,13 +585,15 @@ export function getYearlyDashboardData(year, options) {
   const ytdRemaining = ytdIncome - ytdSpend - ytdSave;
   const annualBudget = monthData.reduce((sum, m) => sum + m.budget, 0);
   const ytdBudget = elapsedMonths.reduce((sum, m) => sum + m.budget, 0);
-  const forecastSpend = ytdSpend + futureMonths.reduce((sum, m) => sum + m.budget, 0);
+  const avgMonthlySpend = elapsedMonths.length > 0 ? ytdSpend / elapsedMonths.length : 0;
+  const forecastSpend = ytdSpend + (futureMonths.length * avgMonthlySpend);
   const avgMonthlyIncome = elapsedMonths.length > 0 ? ytdIncome / elapsedMonths.length : 0;
   const forecastIncome = ytdIncome + (futureMonths.length * avgMonthlyIncome);
   const avgMonthlySave = elapsedMonths.length > 0 ? ytdSave / elapsedMonths.length : 0;
   const forecastSave = ytdSave + (futureMonths.length * avgMonthlySave);
+  const avgMonthlyLoan = elapsedMonths.length > 0 ? ytdLoan / elapsedMonths.length : 0;
+  const forecastLoan = ytdLoan + (futureMonths.length * avgMonthlyLoan);
   const monthlyLoanBudget = annualLoanBudget / 12;
-  const forecastLoan = ytdLoan + (futureMonths.length * monthlyLoanBudget);
   const forecastRemaining = forecastIncome - forecastSpend - forecastSave;
   const catBudgets = {};
   Object.entries(categories).forEach(([group, cats]) => {
