@@ -19,6 +19,7 @@ import {
   certaintyBand,
   collapseSplitParent,
   computeCategoryCertainty,
+  computeDuplicateGroups,
   computeMerchantStats,
   flagDuplicates,
   detectConflicts,
@@ -467,6 +468,69 @@ function deleteFiltered() {
   commit(`Deleted ${displayTxs.length} transaction${displayTxs.length !== 1 ? 's' : ''}${filterDesc}.`);
 }
 
+function openDuplicatesModal() {
+  const stats = computeDuplicateGroups(store.transactions);
+  if (stats.totalDuplicateRows === 0) {
+    toast('No duplicates found.');
+    return;
+  }
+  modalTriggerEl = document.activeElement;
+  document.getElementById('dup-include-risky').checked = false;
+  renderDuplicatesModal(stats);
+  document.getElementById('modal-duplicates').classList.add('open');
+}
+
+function refreshDuplicatesModal() {
+  renderDuplicatesModal(computeDuplicateGroups(store.transactions));
+}
+
+function renderDuplicatesModal(stats) {
+  const includeRisky = document.getElementById('dup-include-risky').checked;
+  const deleteCount = stats.totalSafe + (includeRisky ? stats.totalRisky : 0);
+  const summaryEl = document.getElementById('dup-summary');
+  const riskySection = document.getElementById('dup-risky-section');
+  const riskyCountEl = document.getElementById('dup-risky-count');
+  const listEl = document.getElementById('dup-list');
+  const btn = document.getElementById('dup-confirm-btn');
+  summaryEl.innerHTML = `Found <strong>${stats.totalDuplicateRows}</strong> duplicate row${stats.totalDuplicateRows !== 1 ? 's' : ''} across <strong>${stats.groups.length}</strong> group${stats.groups.length !== 1 ? 's' : ''}. <span class="text-slate-500">Will delete <strong class="text-red-600">${deleteCount}</strong>.</span>`;
+  if (stats.totalRisky > 0) {
+    riskySection.classList.remove('hidden');
+    riskyCountEl.textContent = String(stats.totalRisky);
+  } else {
+    riskySection.classList.add('hidden');
+  }
+  listEl.innerHTML = stats.groups.map(g => {
+    const loserIds = includeRisky ? [...g.safeIds, ...g.riskyIds] : g.safeIds;
+    const riskyNote = g.riskyIds.length > 0 ? ` <span class="text-amber-700">(${g.riskyIds.length} risky)</span>` : '';
+    const willDelete = loserIds.length;
+    return `<div class="p-2 rounded-md bg-slate-50/60">
+      <div class="flex items-baseline justify-between gap-3">
+        <div class="truncate"><span class="tabular-nums text-slate-500">${g.sample.date}</span> · <strong>${esc(g.sample.merchant)}</strong> <span class="text-slate-500">${esc(g.sample.description || '')}</span></div>
+        <div class="shrink-0 tabular-nums"><span class="${g.sample.amount < 0 ? 'text-red-500' : 'text-emerald-700'}">${fmt(g.sample.amount)}</span></div>
+      </div>
+      <div class="text-[11px] text-slate-500 mt-0.5">Keep id ${g.keepId}, delete ${willDelete} copy${willDelete !== 1 ? 'ies' : ''}${riskyNote}</div>
+    </div>`;
+  }).join('');
+  btn.disabled = deleteCount === 0;
+  btn.textContent = deleteCount > 0 ? `Delete ${deleteCount}` : 'Nothing to delete';
+}
+
+function confirmDeleteDuplicates() {
+  const stats = computeDuplicateGroups(store.transactions);
+  const includeRisky = document.getElementById('dup-include-risky').checked;
+  const idsToDelete = new Set();
+  stats.groups.forEach(g => {
+    g.safeIds.forEach(id => idsToDelete.add(id));
+    if (includeRisky) g.riskyIds.forEach(id => idsToDelete.add(id));
+  });
+  if (idsToDelete.size === 0) {
+    toast('Nothing to delete.');
+    return;
+  }
+  store.transactions = store.transactions.filter(t => !idsToDelete.has(t.id));
+  closeModal('modal-duplicates');
+  commit(`Deleted ${idsToDelete.size} duplicate${idsToDelete.size !== 1 ? 's' : ''}.`);
+}
 
 function closeCatDropdowns() {
   document.querySelectorAll('.cat-dropdown').forEach(el => el.remove());
@@ -834,7 +898,9 @@ function renderTransactions() {
   const highBtn = highCertCount > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors ml-2" onclick="applyVisibleSuggestions('high')">Apply ${highCertCount} high-certainty</button>` : '';
   const allBtn = allSuggestionCount > highCertCount ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors ml-1" onclick="applyVisibleSuggestions('low')">Apply all ${allSuggestionCount}</button>` : '';
   const deleteBtn = displayTxs.length > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors ml-2" onclick="deleteFiltered()">Delete ${displayTxs.length} shown</button>` : '';
-  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${progressHtml}${highBtn}${allBtn}${deleteBtn}`;
+  const dupStats = computeDuplicateGroups(store.transactions);
+  const dupBtn = dupStats.totalDuplicateRows > 0 ? ` <button class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors ml-2" onclick="openDuplicatesModal()">Clean up <span class="tabular-nums">${dupStats.totalDuplicateRows}</span> duplicate${dupStats.totalDuplicateRows !== 1 ? 's' : ''}</button>` : '';
+  summaryEl.innerHTML = `<span class="tabular-nums">${displayTxs.length} transactions | Spending: ${fmt(-result.totalSpending)} | Income: ${fmt(result.totalIncome)}</span>${progressHtml}${highBtn}${allBtn}${deleteBtn}${dupBtn}`;
   const tbody = document.getElementById('tx-body');
   const scrollParent = tbody.closest('.overflow-x-auto') || window;
   const scrollTop = scrollParent === window ? window.scrollY : scrollParent.scrollTop;
@@ -1071,7 +1137,7 @@ function renderDashboard() {
     return `<div class="py-3.5 ${i > 0 ? 'border-t border-slate-100' : ''} ${deemphasize}">
       <div class="flex items-center gap-3">
         <span class="text-sm font-medium w-36 sm:w-44 shrink-0 truncate" title="${esc(cat)}">${esc(cat)}</span>
-        <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${cat}: ${pct}% of budget used">
+        <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${esc(cat)}: ${pct}% of budget used">
           <div class="h-full rounded-full ${barColor}" style="width:${Math.min(pct, 100)}%"></div>
         </div>
         <span class="text-xs tabular-nums text-slate-500 shrink-0 w-10 text-right">${pct}%</span>
@@ -2180,7 +2246,7 @@ function updateCatFilter() {
   } else {
     cats = (store.categories[group] || []).slice().sort();
   }
-  txCat.innerHTML = '<option value="all">All categories</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  txCat.innerHTML = '<option value="all">All categories</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
   txCat.value = cats.includes(prev) ? prev : 'all';
 }
 
@@ -2196,16 +2262,16 @@ function populateFilters() {
     : lastCompletedMonth;
   const dashboardMonths = firstMonth ? getMonthRange(firstMonth, finalMonth) : [lastCompletedMonth];
   const defaultDashMonth = dashboardMonths.includes(lastCompletedMonth) ? lastCompletedMonth : dashboardMonths[dashboardMonths.length - 1];
-  dashMonth.innerHTML = dashboardMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+  dashMonth.innerHTML = dashboardMonths.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
   dashMonth.value = dashboardMonths.includes(dashMonthValue) ? dashMonthValue : (defaultDashMonth || '');
   document.getElementById('dash-salary-shift').value = store.salaryShiftDay || 0;
   const txMonth = document.getElementById('tx-month-filter');
   const txMonthValue = txMonth.value;
-  txMonth.innerHTML = '<option value="all">All months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+  txMonth.innerHTML = '<option value="all">All months</option>' + months.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
   txMonth.value = txMonthValue || 'all';
   const txGroup = document.getElementById('tx-group-filter');
   const txGroupValue = txGroup.value;
-  txGroup.innerHTML = '<option value="all">All groups</option>' + Object.keys(store.categories).map(g => `<option value="${g}">${g}</option>`).join('');
+  txGroup.innerHTML = '<option value="all">All groups</option>' + Object.keys(store.categories).map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
   txGroup.value = txGroupValue || 'all';
   updateCatFilter();
   const years = new Set();
@@ -2214,11 +2280,11 @@ function populateFilters() {
   const sortedYears = [...years].sort();
   const budgetYear = document.getElementById('budget-year');
   const budgetYearValue = budgetYear.value;
-  budgetYear.innerHTML = sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+  budgetYear.innerHTML = sortedYears.map(y => `<option value="${esc(y)}">${esc(y)}</option>`).join('');
   budgetYear.value = budgetYearValue || String(new Date().getFullYear());
   const dashYear = document.getElementById('dash-year');
   const dashYearValue = dashYear.value;
-  dashYear.innerHTML = sortedYears.map(y => `<option value="${y}">${y}</option>`).join('');
+  dashYear.innerHTML = sortedYears.map(y => `<option value="${esc(y)}">${esc(y)}</option>`).join('');
   dashYear.value = dashYearValue || String(new Date().getFullYear());
 }
 
@@ -2315,6 +2381,7 @@ function bindGlobalActions() {
     applyVisibleSuggestions,
     cancelImport,
     closeModal,
+    confirmDeleteDuplicates,
     confirmImport,
     confirmSplit,
     deleteCat,
@@ -2326,8 +2393,10 @@ function bindGlobalActions() {
     handleCSV,
     importJSON,
     openCatDropdown,
+    openDuplicatesModal,
     openNewCatModal,
     openSplitModal,
+    refreshDuplicatesModal,
     renderDashboard,
     renderBudgetEditor,
     renderAll: rerenderAll,

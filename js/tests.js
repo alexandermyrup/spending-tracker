@@ -13,6 +13,7 @@ import {
 import {
   autoMatchMerchant,
   collapseSplitParent,
+  computeDuplicateGroups,
   flagDuplicates,
   getFilteredTransactions,
   parseNordeaCSV,
@@ -1329,6 +1330,85 @@ runner.suite('Import duplicate flagging', test => {
     ];
     const result = flagDuplicates(existing, newRows);
     assertEquals(result[0].possibleDuplicate, true, 'Matches non-split existing tx');
+  });
+});
+
+runner.suite('Duplicate groups for bulk delete', test => {
+  test('empty when no duplicates', () => {
+    const txs = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000' },
+      { id: 2, date: '2026-02-16', amount: -50, merchant: 'B', description: '', balance: '4950' }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups.length, 0);
+    assertEquals(result.totalDuplicateRows, 0);
+  });
+
+  test('keeps lowest id and marks rest as safe', () => {
+    const txs = [
+      { id: 7, date: '2026-02-15', amount: -100, merchant: 'A', description: 'x', balance: '5000' },
+      { id: 3, date: '2026-02-15', amount: -100, merchant: 'A', description: 'x', balance: '5000' },
+      { id: 9, date: '2026-02-15', amount: -100, merchant: 'A', description: 'x', balance: '5000' }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups.length, 1);
+    assertEquals(result.groups[0].keepId, 3, 'Lowest id is kept');
+    assertEquals(result.groups[0].safeIds.length, 2);
+    assert(result.groups[0].safeIds.includes(7));
+    assert(result.groups[0].safeIds.includes(9));
+    assertEquals(result.totalSafe, 2);
+    assertEquals(result.totalRisky, 0);
+  });
+
+  test('routes manualCategory duplicates to riskyIds', () => {
+    const txs = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000' },
+      { id: 2, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000', manualCategory: true }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups.length, 1);
+    assertEquals(result.groups[0].keepId, 1);
+    assertEquals(result.groups[0].safeIds.length, 0);
+    assertEquals(result.groups[0].riskyIds.length, 1);
+    assertEquals(result.groups[0].riskyIds[0], 2);
+    assertEquals(result.totalSafe, 0);
+    assertEquals(result.totalRisky, 1);
+  });
+
+  test('routes covered duplicates to riskyIds', () => {
+    const txs = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000' },
+      { id: 2, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000', covered: true }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups[0].riskyIds[0], 2);
+    assertEquals(result.totalRisky, 1);
+  });
+
+  test('ignores split parents and children', () => {
+    const txs = [
+      { id: 1, date: '2026-02-15', amount: -300, merchant: 'A', description: '', balance: '5000', splitInto: [2, 3] },
+      { id: 2, date: '2026-02-15', amount: -200, merchant: 'A', description: '', balance: '5000', splitFrom: 1 },
+      { id: 3, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000', splitFrom: 1 },
+      { id: 4, date: '2026-02-15', amount: -300, merchant: 'A', description: '', balance: '5000' }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups.length, 0, 'No duplicate groups because split parent is excluded');
+  });
+
+  test('handles multiple duplicate groups sorted by size', () => {
+    const txs = [
+      { id: 1, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000' },
+      { id: 2, date: '2026-02-15', amount: -100, merchant: 'A', description: '', balance: '5000' },
+      { id: 3, date: '2026-02-16', amount: -50, merchant: 'B', description: '', balance: '4950' },
+      { id: 4, date: '2026-02-16', amount: -50, merchant: 'B', description: '', balance: '4950' },
+      { id: 5, date: '2026-02-16', amount: -50, merchant: 'B', description: '', balance: '4950' }
+    ];
+    const result = computeDuplicateGroups(txs);
+    assertEquals(result.groups.length, 2);
+    assertEquals(result.groups[0].keepId, 3, 'Bigger group (B, 3 rows) first');
+    assertEquals(result.groups[1].keepId, 1, 'Smaller group (A, 2 rows) second');
+    assertEquals(result.totalDuplicateRows, 3);
   });
 });
 

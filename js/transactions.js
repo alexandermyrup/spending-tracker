@@ -396,6 +396,41 @@ export function flagDuplicates(existingTransactions, newRows) {
   }));
 }
 
+// Groups already-stored transactions by fingerprint and picks which rows to
+// delete. Split parents/children are excluded. Within each duplicate group,
+// the lowest id is kept (earliest import). Rows with user edits
+// (manualCategory or covered) are routed to riskyIds so the user can review
+// them manually; safeIds is the default delete set.
+export function computeDuplicateGroups(transactions) {
+  const byFp = new Map();
+  transactions.forEach(tx => {
+    if (tx.splitInto || tx.splitFrom) return;
+    const fp = txFingerprint(tx);
+    if (!byFp.has(fp)) byFp.set(fp, []);
+    byFp.get(fp).push(tx);
+  });
+  const groups = [];
+  let totalSafe = 0;
+  let totalRisky = 0;
+  byFp.forEach((rows, fp) => {
+    if (rows.length < 2) return;
+    rows.sort((a, b) => a.id - b.id);
+    const keep = rows[0];
+    const losers = rows.slice(1);
+    const riskyIds = losers.filter(t => t.manualCategory || t.covered).map(t => t.id);
+    const safeIds = losers.filter(t => !t.manualCategory && !t.covered).map(t => t.id);
+    groups.push({ fingerprint: fp, sample: keep, keepId: keep.id, safeIds, riskyIds });
+    totalSafe += safeIds.length;
+    totalRisky += riskyIds.length;
+  });
+  groups.sort((a, b) => {
+    const countDiff = (b.safeIds.length + b.riskyIds.length) - (a.safeIds.length + a.riskyIds.length);
+    if (countDiff !== 0) return countDiff;
+    return b.sample.date.localeCompare(a.sample.date);
+  });
+  return { groups, totalSafe, totalRisky, totalDuplicateRows: totalSafe + totalRisky };
+}
+
 export function collapseSplitParent(parent, remainingChild) {
   return {
     amount: remainingChild.amount,
